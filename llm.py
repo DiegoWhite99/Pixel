@@ -2,12 +2,15 @@
 """Fase 3 - Cliente de Ollama en streaming.
 
 Usa solo urllib (libreria estandar): no hace falta instalar nada.
+Fase 11: si hay clave de Gemini, responde Gemini (gemini.py) y Ollama queda de respaldo.
 """
 
 import json
 import threading
 import urllib.error
 import urllib.request
+
+import gemini
 
 # Una sola generacion de Ollama a la vez: el modelo es uno y la CPU tambien.
 # Es de modulo, no de instancia, porque cada conversacion tiene su propio Llm.
@@ -21,8 +24,7 @@ SYSTEM_PROMPT = (
     "Si no sabes algo o no estás seguro, dilo claramente en vez de inventar. "
     "No uses listas, viñetas, markdown ni emojis, porque tu respuesta se lee en voz alta. "
     "Tú no puedes agendar, recordar, poner música ni enviar nada: nunca digas que lo hiciste. "
-    "Si te piden algo así, di que lo repitan empezando con 'agenda', 'recuérdame' o 'pon'. "
-    "Si viene al caso, puedes mencionar que funcionas 100% en local, sin conexión a la nube."
+    "Si te piden algo así, di que lo repitan empezando con 'agenda', 'recuérdame' o 'pon'."
 )
 
 DIAS = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
@@ -51,14 +53,24 @@ class Llm:
         self.timeout = timeout
         self.espera_lock = espera_lock
         self.historial = []               # propio de esta conversacion
+        self.motor = None                 # quien dio la ultima respuesta: "gemini" u "ollama" (para el log)
 
     # -- utilidades -------------------------------------------------------
 
+    def _conversacion(self, texto_usuario):
+        return self.historial[-self.max_turnos * 2:] + [{"role": "user", "content": texto_usuario}]
+
     def _mensajes(self, texto_usuario):
-        msgs = [{"role": "system", "content": self.system}]
-        msgs.extend(self.historial[-self.max_turnos * 2:])
-        msgs.append({"role": "user", "content": texto_usuario})
-        return msgs
+        return [{"role": "system", "content": self.system}] + self._conversacion(texto_usuario)
+
+    def _recordar(self, texto_usuario, texto):
+        texto = texto.strip()
+        if texto:
+            self.historial.append({"role": "user", "content": texto_usuario})
+            self.historial.append({"role": "assistant", "content": texto})
+            sobran = len(self.historial) - self.max_turnos * 2
+            if sobran > 0:
+                del self.historial[:sobran]
 
     def _peticion(self, cuerpo, ruta):
         return urllib.request.Request(
@@ -78,8 +90,28 @@ class Llm:
     def responder(self, texto_usuario):
         """Generador: cede trozos de texto segun los va soltando el modelo.
 
-        Al terminar guarda el turno en el historial.
+        Con clave de Gemini responde Gemini; si falla antes de decir nada, este turno
+        responde Ollama. Al terminar guarda el turno en el historial.
         """
+        if gemini.activo():
+            dicho = []
+            try:
+                for trozo in gemini.generar_stream(self.system, self._conversacion(texto_usuario)):
+                    dicho.append(trozo)
+                    yield trozo
+            except gemini.ErrorGemini as e:
+                if dicho:
+                    gemini.LOG("gemini: se corto a media respuesta (%s)" % e)
+                else:
+                    gemini.LOG("gemini: fallo (%s); este turno responde Ollama" % e)
+            if dicho:
+                self.motor = "gemini"
+                self._recordar(texto_usuario, "".join(dicho))
+                return
+        self.motor = "ollama"
+        yield from self._ollama(texto_usuario)
+
+    def _ollama(self, texto_usuario):
         if not _OLLAMA.acquire(timeout=self.espera_lock):
             raise RuntimeError("Ollama sigue ocupado tras %s s" % self.espera_lock)
         try:
@@ -109,12 +141,6 @@ class Llm:
                     if dato.get("done"):
                         break
 
-            texto = "".join(completo).strip()
-            if texto:
-                self.historial.append({"role": "user", "content": texto_usuario})
-                self.historial.append({"role": "assistant", "content": texto})
-                sobran = len(self.historial) - self.max_turnos * 2
-                if sobran > 0:
-                    del self.historial[:sobran]
+            self._recordar(texto_usuario, "".join(completo))
         finally:
             _OLLAMA.release()

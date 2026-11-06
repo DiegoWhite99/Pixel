@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Qué es
 
-Asistente de voz 100% local para una demo de feria. Un ESP32-S3 (micrófono INMP441; su firmware **no** está en este repo) manda audio por TCP; el servidor en Python lo transcribe (faster-whisper), decide qué hacer (acciones por regex, clasificador LLM o respuesta libre del LLM vía Ollama) y devuelve voz sintetizada (Piper). Palabra de activación: "Píxel" (antes "Nova", que Whisper oía como "No, no."; ver `memoria.md`).
+Asistente de voz para una demo de feria, todo en el PC salvo la IA de Gemini, que es opcional (Fase 11). Un ESP32-S3 (micrófono INMP441; su firmware **no** está en este repo) manda audio por TCP; el servidor en Python lo transcribe (faster-whisper), decide qué hacer (acciones por regex, clasificador LLM o respuesta libre del LLM vía Ollama) y devuelve voz sintetizada (Piper). Palabra de activación: "Píxel" (antes "Nova", que Whisper oía como "No, no."; ver `memoria.md`).
 
-Git: https://github.com/DiegoWhite99/Pixel, **público**. Ahí no entran claves, grabaciones ni datos personales: ver `.gitignore`. `main` guarda el estado del 6 nov, y el trabajo nuevo va en la rama `vinculacion_movil`. El repositorio tiene su propio `core.sshCommand` con `~/.ssh/id_ed25519_wikiia`: la llave por defecto, `id_ed25519`, es una deploy key del repo AGATA, y GitHub la rechaza aquí. No hay `requirements.txt`, ni tests, ni linter. Las dependencias viven en `.venv/` (Python 3.10: faster-whisper 1.2.1, piper-tts 1.8.0, numpy, yt-dlp); `venv/` es una copia con los mismos paquetes que no se usa. Ollama corre aparte en `127.0.0.1:11434` con el modelo `qwen2.5:3b`.
+Git: https://github.com/DiegoWhite99/Pixel, **público**. Ahí no entran claves, grabaciones ni datos personales: ver `.gitignore`. `main` guarda el estado del 6 nov, y el trabajo nuevo va en la rama `vinculacion_movil`. El repositorio tiene su propio `core.sshCommand` con `~/.ssh/id_ed25519_wikiia`: la llave por defecto, `id_ed25519`, es una deploy key del repo AGATA, y GitHub la rechaza aquí. No hay `requirements.txt`, ni tests, ni linter. Las dependencias viven en `.venv/` (Python 3.10: faster-whisper 1.2.1, piper-tts 1.8.0, numpy, yt-dlp); `venv/` es una copia con los mismos paquetes que no se usa. Ollama corre aparte en `127.0.0.1:11434` con el modelo `qwen2.5:3b`. Con clave de Gemini, Gemini responde y Ollama queda de respaldo (ver **Gemini**).
 
 ## Comandos
 
@@ -39,12 +39,14 @@ Ojo: ejecutar una acción de YouTube busca de verdad y abre una pestaña en el n
 Servidor de prueba aislado, para no tocar el real ni sus JSON (luego `tools/cliente_prueba.py --port 8799`):
 
 ```bash
-.venv/bin/python -c "import servidor, acciones; servidor.PORT = 8799; servidor.PANEL_PORT = 8081; servidor.RECORDATORIOS_ARCHIVO = '/tmp/r.json'; servidor.EVENTOS_ARCHIVO = '/tmp/e.json'; servidor.AJUSTES_ARCHIVO = '/tmp/a.json'; servidor.DISPOSITIVOS_ARCHIVO = '/tmp/d.json'; servidor.CONTACTOS_ARCHIVO = '/tmp/c.json'; servidor.GOOGLE_TOKEN = '/tmp/g.json'; servidor.NUBE_DB = ''; servidor.DESCUBRIR_PORT = 0; servidor.CAPTURE_DIR = '/tmp/capturas'; acciones._abrir = lambda url: 0; servidor.main()"
+.venv/bin/python -c "import servidor, acciones; servidor.PORT = 8799; servidor.PANEL_PORT = 8081; servidor.RECORDATORIOS_ARCHIVO = '/tmp/r.json'; servidor.EVENTOS_ARCHIVO = '/tmp/e.json'; servidor.AJUSTES_ARCHIVO = '/tmp/a.json'; servidor.DISPOSITIVOS_ARCHIVO = '/tmp/d.json'; servidor.CONTACTOS_ARCHIVO = '/tmp/c.json'; servidor.GOOGLE_TOKEN = '/tmp/g.json'; servidor.GEMINI_CLAVE = '/tmp/gm.json'; servidor.NUBE_DB = ''; servidor.DESCUBRIR_PORT = 0; servidor.CAPTURE_DIR = '/tmp/capturas'; acciones._abrir = lambda url: 0; servidor.main()"
 ```
 
 - `PANEL_PORT`: el panel se abre siempre en `main()`; con el servidor real arriba, el 8080 está ocupado y el de prueba se cae al arrancar.
 - `AJUSTES_ARCHIVO`: el `ajustes.json` real puede tener `"salida_voz": "pc"`. Entonces la voz suena por el altavoz del PC y no llega ningún 0x02, así que el cliente no guarda `respuesta_NN.wav`. Sin archivo, la salida es `"esp32"`.
 - `GOOGLE_TOKEN`: sin ese archivo, Google no se carga. Entonces `crear_evento` y `ver_calendario` usan el calendario local de prueba, y `correo` dice que no está configurado. Así, aunque el real esté autorizado, el de prueba no toca la cuenta de Google.
+- `GEMINI_CLAVE`: el de prueba arranca sin clave (Ollama). Una clave puesta en su panel (8081) va a `/tmp/gm.json`, no a la del real.
+- La grabación de `capturas/` empieza ya con voz, y el VAD calibra con los primeros 500 ms: sin 1 s de silencio delante, se pierde "Píxel" y la frase se ignora.
 - `NUBE_DB = ''`: sin nube. Con el `nube_token.json` real, el de prueba sería el mismo Píxel que el real en Firebase. Para probar la nube, usar otra identidad: `servidor.NUBE_TOKEN = '/tmp/n.json'; servidor.NUBE_NOMBRE = 'Píxel de prueba'`. Al acabar, borrar sus datos (`visibles/<pid>`, `pixeles/<pid>` y `usuarios/<uid>/pixeles/<pid>` de cada dueño) con `nube._db()` y ese token.
 - El Bluetooth del PC es uno solo: el panel de prueba busca, empareja y cambia la salida de audio de verdad, igual que el real.
 - Python carga `panel.py` al arrancar, pero los archivos de `web/` se leen en cada petición: los cambios de la web se ven al recargar y los de Python piden reiniciar.
@@ -71,13 +73,13 @@ Buscar en la red WiFi sin el servidor: `.venv/bin/python red_wifi.py` (tarda uno
 2. STT (`stt.Transcriptor.transcribir`), con una sola temperatura (`STT_TEMPERATURA`, sin reintentos) y descartando los segmentos en bucle (`STT_MAX_COMPRESION`).
 3. Palabra de activación (`quitar_activacion`): `ACTIVACION_VARIANTES` y compañía admiten grafías erróneas de Whisper, algunas solo si sigue coma o verbo de acción. "Píxel" sola responde "Dime" y abre una ventana de 8 s para **una** frase sin "Píxel". Si el usuario ya sigue hablando (`en_voz` o hay otra frase en cola), no hay beep ni "Dime": solo se abre la ventana. "Píxel, Píxel" cuenta como una sola llamada.
     - En medio de la frase también vale (`_RE_ACTIVACION_EN_MEDIO`): se toma lo que va tras la última aparición. Pasa cuando música, TV u otra voz juntan todo en una frase. Solo cuenta con pausa antes o después (signo de puntuación), así "un píxel de la pantalla" no la activa. Las frases sin activación se ignoran sin mandar nada al ESP32, ni siquiera `0x03`.
-4. Intención: primero `acciones.detectar()` (regex, rápido); si no hay coincidencia, `clasificador.Clasificador` (Ollama, JSON), cuyo "youtube" solo vale si `acciones.hay_pedido()` ve un verbo de acción (aunque llegue roto), "quiero", YouTube o una palabra de música; si no, la frase va al LLM. Con regex, el clasificador solo se usa como `acciones.CORRECTOR` cuando YouTube no da resultados (corrige el nombre y busca otra vez).
+4. Intención: primero `acciones.detectar()` (regex, rápido); si no hay coincidencia, `clasificador.Clasificador` (Gemini u Ollama, JSON), cuyo "youtube" solo vale si `acciones.hay_pedido()` ve un verbo de acción (aunque llegue roto), "quiero", YouTube o una palabra de música; si no, la frase va al LLM. Con regex, el clasificador solo se usa como `acciones.CORRECTOR` cuando YouTube no da resultados (corrige el nombre y busca otra vez).
 5. Si no es acción: `llm.Llm.responder()` en streaming; `extraer_frases()` parte el texto en frases (la primera también corta en coma para que la voz arranque antes) y cada frase va a Piper y se envía en cuanto está lista.
 6. Toda respuesta (LLM, acción, "Dime" o reposo) termina con `fin_respuesta()`: beep descendente y luego `0x03`.
 
 **Reposo:** si pasan `REPOSO_S` desde la última respuesta a una frase aceptada, el hilo trabajador (que espera la cola con timeout) dice `REPOSO_FRASE`, borra el historial del `Llm` y no lo repite hasta la siguiente interacción.
 
-**Recursos compartidos:** Whisper, Piper y el clasificador se cargan una vez en `main()` como globales del módulo. Cada sesión tiene su propio `Llm` (historial propio). `llm._OLLAMA` es un candado **de módulo** compartido por `Llm` y `Clasificador`: una sola generación de Ollama a la vez. Whisper y Piper tienen su propio candado.
+**Recursos compartidos:** Whisper, Piper y el clasificador se cargan una vez en `main()` como globales del módulo. Cada sesión tiene su propio `Llm` (historial propio). `llm._OLLAMA` es un candado **de módulo** compartido por `Llm` y `Clasificador`: una sola generación de Ollama a la vez. Las llamadas a Gemini no lo toman. Whisper y Piper tienen su propio candado.
 
 **Acciones** (`acciones.py`): se registran con `@registrar(nombre, detector)`; el detector devuelve un dict de parámetros o `None`, y la función devuelve `{"ok", "decir", "log"}`. `plano()` pasa a minúsculas y quita tildes **conservando la longitud**, así los índices de un match sobre el texto plano recortan el original con sus mayúsculas y acentos. Las acciones de recordatorio van registradas antes que YouTube y solo se detectan por regex. El clasificador general solo puede devolver `"youtube"` o `"ninguna"`: si una acción nueva debe poder elegirla él, hay que tocar su prompt y su validación en `clasificador.py`.
 
@@ -88,7 +90,7 @@ Buscar en la red WiFi sin el servidor: `.venv/bin/python red_wifi.py` (tarda uno
 **Panel de administración** (`panel.py` + la app de `web/`, Fases 8 y 9): `servidor.main()` lo arranca en `PANEL_PORT` (8080), en un hilo, solo con stdlib y sin fuentes de internet. Se abre en `http://<IP del PC>:8080`, también desde el móvil. `panel.html` es la versión anterior y ya no se sirve.
 - `GET /` y `GET /<archivo>` sirven solo archivos sueltos de `web/` (sin subcarpetas) con las extensiones de `TIPOS_MIME`.
 - `GET /api/estado` lee el estado vivo: `SESIONES` (con `desde`, `piso`, `ultimo_texto`, `ultimo_audio`), agenda, Google, contactos, Bluetooth del PC y la búsqueda WiFi.
-- Los `POST /api/...` sirven para guardar el agente (voz entre `panel.VOCES`, personalidad, respuesta corta o normal; se persiste en `AJUSTES_ARCHIVO` y se aplica en vivo cambiando `TTS`, `LLM_SYSTEM` y `llm.system` de cada sesión), probar la voz (encola `("decir", texto)` en la sesión más reciente), gestionar contactos, borrar de la agenda y vincular Google.
+- Los `POST /api/...` sirven para guardar el agente (voz entre `panel.VOCES`, personalidad, respuesta corta o normal; se persiste en `AJUSTES_ARCHIVO` y se aplica en vivo cambiando `TTS`, `LLM_SYSTEM` y `llm.system` de cada sesión), probar la voz (encola `("decir", texto)` en la sesión más reciente), gestionar contactos, borrar de la agenda, vincular Google y, solo desde la red local, poner la clave de Gemini.
 - "Agregar dispositivo" es una hoja (`<dialog>`) con tres caminos: Bluetooth del PC, WiFi y otro Píxel (los pasos del portal). "Mis dispositivos" empieza por los dos altavoces fijos, "Altavoz de Píxel" (el del ESP32) y "Altavoces del PC". Cada uno marca si Píxel habla por él, tiene "Que hable por aquí" (cambia `salida_voz`) y un "Probar" que suena en ese altavoz: `/api/agente/probar` con `donde`, `"esp32"` aunque la voz vaya al PC (`forzar_esp32`) o `"pc"`. Después junta los emparejados del PC, los WiFi y los Bluetooth recordados del ESP32. La música y el resto de los aparatos suenan por su salida de siempre: el usuario no quiere que el audio del PC pase por Píxel.
 - `DISPOSITIVOS_ARCHIVO` va por MAC: `{"nombre", "aceptado"}` para los Bluetooth vistos por el ESP32, y además `"via": "wifi", "ip", "tipo", "fabricante"` para los WiFi.
 - "Detectar cuando está cerca de Píxel" espera la siguiente lista Bluetooth del ESP32 (como mucho 30 s) y ofrece "Recordar" en cada uno. Los móviles rotan su MAC Bluetooth, así que recordarlos dura poco.
@@ -162,6 +164,16 @@ Buscar en la red WiFi sin el servidor: `.venv/bin/python red_wifi.py` (tarda uno
 - El panel lo da en `GET /api/voz`, que la app consulta cada 300 ms en Inicio.
 - La nube lo publica en `pixeles/<pid>/voz` en cuanto Píxel habla (`servidor.AL_HABLAR`).
 - La app busca el trozo que suena ahora con el desfase de reloj y llama a `cara.boca(nivel)`.
+
+**Gemini** (`gemini.py`, Fase 11): si hay clave, `Llm.responder()` y el `Clasificador` le preguntan a Gemini en vez de a Ollama.
+- REST `v1beta` con `urllib`. La clave va en la cabecera `x-goog-api-key`: nunca en la URL, en el log ni en `/api/estado`. La voz usa `:streamGenerateContent?alt=sse` y el clasificador `responseMimeType` JSON.
+- Si falla antes de decir nada (sin internet, clave mala, 4xx/5xx, `GEMINI_TIMEOUT`), ese turno responde Ollama y queda una línea `gemini: fallo (...)` en el log. Tras un fallo de conexión se salta Gemini `gemini.PAUSA_S` (60 s), para no pagar el timeout en cada turno.
+- `GEMINI_MODELO` = `gemini-3.8-flash` con `thinkingLevel` `"low"`: 3.8 Flash no admite `"minimal"` (400). Si el modelo rechaza `thinkingConfig`, reintenta sin él. No se manda `temperature`: en Gemini 3, Google recomienda dejar la de por defecto.
+- La clave se pega en el panel local (Cuentas) y se guarda en `GEMINI_CLAVE` (`gemini_clave.json`, permisos 600, fuera de git). Vale al momento, sin reiniciar. `main()` la carga después de calentar Ollama, para que el respaldo responda rápido.
+- `/api/gemini/clave` y `/api/gemini/probar` están en `panel.RUTAS_SOLO_LOCAL`, no en `RUTAS_POST`: `nube.py` ejecuta `RUTAS_POST` como órdenes de internet, así que la nube no puede poner ni probar la clave. En modo internet la tarjeta solo enseña el estado.
+- "Probar" busca `GEMINI_MODELO` en la lista de modelos (ListModels) y hace una pregunta corta.
+- Los logs del turno dicen quién contestó: `clasificador gemini|ollama` y `LLM gemini|ollama 1er token`.
+- Para probar sin clave real, apuntar `gemini.URL` a un servidor simulado en local.
 
 **TTS** (`tts.py`): Piper sale a 22050 Hz y se remuestrea a 16000 Hz con numpy (FIR paso bajo + interpolación lineal, sin scipy).
 

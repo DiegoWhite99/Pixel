@@ -570,3 +570,31 @@ El usuario pidió que todo fuera con "pixel asistente de voz". Eligió la carpet
     - `Etb_boot.ino.mejoras-22oct` usa el mismo nombre al buscar el servidor. `Etb_boot.ino` no tiene nombre.
     - Los dos compilan (91 % y 69 %), pero **falta subirlos a la placa**. Copia del anterior en `Pixel_portal.ino.respaldo-06nov`.
 - El panel (`panel.py`) y `web/index.html` ya dicen el nombre nuevo de la red del portal. La app publicada en Firebase sigue diciendo "Pixel-Config" hasta que se vuelva a publicar.
+
+---
+
+# Fase 11: Gemini en vez de Ollama (6 de noviembre, rama `vinculacion_movil`)
+
+El 22 de octubre el usuario había decidido dejar el cerebro en el PC. El 6 de noviembre pidió cambiar el modelo de IA por la API de Gemini. Todavía no tiene la clave: la está sacando.
+
+- **Qué cambia:** con clave, las respuestas habladas (`llm.Llm`) y el clasificador (`clasificador.Clasificador`) preguntan a Gemini (`gemini.py`, solo `urllib`). Sin clave, o si Gemini falla antes de decir nada, ese turno responde Ollama. Whisper y Piper siguen en el PC.
+- **Modelo:** `gemini-3.8-flash` (salió el 2 de septiembre de 2026; las peticiones a 3.7 Flash ya se redirigen a él, y Google anunció el retiro de 2.5 Flash para el 1 de diciembre). Va con `thinkingLevel: "low"`: 3.8 Flash no admite `"minimal"` (da 400), y `"low"` es su nivel más rápido. Fuentes: la página de novedades de Gemini 3.8 y la de retiradas en ai.google.dev, vistas en resultados de búsqueda, sin abrir las páginas. Por eso "Probar" del panel busca el modelo en ListModels con la clave real.
+- **Sin `temperature`:** en Gemini 3, Google recomienda dejarla en su valor por defecto. El largo de la respuesta lo sigue marcando el prompt ("2 a 4 frases"). `maxOutputTokens` va en 1024, holgado, porque el razonamiento también gasta del tope.
+- **Prompt de sistema:** se quitó "funcionas 100% en local, sin conexión a la nube" (pendiente de la Fase 10).
+- **La clave:**
+    - Se pega en el panel local (Cuentas → Gemini) y se guarda en `gemini_clave.json` con permisos 600, fuera de git.
+    - Vale al momento, sin reiniciar.
+    - Las rutas para ponerla y probarla no están en `RUTAS_POST`, así que la nube no puede tocarla. Probado: una orden de la nube a `/api/gemini/clave` contesta "Esa orden no existe." y no llama a Gemini.
+- **Probado contra un Gemini simulado en local** (21 comprobaciones): la clave va en la cabecera y no en la URL, el streaming SSE, los roles del historial, el modo JSON, el reintento sin `thinkingConfig`, ListModels, la caída a Ollama con clave mala y sin conexión, la pausa de 60 s tras un fallo de conexión, y que la clave no sale ni en el log ni en el estado.
+- **Probado con el servidor de prueba y la grabación real "Píxel, ¿Qué es el sistema operativo de Linux?":**
+    - Sin clave responde Ollama: 1er token en 5,39 s, total 16,1 s.
+    - Con una clave falsa, el Gemini real contesta "API key not valid". El clasificador cae a Ollama tras 0,35 s y la respuesta tras 0,6 s, y el turno responde igual (1er token de Ollama en 0,80 s). La clave no aparece en el log.
+    - Un POST de la clave desde otra página da 403.
+- **No probado:** una respuesta real de Gemini (falta la clave), su latencia y si el 3.8 Flash del usuario acepta `"low"` (si no, reintenta solo, sin él).
+
+## Pendientes
+
+1. Cuando el usuario tenga la clave: pegarla en el panel, tocar "Probar" y medir la latencia de Gemini contra la de Ollama con grabaciones reales.
+2. Con una clave mala, cada turno pierde ~1 s en los dos intentos fallidos, porque solo los fallos de conexión hacen pausa. Si molesta, pausar también los 4xx.
+3. Ollama se descarga de la RAM tras 30 min sin usarse (`keep_alive`). Con Gemini contestando siempre, el primer respaldo tras ese rato será lento (~10 s).
+4. La app publicada en Firebase no tiene la tarjeta de Gemini hasta que se vuelva a publicar. Desde internet solo enseña el estado: la clave nunca viaja por la nube.

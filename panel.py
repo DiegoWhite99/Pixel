@@ -26,6 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import acciones
 import bluetooth_pc
+import gemini
 import nube
 import recordatorios
 import red_wifi
@@ -198,6 +199,7 @@ def estado():
                        "credenciales": os.path.exists(_ruta(S.GOOGLE_CLIENTE)),
                        "estado": _google["estado"], "error": _google["error"]},
             "contactos": [{"nombre": n, "correo": c} for n, c in acciones.CONTACTOS.items()],
+            "gemini": gemini.estado(),          # sin la clave: solo si hay, el modelo y el ultimo error
         },
         "agenda": {"recordatorios": pendientes, "eventos": eventos},
     }
@@ -376,6 +378,31 @@ def vincular_google(d):
     return {"mensaje": "Se abrió Google en el navegador del PC. Entra con la cuenta y acepta."}
 
 
+def guardar_gemini(d):
+    """Guarda la clave de Gemini (vacia = quitarla) y la prueba. Se usa desde ya, sin reiniciar."""
+    clave = (d.get("clave") or "").strip()
+    if clave and (len(clave) < 20 or len(clave) > 200 or any(c.isspace() for c in clave)):
+        raise ErrorPanel("Esa clave no parece de Gemini: cópiala entera desde Google AI Studio.")
+    gemini.guardar(clave)
+    if not clave:
+        S.log("panel: clave de Gemini quitada; responde Ollama")
+        return {"mensaje": "Clave quitada. Píxel vuelve a usar la IA local."}
+    S.log("panel: clave de Gemini guardada")
+    ok, texto = gemini.probar()
+    S.log("panel: prueba de Gemini: %s" % texto)
+    if not ok:
+        raise ErrorPanel("Clave guardada, pero falla. " + texto)
+    return {"mensaje": "Clave guardada. " + texto}
+
+
+def probar_gemini(d):
+    ok, texto = gemini.probar()
+    S.log("panel: prueba de Gemini: %s" % texto)
+    if not ok:
+        raise ErrorPanel(texto)
+    return {"mensaje": texto}
+
+
 RUTAS_POST = {
     "/api/agente": guardar_agente,
     "/api/agente/probar": probar_voz,
@@ -396,6 +423,13 @@ RUTAS_POST = {
     "/api/bt/desconectar": _bt(bluetooth_pc.desconectar, "Desconectado."),
     "/api/bt/olvidar": _bt(bluetooth_pc.olvidar, "Olvidado."),
     "/api/bt/musica": _bt(bluetooth_pc.usar_para_musica, "Salida de la música cambiada."),
+}
+
+# Solo desde el panel local: no van en RUTAS_POST porque nube.py ejecuta esas como ordenes
+# que llegan de internet, y la clave de Gemini solo se pone o se quita desde la red de casa.
+RUTAS_SOLO_LOCAL = {
+    "/api/gemini/clave": guardar_gemini,
+    "/api/gemini/probar": probar_gemini,
 }
 
 
@@ -435,7 +469,7 @@ class Manejador(BaseHTTPRequestHandler):
             self._responder(200, f.read(), tipo)
 
     def do_POST(self):
-        funcion = RUTAS_POST.get(self.path)
+        funcion = RUTAS_POST.get(self.path) or RUTAS_SOLO_LOCAL.get(self.path)
         largo = int(self.headers.get("Content-Length") or 0)
         if self._origen_ajeno():
             self._responder(403, {"error": "Origen no permitido."})

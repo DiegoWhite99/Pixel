@@ -254,7 +254,7 @@ function pintarDispositivos(d) {
   $("#portal-clave").textContent = d.portal.clave;
   $("#kv-servidor").innerHTML = `<dt>IP</dt><dd class="mono">${esc(d.servidor.ip)}</dd><dt>Puerto ESP32</dt><dd class="mono">${d.servidor.puerto}</dd>
     <dt>Este panel</dt><dd class="mono">http://${esc(d.servidor.ip)}:${d.servidor.panel}</dd>
-    <dt>Reconocimiento</dt><dd>Whisper ${esc(d.servidor.stt)}</dd><dt>IA</dt><dd>${esc(d.servidor.llm)} ${d.servidor.ollama ? "· lista" : "· apagada"}</dd>`;
+    <dt>Reconocimiento</dt><dd>Whisper ${esc(d.servidor.stt)}</dd><dt>IA</dt><dd>${d.cuentas.gemini && d.cuentas.gemini.configurada ? "Gemini " + esc(d.cuentas.gemini.modelo) + " · respaldo " : ""}${esc(d.servidor.llm)} ${d.servidor.ollama ? "· lista" : "· apagada"}</dd>`;
 }
 
 // ------------------------------------------------------------------ hoja "Agregar dispositivo"
@@ -392,7 +392,27 @@ function filaAgenda(item, tipo) {
     <button class="btn peligro" type="button" data-borrar="${tipo}" data-id="${item.id}">Borrar</button></div>`;
 }
 
+// Gemini con error: el ultimo fallo es mas reciente que la ultima respuesta buena
+function geminiConError(gm) {
+  return !!(gm && gm.configurada && gm.error && (gm.hace_ok === null || gm.hace_error < gm.hace_ok));
+}
+
+function pintarGemini(gm) {
+  if (!gm) return;                      // servidor anterior a la Fase 11
+  const mal = geminiConError(gm);
+  $("#gm-chip").textContent = !gm.configurada ? "Sin clave" : mal ? "Con error" : "Activa";
+  $("#gm-chip").className = "chip" + (!gm.configurada ? "" : mal ? " warn" : " ok");
+  $("#gm-info").textContent = (gm.configurada ? `Responde ${gm.modelo}. Si falla, responde la IA local.` : "Ahora responde la IA local del PC.")
+    + (EN_INTERNET ? " La clave se pone desde el panel del PC, en tu red." : "");
+  $("#gm-aviso").hidden = !mal;
+  $("#gm-aviso").textContent = mal ? "Último error: " + gm.error : "";
+  $("#f-gemini").hidden = EN_INTERNET;  // la clave nunca viaja por la nube
+  $("#gm-probar").disabled = !gm.configurada;
+  $("#gm-quitar").hidden = !gm.configurada;
+}
+
 function pintarResto(d) {
+  pintarGemini(d.cuentas.gemini);
   const g = d.cuentas.google, chip = $("#g-chip"), boton = $("#g-vincular"), aviso = $("#g-aviso");
   chip.textContent = g.vinculada ? "Vinculada" : g.estado === "esperando" ? "Esperando en el navegador" : "No vinculada";
   chip.className = "chip" + (g.vinculada ? " ok" : g.estado === "esperando" ? " warn" : "");
@@ -468,7 +488,9 @@ function pintar(d) {
   ultimaOp = clave;
   pill("#pill-servidor", "ok", EN_INTERNET ? (d.nube.nombre || "Píxel") : "Servidor · " + d.servidor.ip);
   pill("#pill-esp", d.activos ? "ok" : "warn", d.activos ? (d.activos === 1 ? "ESP32 conectado" : d.activos + " ESP32") : "ESP32 sin conectar");
-  pill("#pill-ollama", d.servidor.ollama ? "ok" : "warn", d.servidor.ollama ? "IA local lista" : "IA local apagada");
+  const gm = d.cuentas.gemini;
+  if (gm && gm.configurada) pill("#pill-ollama", geminiConError(gm) ? "warn" : "ok", geminiConError(gm) ? "Gemini con error" : "IA: Gemini");
+  else pill("#pill-ollama", d.servidor.ollama ? "ok" : "warn", d.servidor.ollama ? "IA local lista" : "IA local apagada");
   pintarInicio(d);
   pintarDispositivos(d);
   pintarHoja(d);
@@ -709,6 +731,18 @@ $("#f-contacto").addEventListener("submit", async (e) => {
   if (await enviar("/api/contactos", {nombre: $("#c-nombre").value, correo: $("#c-correo").value})) { $("#c-nombre").value = ""; $("#c-correo").value = ""; }
 });
 $("#g-vincular").addEventListener("click", () => enviar("/api/google/vincular"));
+$("#f-gemini").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const clave = $("#gm-clave").value.trim();
+  if (!clave) { toast("Pega primero la clave.", true); return; }
+  toast("Guardando y probando la clave…");
+  await enviar("/api/gemini/clave", {clave});
+  $("#gm-clave").value = "";            // que la clave no se quede en la pantalla
+});
+$("#gm-probar").addEventListener("click", () => { toast("Probando Gemini…"); enviar("/api/gemini/probar"); });
+$("#gm-quitar").addEventListener("click", () => {
+  if (confirm("¿Quitar la clave de Gemini? Píxel volverá a usar la IA local.")) enviar("/api/gemini/clave", {clave: ""});
+});
 
 const hoja = $("#agregar");
 hoja.addEventListener("click", (e) => { if (e.target === hoja) hoja.close(); });

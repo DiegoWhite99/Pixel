@@ -150,6 +150,13 @@ LLM_TEMPERATURA = 0.5
 LLM_MAX_TURNOS = 4          # pares usuario/asistente que se recuerdan
 LLM_SYSTEM = None           # prompt con la fecha; se arma en main()
 
+# Fase 11: Gemini (Google) en vez de Ollama si hay clave; sin clave, o si falla, responde Ollama
+GEMINI_CLAVE = "gemini_clave.json"     # la pega el usuario en el panel (Cuentas); da acceso a su cuenta: no se comparte
+GEMINI_MODELO = "gemini-3.8-flash"     # el Flash vigente en nov 2026 (ai.google.dev); "Probar" del panel lo busca con ListModels
+GEMINI_PENSAR = "low"                  # thinkingLevel mas rapido que admite 3.8 Flash ("minimal" da 400)
+GEMINI_MAX_TOKENS = 1024               # holgado: el razonamiento tambien gasta tokens del tope
+GEMINI_TIMEOUT = 10.0                  # s sin recibir nada antes de pasarse a Ollama
+
 # TTS (Piper)
 TTS_VOZ = "voces/es_ES-sharvard-medium.onnx"     # antes es_MX-ald-medium (masculina)
 TTS_HABLANTE = "F"          # el modelo trae "M" y "F"; medida la mas ligera de las femeninas que se oyen bien
@@ -779,11 +786,11 @@ class Sesion:
                 % (self.peer, clas["accion"], clas.get("consulta")))
             clas = {"accion": "ninguna"}
         if clas and clas.get("accion") in funciones and clas.get("consulta"):
-            log('%s  INTENCION via clasificador: %s | consulta "%s" | clasificador %.2f s'
-                % (self.peer, clas["accion"], clas["consulta"], t_clas))
+            log('%s  INTENCION via clasificador: %s | consulta "%s" | clasificador %s %.2f s'
+                % (self.peer, clas["accion"], clas["consulta"], CLASIFICADOR.motor, t_clas))
             self._accion((clas["accion"], {"consulta": clas["consulta"]}, funciones[clas["accion"]]))
             return
-        log("%s  INTENCION: ninguna (clasificador: %s, %.2f s) -> LLM" % (self.peer, clas, t_clas))
+        log("%s  INTENCION: ninguna (clasificador %s: %s, %.2f s) -> LLM" % (self.peer, CLASIFICADOR.motor, clas, t_clas))
 
         # --- LLM en streaming + TTS por frase ---
         t0 = time.monotonic()
@@ -821,8 +828,8 @@ class Sesion:
         respuesta = " ".join(dichas)
         dur_audio = bytes_audio / float(SAMPLE_RATE * SAMPLE_WIDTH)
         log('%s  RESPUESTA: "%s"' % (self.peer, respuesta))
-        log("%s  tiempos -> STT %.2f s (audio %.2f s) | LLM 1er token %.2f s (total %.2f s) | TTS %.2f s (%.2f s de voz)"
-            % (self.peer, t_stt, dur_s,
+        log("%s  tiempos -> STT %.2f s (audio %.2f s) | LLM %s 1er token %.2f s (total %.2f s) | TTS %.2f s (%.2f s de voz)"
+            % (self.peer, t_stt, dur_s, self.llm.motor,
                t_primer_token if t_primer_token is not None else -1.0,
                t_llm_total, t_tts, dur_audio))
         self.debug("ia: " + respuesta)
@@ -1089,6 +1096,14 @@ def main():
     if DESCUBRIR_PORT:
         threading.Thread(target=responder_descubrimiento, daemon=True).start()
     log("recordatorios: %s | %d pendiente(s)" % (AGENDA.ruta, len(AGENDA.pendientes())))
+
+    # despues de calentar: asi el calentamiento va a Ollama y el respaldo responde rapido
+    import gemini
+    gemini.configurar(GEMINI_MODELO, GEMINI_PENSAR, GEMINI_MAX_TOKENS, GEMINI_TIMEOUT, log)
+    if gemini.cargar(os.path.join(BASE_DIR, GEMINI_CLAVE)):
+        log("Gemini: clave cargada; responde %s y Ollama queda de respaldo" % GEMINI_MODELO)
+    else:
+        log("Gemini: sin clave (se pone en el panel, Cuentas); responde Ollama")
 
     import servicios_google
     try:

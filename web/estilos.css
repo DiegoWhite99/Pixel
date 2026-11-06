@@ -149,7 +149,7 @@ ol.pasos li::marker { color: var(--blue); font-weight: 800; }
 .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
 .acciones { display: flex; gap: 8px; flex-wrap: wrap; }
 label.campo { display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
-input[type=text], input[type=email], textarea, select { width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 10px 12px; font-weight: 400; }
+input[type=text], input[type=email], input[type=password], textarea, select { width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 10px 12px; font-weight: 400; }
 input:focus, textarea:focus, select:focus { border-color: var(--blue-2); }
 textarea { min-height: 90px; resize: vertical; }
 .form-fila { display: grid; gap: 10px; grid-template-columns: 1fr 1.4fr auto; align-items: end; }

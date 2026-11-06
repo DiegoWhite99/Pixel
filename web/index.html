@@ -159,6 +159,21 @@
     <div><h1>Cuentas</h1><p class="sub">Vincula servicios para que Píxel pueda usar tu calendario y enviar correos.</p></div>
     <div class="card">
       <div class="head">
+        <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3c.6 4.6 3.4 7.4 8 8-4.6.6-7.4 3.4-8 8-.6-4.6-3.4-7.4-8-8 4.6-.6 7.4-3.4 8-8Z"/></svg></div><h2>Gemini</h2></div>
+        <span class="chip" id="gm-chip">Sin clave</span>
+      </div>
+      <p class="sub">Con una clave de Gemini, Píxel piensa con la IA de Google por internet. Sin clave, o si se cae internet, responde la IA local del PC.</p>
+      <form class="form-linea" id="f-gemini" autocomplete="off">
+        <input type="password" id="gm-clave" placeholder="Pega aquí la clave" autocomplete="off" spellcheck="false" aria-label="Clave de Gemini">
+        <button class="btn primario" type="submit">Guardar</button>
+        <button class="btn" type="button" id="gm-probar">Probar</button>
+        <button class="btn peligro" type="button" id="gm-quitar">Quitar clave</button>
+      </form>
+      <p class="sub" id="gm-info"></p>
+      <p class="aviso" id="gm-aviso" hidden></p>
+    </div>
+    <div class="card">
+      <div class="head">
         <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 12h8M12 3v9"/></svg></div><h2>Google</h2></div>
         <span class="chip" id="g-chip">No vinculada</span>
       </div>
