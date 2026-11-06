@@ -1,0 +1,12 @@
+{
+  "hosting": {
+    "public": "web",
+    "ignore": ["**/.*"],
+    "headers": [
+      {"source": "**/*.@(html|js|css|webmanifest)", "headers": [{"key": "Cache-Control", "value": "no-cache"}]}
+    ]
+  },
+  "database": {
+    "rules": "database.rules.json"
+  }
+}

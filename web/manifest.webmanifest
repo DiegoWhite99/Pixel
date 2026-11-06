@@ -1,0 +1,10 @@
+{
+  "name": "Píxel",
+  "short_name": "Píxel",
+  "description": "Panel de Píxel, el asistente de voz local",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [{"src": "icono.svg", "sizes": "any", "type": "image/svg+xml"}]
+}

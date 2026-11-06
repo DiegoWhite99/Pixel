@@ -1,0 +1,47 @@
+{
+  "rules": {
+    "visibles": {
+      ".read": "auth != null",
+      "$pid": {".write": "auth != null && auth.uid === $pid"}
+    },
+    "pixeles": {
+      "$pid": {
+        ".read": "auth != null && auth.uid === $pid",
+        ".write": "auth != null && auth.uid === $pid",
+        "estado": {".read": "auth != null && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()"},
+        "vivo": {".read": "auth != null && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()"},
+        "voz": {".read": "auth != null && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()"},
+        "duenos": {"$uid": {".read": "auth != null && auth.uid === $uid"}},
+        "mirando": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()",
+            ".validate": "newData.isNumber()"
+          }
+        },
+        "solicitudes": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.hasChildren(['codigo', 'n']) && newData.child('codigo').isString() && newData.child('codigo').val().length <= 12 && newData.child('n').isString() && newData.child('n').val().length <= 40 && (!newData.child('nombre').exists() || newData.child('nombre').isString() && newData.child('nombre').val().length <= 40)"
+          }
+        },
+        "ordenes": {
+          "$id": {
+            ".write": "auth != null && !data.exists() && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()",
+            ".validate": "newData.child('uid').val() === auth.uid && newData.child('ruta').isString() && newData.child('ruta').val().length <= 60 && newData.child('cuerpo').isString() && newData.child('cuerpo').val().length <= 20000"
+          }
+        },
+        "respuestas": {
+          "$id": {".read": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid)"}
+        }
+      }
+    },
+    "usuarios": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "pixeles": {
+          "$pid": {".write": "auth != null && (auth.uid === $pid || (auth.uid === $uid && !newData.exists()))"}
+        }
+      }
+    }
+  }
+}

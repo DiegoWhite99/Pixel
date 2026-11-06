@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Píxel · Administración</title>
+<style>
+/* Panel tipo app: barra de estado arriba, pestañas, tarjetas por tema. Fuentes del sistema
+   para que funcione sin internet en la feria. */
+:root {
+  --bg: #eef2f1;
+  --surface: #ffffff;
+  --surface-2: #f6f8f7;
+  --ink: #142019;
+  --muted: #5a6762;
+  --line: #d6dedb;
+  --accent: #0c7a68;
+  --accent-ink: #ffffff;
+  --accent-soft: #dbefea;
+  --ok: #23854a;
+  --ok-soft: #dff2e5;
+  --warn: #a8650a;
+  --warn-soft: #fbefd9;
+  --off: #8a9692;
+  --off-soft: #eceff0;
+  --bad: #b8372f;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", Ubuntu, sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", "DejaVu Sans Mono", Menlo, Consolas, monospace;
+  --radius: 10px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1412; --surface: #161e1b; --surface-2: #1b2521; --ink: #e5ece9; --muted: #9aa8a3; --line: #2a3632;
+    --accent: #3cbca6; --accent-ink: #06201b; --accent-soft: #163a33;
+    --ok: #5fc879; --ok-soft: #163322; --warn: #f0b545; --warn-soft: #3a2d12; --off: #7d8a86; --off-soft: #222b28; --bad: #ef6a62;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.5; }
+button, input, select, textarea { font: inherit; color: inherit; }
+.wrap { max-width: 980px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+
+/* barra superior */
+.top { background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+.top .wrap { display: flex; align-items: center; gap: 14px; padding-block: 12px; flex-wrap: wrap; }
+.marca { display: flex; align-items: center; gap: 10px; margin-right: auto; }
+.logo { width: 38px; height: 38px; border-radius: 11px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-weight: 800; font-size: 20px; }
+.marca b { font-size: 18px; display: block; line-height: 1.1; }
+.marca small { color: var(--muted); font-size: 12.5px; }
+.pills { display: flex; gap: 8px; flex-wrap: wrap; }
+.pill { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; padding: 5px 11px; border-radius: 999px; background: var(--off-soft); color: var(--muted); white-space: nowrap; }
+.pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--off); }
+.pill.ok { background: var(--ok-soft); color: var(--ok); } .pill.ok i { background: var(--ok); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); } .pill.warn i { background: var(--warn); }
+
+nav.tabs { display: flex; gap: 4px; overflow-x: auto; padding-block: 0 10px; scrollbar-width: none; }
+nav.tabs a { text-decoration: none; color: var(--muted); padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 14px; white-space: nowrap; }
+nav.tabs a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); }
+nav.tabs a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+main { padding-block: 22px 60px; }
+section.vista { display: grid; gap: 16px; }
+section.vista[hidden] { display: none; }
+h1 { font-size: 24px; margin: 0; letter-spacing: -0.01em; }
+h2 { font-size: 17px; margin: 0; }
+p { margin: 0; }
+.sub { color: var(--muted); font-size: 14px; }
+
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.card .head { display: flex; align-items: center; gap: 10px; justify-content: space-between; flex-wrap: wrap; }
+.ico { width: 34px; height: 34px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; flex: none; }
+.ico svg { width: 19px; height: 19px; }
+.titulo { display: flex; align-items: center; gap: 10px; min-width: 0; }
+
+/* inicio */
+.hero { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; display: grid; gap: 8px; }
+.hero .estado { font-size: 22px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+.latido { width: 12px; height: 12px; border-radius: 50%; background: var(--off); flex: none; }
+.latido.ok { background: var(--ok); box-shadow: 0 0 0 0 var(--ok); animation: latir 2s infinite; }
+@keyframes latir { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 55%, transparent); } 70% { box-shadow: 0 0 0 10px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .latido.ok { animation: none; } }
+.dato { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.cita { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; font-size: 14px; color: var(--muted); }
+.cita b { color: var(--ink); font-weight: 600; }
+
+/* listas */
+.lista { display: grid; gap: 8px; }
+.fila { display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface-2); border-radius: 8px; }
+.fila .txt { flex: 1; min-width: 0; }
+.fila .txt b { display: block; overflow-wrap: anywhere; }
+.fila .txt small { color: var(--muted); }
+.vacio { color: var(--muted); font-size: 14px; padding: 14px; border: 1px dashed var(--line); border-radius: 8px; text-align: center; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 14px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+code, .mono { font-family: var(--mono); font-size: 13px; }
+.chip-estado { font-size: 12.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--off-soft); color: var(--muted); white-space: nowrap; }
+.chip-estado.escuchando { background: var(--ok-soft); color: var(--ok); }
+.chip-estado.hablando { background: var(--accent-soft); color: var(--accent); }
+.chip-estado.pronto { background: var(--warn-soft); color: var(--warn); }
+
+ol.pasos { margin: 0; padding-left: 20px; display: grid; gap: 8px; font-size: 14px; }
+ol.pasos li::marker { color: var(--accent); font-weight: 700; }
+
+/* botones y formularios */
+.btn { border: 1px solid var(--line); background: var(--surface); padding: 9px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; }
+.btn:hover { background: var(--surface-2); }
+.btn.primario { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primario:hover { filter: brightness(1.05); }
+.btn.peligro { color: var(--bad); }
+.btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+.acciones { display: flex; gap: 8px; flex-wrap: wrap; }
+label.campo { display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
+input[type=text], input[type=email], textarea, select { width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 10px 12px; font-weight: 400; }
+textarea { min-height: 90px; resize: vertical; }
+.form-fila { display: grid; gap: 10px; grid-template-columns: 1fr 1.4fr auto; align-items: end; }
+@media (max-width: 620px) { .form-fila { grid-template-columns: 1fr; } }
+
+.voces { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.voz { display: flex; gap: 10px; align-items: center; padding: 11px 12px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; background: var(--surface); }
+.voz:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.voz input { accent-color: var(--accent); }
+.presets { display: flex; gap: 6px; flex-wrap: wrap; }
+.presets button { border: 1px solid var(--line); background: var(--surface-2); border-radius: 999px; padding: 5px 12px; font-size: 13px; cursor: pointer; }
+.presets button:hover { border-color: var(--accent); color: var(--accent); }
+.segmento { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.segmento label { padding: 8px 14px; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--muted); }
+.segmento input { position: absolute; opacity: 0; pointer-events: none; }
+.segmento label:has(input:checked) { background: var(--accent-soft); color: var(--accent); }
+.contador { font-size: 12.5px; color: var(--muted); text-align: right; }
+
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 14px; max-width: calc(100% - 32px); z-index: 20; }
+.toast.error { background: var(--bad); color: #fff; }
+.ble { display: grid; gap: 6px; border-top: 1px solid var(--line); padding-top: 10px; }
+.ble-fila { display: flex; align-items: center; gap: 12px; padding: 7px 10px; background: var(--surface-2); border-radius: 8px; }
+.ble-fila .txt { flex: 1; min-width: 0; }
+.ble-fila .txt b { display: block; font-size: 14px; overflow-wrap: anywhere; }
+.ble-fila .txt small { color: var(--muted); font-size: 12px; }
+.barras { display: inline-flex; align-items: flex-end; gap: 2px; height: 16px; flex: none; }
+.barras i { width: 4px; border-radius: 1px; background: var(--line); }
+.barras i.on { background: var(--accent); }
+.buscando { display: flex; align-items: center; gap: 10px; padding: 14px; color: var(--muted); font-size: 14px; }
+.giro { width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: girar 0.9s linear infinite; flex: none; }
+@keyframes girar { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .giro { animation: none; border-top-color: var(--line); background: var(--accent-soft); } }
+.form-aceptar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; width: 100%; }
+.form-aceptar input { flex: 1; min-width: 160px; }
+.aviso { font-size: 13.5px; background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 9px 12px; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="marca">
+      <div class="logo" aria-hidden="true">P</div>
+      <div><b>Píxel</b><small>Administración del asistente</small></div>
+    </div>
+    <div class="pills">
+      <span class="pill" id="pill-servidor"><i></i>Servidor</span>
+      <span class="pill" id="pill-esp"><i></i>ESP32</span>
+      <span class="pill" id="pill-ollama"><i></i>IA local</span>
+    </div>
+  </div>
+  <div class="wrap">
+    <nav class="tabs" aria-label="Secciones">
+      <a href="#inicio" data-vista="inicio">Inicio</a>
+      <a href="#dispositivos" data-vista="dispositivos">Dispositivos</a>
+      <a href="#cuentas" data-vista="cuentas">Cuentas</a>
+      <a href="#agente" data-vista="agente">Agente</a>
+      <a href="#agenda" data-vista="agenda">Agenda</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- INICIO -->
+  <section class="vista" id="v-inicio">
+    <div class="hero">
+      <div class="estado"><span class="latido" id="latido"></span><span id="hero-estado">Conectando con el servidor…</span></div>
+      <p class="sub" id="hero-sub">El panel se actualiza solo cada 3 segundos.</p>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M10 17h4"/></svg></div><h2>Dispositivos</h2></div>
+        <div class="dato" id="r-disp">–</div>
+        <p class="sub" id="r-disp-sub">ESP32 conectados</p>
+      </div>
+      <div class="card">
+        <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></div><h2>Agenda</h2></div>
+        <div class="dato" id="r-agenda">–</div>
+        <p class="sub" id="r-agenda-sub">recordatorios y eventos pendientes</p>
+      </div>
+      <div class="card">
+        <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12a8 8 0 0 1 16 0v5a2 2 0 0 1-2 2h-1v-6h3M4 13h3v6H6a2 2 0 0 1-2-2z"/></svg></div><h2>Voz</h2></div>
+        <div class="dato" id="r-voz" style="font-size:20px">–</div>
+        <p class="sub" id="r-voz-sub">palabra de activación</p>
+      </div>
+      <div class="card">
+        <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></div><h2>Cuentas</h2></div>
+        <div class="dato" id="r-cuentas" style="font-size:20px">–</div>
+        <p class="sub" id="r-cuentas-sub">Google</p>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Lo último que oyó</h2>
+      <div class="cita" id="ultimo">Todavía nada.</div>
+      <div class="acciones"><button class="btn" type="button" data-probar>Probar la voz</button></div>
+    </div>
+  </section>
+
+  <!-- DISPOSITIVOS -->
+  <section class="vista" id="v-dispositivos" hidden>
+    <div><h1>Dispositivos</h1><p class="sub">Conecta altavoces, auriculares y móviles, y mira los ESP32 conectados.</p></div>
+    <div class="card" id="c-btpc">
+      <div class="head">
+        <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="14" r="4"/><circle cx="12" cy="6" r="1"/></svg></div>
+          <div><h2>Altavoces, auriculares y móviles</h2><span class="sub">Por el Bluetooth del PC. La música que pone Píxel suena por el altavoz que elijas.</span></div></div>
+        <span class="chip-estado" id="bt-chip">…</span>
+      </div>
+      <div id="bt-cuerpo"><div class="buscando"><span class="giro"></span>Mirando el Bluetooth del PC…</div></div>
+    </div>
+    <h2 style="margin-top:6px">ESP32 conectados</h2>
+    <div class="lista" id="lista-disp"></div>
+    <div class="card" id="c-buscar">
+      <div class="head">
+        <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></svg></div>
+          <div><h2>Buscar dispositivos Bluetooth</h2><span class="sub">El ESP32 mira a su alrededor y tú aceptas los que quieras.</span></div></div>
+        <button class="btn primario" type="button" id="b-buscar">Buscar dispositivos</button>
+      </div>
+      <div id="busqueda"><div class="vacio">Pulsa "Buscar dispositivos".</div></div>
+      <p class="sub">Los móviles cambian su dirección Bluetooth cada pocos minutos por privacidad, así que aceptarlos dura poco. Con relojes, pulseras, sensores y balizas funciona bien.</p>
+    </div>
+    <div class="card">
+      <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></div><h2>Mis dispositivos</h2></div>
+      <div class="lista" id="lista-mios"></div>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/></svg></div><h2>Conectar un ESP32 por WiFi</h2></div>
+        <ol class="pasos" id="pasos-wifi">
+          <li>Enciende el ESP32. Si no encuentra su red, abre la red <b>Pixel-Config</b> y el LED se pone <b>morado</b>. También puedes abrirla manteniendo pulsado el botón <b>BOOT</b> 3 segundos.</li>
+          <li>Desde el móvil, conéctate a <b>Pixel-Config</b> (clave <code id="portal-clave">pixel2026</code>).</li>
+          <li>Se abre la página de configuración. Si no se abre, entra a <code>http://192.168.4.1</code>.</li>
+          <li>Elige la red WiFi y pon como IP del servidor <code id="ip-servidor">…</code>. Al guardar, el ESP32 se reinicia y aparece en esta lista.</li>
+        </ol>
+        <p class="aviso">Requiere el firmware nuevo con portal (<code>Pixel_portal.ino</code>).</p>
+      </div>
+      <div class="card">
+        <div class="head"><div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></svg></div><h2>Bluetooth</h2></div><span class="chip-estado" id="ble-chip">Sin datos</span></div>
+        <p class="sub" id="ble-texto">Con el firmware nuevo, el ESP32 se anuncia por Bluetooth y cada 30 segundos busca los dispositivos que tiene cerca. La lista aparece en su tarjeta.</p>
+        <p class="sub">Es Bluetooth de bajo consumo (BLE): sirve para ver dispositivos y, más adelante, para configurarlo desde el móvil. No sirve para audio: no puede hacer de altavoz ni conectarse a auriculares.</p>
+      </div>
+      <div class="card">
+        <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div><h2>Este servidor</h2></div>
+        <dl class="kv" id="kv-servidor"></dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- CUENTAS -->
+  <section class="vista" id="v-cuentas" hidden>
+    <div><h1>Cuentas</h1><p class="sub">Vincula servicios para que Píxel pueda usar tu calendario y enviar correos.</p></div>
+    <div class="card">
+      <div class="head">
+        <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 12h8M12 3v9"/></svg></div><h2>Google</h2></div>
+        <span class="chip-estado" id="g-chip">No vinculada</span>
+      </div>
+      <p class="sub" id="g-texto">Con Google vinculado, Píxel usa tu Google Calendar en vez del calendario local y puede enviar correos (siempre después de que digas "sí, mándalo").</p>
+      <div class="acciones"><button class="btn primario" type="button" id="g-vincular">Vincular con Google</button></div>
+      <p class="aviso" id="g-aviso" hidden></p>
+    </div>
+    <div class="card">
+      <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></div><h2>Contactos para el correo</h2></div>
+      <p class="sub">Píxel solo puede escribir a estas personas. Di: "Píxel, manda un correo a Ana diciendo que llego tarde".</p>
+      <div class="lista" id="lista-contactos"></div>
+      <form class="form-fila" id="f-contacto">
+        <label class="campo">Nombre<input type="text" id="c-nombre" maxlength="40" placeholder="Ana" required></label>
+        <label class="campo">Correo<input type="email" id="c-correo" placeholder="ana@gmail.com" required></label>
+        <button class="btn primario" type="submit">Añadir</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- AGENTE -->
+  <section class="vista" id="v-agente" hidden>
+    <div><h1>Personalizar el agente</h1><p class="sub">Los cambios se aplican en la siguiente respuesta, sin reiniciar nada.</p></div>
+    <form class="card" id="f-agente">
+      <div class="head"><h2>Palabra de activación</h2><span class="chip-estado">Fija</span></div>
+      <p class="sub">Se dice <b id="activacion">Píxel</b> antes de cada orden. Está ajustada al reconocimiento de voz y no se cambia desde aquí.</p>
+
+      <h2>Por dónde habla</h2>
+      <div class="voces">
+        <label class="voz"><input type="radio" name="salida_voz" value="esp32"><span><b>Por el ESP32</b><br><small class="sub">su propio altavoz</small></span></label>
+        <label class="voz"><input type="radio" name="salida_voz" value="pc"><span><b>Por el altavoz del PC</b><br><small class="sub" id="salida-pc-nota">el altavoz Bluetooth si está conectado</small></span></label>
+      </div>
+
+      <h2>Voz</h2>
+      <div class="voces" id="voces"></div>
+      <div class="acciones"><button class="btn" type="button" id="guardar-probar">Guardar y probar</button></div>
+
+      <h2>Personalidad</h2>
+      <div class="presets" id="presets">
+        <button type="button" data-texto="Amable y cercano, con frases sencillas.">Amable</button>
+        <button type="button" data-texto="Entusiasta y con humor, sin exagerar.">Divertido</button>
+        <button type="button" data-texto="Paciente, explica como un buen profesor y pone un ejemplo.">Profesor</button>
+        <button type="button" data-texto="Formal y preciso, trata de usted.">Formal</button>
+        <button type="button" data-texto="">Sin estilo</button>
+      </div>
+      <label class="campo">Cómo quieres que hable<textarea id="personalidad" maxlength="300" placeholder="Por ejemplo: amable y cercano, con frases sencillas."></textarea></label>
+      <div class="contador" id="contador">0 / 300</div>
+
+      <h2>Largo de las respuestas</h2>
+      <div class="segmento" role="radiogroup" aria-label="Largo de las respuestas">
+        <label><input type="radio" name="respuesta" value="corta">Corta · 1–2 frases</label>
+        <label><input type="radio" name="respuesta" value="normal">Normal · 2–4 frases</label>
+      </div>
+      <div class="acciones"><button class="btn primario" type="submit">Guardar cambios</button></div>
+    </form>
+  </section>
+
+  <!-- AGENDA -->
+  <section class="vista" id="v-agenda" hidden>
+    <div><h1>Agenda</h1><p class="sub">Lo que se creó por voz. Los recordatorios suenan a su hora en el ESP32.</p></div>
+    <div class="grid">
+      <div class="card"><h2>Recordatorios</h2><div class="lista" id="lista-recordatorios"></div><p class="sub">"Píxel, recuérdame comprar pan en 10 minutos"</p></div>
+      <div class="card"><h2>Eventos del calendario</h2><div class="lista" id="lista-eventos"></div><p class="sub">"Píxel, agenda la reunión mañana a las 3"</p></div>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+let datos = null, agenteListo = false, toastHasta = 0;
+
+function toast(texto, error) {
+  const t = $("#toast");
+  t.textContent = texto; t.className = "toast" + (error ? " error" : ""); t.hidden = false;
+  toastHasta = Date.now() + 3200;
+  setTimeout(() => { if (Date.now() >= toastHasta) t.hidden = true; }, 3300);
+}
+
+async function enviar(ruta, cuerpo) {
+  try {
+    const r = await fetch(ruta, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(cuerpo || {})});
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "No se pudo.");
+    toast(j.mensaje || "Hecho.");
+    refrescar();
+    return true;
+  } catch (e) { toast(e.message === "Failed to fetch" ? "No llego al servidor." : e.message, true); return false; }
+}
+
+function vista() {
+  const nombre = (location.hash || "#inicio").slice(1);
+  const v = document.getElementById("v-" + nombre) ? nombre : "inicio";
+  document.querySelectorAll("section.vista").forEach((s) => { s.hidden = s.id !== "v-" + v; });
+  document.querySelectorAll("nav.tabs a").forEach((a) => a.setAttribute("aria-current", a.dataset.vista === v ? "page" : "false"));
+}
+window.addEventListener("hashchange", vista);
+
+function pill(id, clase, texto) { const p = $(id); p.className = "pill " + clase; p.innerHTML = "<i></i>" + esc(texto); }
+
+function filaAgenda(item, tipo) {
+  return `<div class="fila"><div class="txt"><b>${esc(item.texto)}</b><small>${esc(item.dicho)}</small></div>
+    <button class="btn peligro" type="button" data-borrar="${tipo}" data-id="${item.id}">Borrar</button></div>`;
+}
+
+function barras(rssi) {
+  const n = rssi > -60 ? 4 : rssi > -70 ? 3 : rssi > -80 ? 2 : 1;
+  return `<span class="barras" title="${rssi} dBm" aria-label="señal ${n} de 4">${[1, 2, 3, 4].map((i) => `<i class="${i <= n ? "on" : ""}" style="height:${4 + i * 3}px"></i>`).join("")}</span>`;
+}
+
+function bleLista(ble) {
+  const cuando = ble.hace === null ? "" : ble.hace < 60 ? `hace ${ble.hace} s` : `hace ${Math.round(ble.hace / 60)} min`;
+  if (!ble.vistos.length) return `<div class="vacio">Todavía no ha visto dispositivos Bluetooth ${cuando}.</div>`;
+  return `<div class="ble"><div class="sub">Bluetooth cerca · ${ble.vistos.length} · ${cuando}</div>${ble.vistos.slice(0, 10).map((v) => `
+    <div class="ble-fila"><div class="txt"><b>${v.nombre ? esc(v.nombre) : "Sin nombre"}</b><small class="mono">${esc(v.mac)}</small></div>${v.aceptado ? '<span class="chip-estado escuchando">Aceptado</span>' : ""}${barras(v.rssi)}</div>`).join("")}
+    ${ble.vistos.length > 10 ? `<div class="sub">y ${ble.vistos.length - 10} más</div>` : ""}</div>`;
+}
+
+let busqueda = null;     // {t0, listo} desde que se pulsa "Buscar dispositivos"
+let aceptando = null;    // mac con el formulario de "Aceptar" abierto: no se repinta encima
+
+function filaEncontrado(v) {
+  return `<div class="fila"><div class="txt"><b>${v.nombre ? esc(v.nombre) : "Sin nombre"}</b><small class="mono">${esc(v.mac)}</small></div>${barras(v.rssi)}
+    ${v.aceptado ? '<span class="chip-estado escuchando">Aceptado</span>'
+                 : `<button class="btn" type="button" data-aceptar="${esc(v.mac)}" data-nombre="${esc(v.nombre)}">Aceptar</button>`}</div>`;
+}
+
+function pintarBusqueda(d) {
+  if (!busqueda || aceptando) return;
+  const caja = $("#busqueda");
+  const conBle = d.dispositivos.filter((x) => x.ble.yo && x.estado !== "sin datos");
+  if (!conBle.length) {
+    caja.innerHTML = '<div class="vacio">No hay ningún ESP32 con Bluetooth conectado. Revisa que esté encendido y con el firmware nuevo.</div>';
+    busqueda = null; return;
+  }
+  const pasado = (Date.now() - busqueda.t0) / 1000;
+  const frescos = conBle.filter((x) => x.ble.hace !== null && x.ble.hace <= pasado);
+  if (!busqueda.listo && !frescos.length) {
+    if (pasado > 45) { caja.innerHTML = '<div class="vacio">No llegó ninguna búsqueda. Prueba otra vez.</div>'; busqueda = null; return; }
+    caja.innerHTML = `<div class="buscando"><span class="giro"></span>Buscando… ${Math.round(pasado)} s (el ESP32 busca cada 30 s)</div>`;
+    return;
+  }
+  busqueda.listo = true;
+  const mapa = new Map();     // si dos ESP32 ven el mismo, el de mejor señal
+  conBle.forEach((x) => x.ble.vistos.forEach((v) => { const p = mapa.get(v.mac); if (!p || v.rssi > p.rssi) mapa.set(v.mac, v); }));
+  const lista = [...mapa.values()].sort((a, b) => b.rssi - a.rssi);
+  caja.innerHTML = lista.length
+    ? `<div class="sub">Encontrados ${lista.length}, del más cercano al más lejano</div><div class="lista">${lista.map(filaEncontrado).join("")}</div>`
+    : '<div class="vacio">No encontró dispositivos cerca.</div>';
+}
+
+function pintarMios(d) {
+  $("#lista-mios").innerHTML = d.mis_dispositivos.length ? d.mis_dispositivos.map((m) => `
+    <div class="fila"><div class="txt"><b>${esc(m.nombre)}</b><small class="mono">${esc(m.mac)}${m.hace !== null ? " · visto hace " + (m.hace < 60 ? m.hace + " s" : Math.round(m.hace / 60) + " min") : ""}</small></div>
+    ${m.cerca ? barras(m.rssi) + '<span class="chip-estado escuchando">Cerca</span>' : '<span class="chip-estado">No está cerca</span>'}
+    <button class="btn peligro" type="button" data-olvidar="${esc(m.mac)}">Olvidar</button></div>`).join("")
+    : '<div class="vacio">Aún no has aceptado ninguno. Usa "Buscar dispositivos".</div>';
+}
+
+const TIPOS_BT = {audio: "Altavoz o auriculares", movil: "Móvil", control: "Mando o teclado", ordenador: "Ordenador", otro: "Otro aparato", "": "Aparato"};
+
+function pintarBtPc(b) {
+  const chip = $("#bt-chip"), caja = $("#bt-cuerpo");
+  if (!b.hay) {
+    chip.textContent = "Sin Bluetooth"; chip.className = "chip-estado";
+    caja.innerHTML = '<div class="vacio">Este PC no tiene Bluetooth.</div>'; return;
+  }
+  chip.textContent = b.encendido ? "Encendido" : "Apagado";
+  chip.className = "chip-estado" + (b.encendido ? " escuchando" : "");
+  if (!b.encendido) {
+    caja.innerHTML = `<p class="sub">El Bluetooth del PC está apagado${b.bloqueado ? " (bloqueado)" : ""}.</p>
+      <div class="acciones"><button class="btn primario" type="button" data-bt="encender">Encender el Bluetooth del PC</button></div>`;
+    return;
+  }
+  const op = b.operacion, opReciente = op.estado && op.hace !== null && op.hace < 40;
+  const ocupado = (mac) => op.estado === "en_curso" && op.mac === mac;
+  const enPc = b.musica_en === "los altavoces del PC";
+  let h = `<div class="fila"><div class="txt"><small>La música suena por</small><b>${esc(b.musica_en)}</b></div>
+    ${enPc ? "" : '<button class="btn" type="button" data-bt="musica" data-mac="">Volver a los altavoces del PC</button>'}</div>`;
+  h += `<div class="acciones">
+    <button class="btn primario" type="button" data-bt="buscar" ${b.buscando ? "disabled" : ""}>${b.buscando ? "Buscando…" : "Buscar aparatos"}</button>
+    <button class="btn" type="button" data-bt="visible">${b.visible_s ? "Visible · " + b.visible_s + " s" : "Hacer visible para el móvil"}</button>
+    <button class="btn" type="button" data-bt="apagar">Apagar Bluetooth</button></div>`;
+  if (b.buscando) h += '<div class="buscando"><span class="giro"></span>Buscando aparatos cerca del PC… Pon tu altavoz o auriculares en modo emparejar.</div>';
+  if (b.visible_s) h += `<p class="aviso">En el móvil: Ajustes → Bluetooth → toca <b>${esc(b.nombre_pc)}</b> y acepta. El PC acepta solo durante estos ${b.visible_s} s.</p>`;
+  if (opReciente && op.estado !== "en_curso") h += `<p class="${op.estado === "ok" ? "sub" : "aviso"}">${esc(op.mensaje)}</p>`;
+  h += b.dispositivos.length ? '<div class="lista">' + b.dispositivos.map((x) => {
+    let botones;
+    if (ocupado(x.mac)) botones = `<span class="buscando" style="padding:0"><span class="giro"></span>${op.accion === "emparejar" ? "Emparejando…" : "Conectando…"}</span>`;
+    else {
+      botones = "";
+      if (!x.emparejado) botones += `<button class="btn primario" type="button" data-bt="emparejar" data-mac="${esc(x.mac)}">Emparejar</button>`;
+      else if (!x.conectado) botones += `<button class="btn primario" type="button" data-bt="conectar" data-mac="${esc(x.mac)}">Conectar</button>`;
+      else botones += `<button class="btn" type="button" data-bt="desconectar" data-mac="${esc(x.mac)}">Desconectar</button>`;
+      if (x.conectado && x.puede_musica && !x.musica) botones += `<button class="btn primario" type="button" data-bt="musica" data-mac="${esc(x.mac)}">Usar para la música</button>`;
+      if (x.emparejado) botones += `<button class="btn peligro" type="button" data-bt="olvidar" data-mac="${esc(x.mac)}">Olvidar</button>`;
+    }
+    return `<div class="fila" style="flex-wrap:wrap"><div class="txt"><b>${esc(x.nombre || x.mac)}</b>
+      <small>${esc(TIPOS_BT[x.tipo] || "Aparato")} · <span class="mono">${esc(x.mac)}</span></small></div>
+      ${x.musica ? '<span class="chip-estado hablando">Suena aquí</span>' : ""}
+      ${x.conectado ? '<span class="chip-estado escuchando">Conectado</span>' : x.emparejado ? '<span class="chip-estado">Emparejado</span>' : ""}
+      <div class="acciones">${botones}</div></div>`;
+  }).join("") + "</div>"
+    : '<div class="vacio">No hay aparatos todavía. Pon tu altavoz en modo emparejar y pulsa "Buscar aparatos".</div>';
+  caja.innerHTML = h;
+}
+
+function pintar(d) {
+  datos = d;
+  pintarBtPc(d.bt_pc);
+  $("#salida-pc-nota").textContent = "ahora: " + d.bt_pc.musica_en;
+  pintarBusqueda(d);
+  pintarMios(d);
+  const activos = d.activos, n = d.dispositivos.length;
+  pill("#pill-servidor", "ok", "Servidor · " + d.servidor.ip);
+  pill("#pill-esp", activos ? "ok" : "warn", activos ? (activos === 1 ? "ESP32 conectado" : activos + " ESP32") : "ESP32 sin conectar");
+  pill("#pill-ollama", d.servidor.ollama ? "ok" : "warn", d.servidor.ollama ? "IA local lista" : "IA local apagada");
+
+  const hablando = d.dispositivos.some((x) => x.estado === "hablando");
+  $("#latido").className = "latido" + (activos ? " ok" : "");
+  $("#hero-estado").textContent = !activos ? "Esperando al ESP32" : hablando ? "Píxel está hablando" : "Píxel está escuchando";
+  $("#hero-sub").textContent = activos ? `Di "${d.agente.activacion}" y tu orden. El panel se actualiza solo.`
+                                       : "Enciende el ESP32 o revisa su WiFi en Dispositivos.";
+  $("#r-disp").textContent = activos;
+  $("#r-disp-sub").textContent = activos === 1 ? "ESP32 conectado" : "ESP32 conectados";
+  const nr = d.agenda.recordatorios.length, ne = d.agenda.eventos.length;
+  $("#r-agenda").textContent = nr + ne;
+  $("#r-agenda-sub").textContent = `${nr} recordatorio${nr === 1 ? "" : "s"} · ${ne} evento${ne === 1 ? "" : "s"}`;
+  const voz = d.agente.voces.find((v) => v.id === d.agente.ajustes.voz);
+  $("#r-voz").textContent = voz ? voz.nombre.split(" · ")[0] : "–";
+  $("#r-voz-sub").textContent = `palabra de activación: ${d.agente.activacion}`;
+  const g = d.cuentas.google;
+  $("#r-cuentas").textContent = g.vinculada ? "Vinculada" : "Sin vincular";
+  $("#r-cuentas-sub").textContent = g.vinculada ? "Google · calendario y correo" : "Google · se usa el calendario local";
+  const conTexto = d.dispositivos.filter((x) => x.ultimo).pop();
+  $("#ultimo").innerHTML = conTexto ? `<b>"${esc(conTexto.ultimo)}"</b> · desde ${esc(conTexto.ip)}` : "Todavía nada.";
+
+  // dispositivos
+  $("#lista-disp").innerHTML = n ? d.dispositivos.map((x) => `
+    <div class="card"><div class="head">
+      <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M10 17h4"/></svg></div>
+      <div><h2>ESP32-S3</h2><span class="sub mono">${esc(x.ip)}</span></div></div>
+      <span class="chip-estado ${x.estado === "sin datos" ? "" : esc(x.estado)}">${esc(x.estado)}</span></div>
+      <dl class="kv"><dt>Conectado</dt><dd>desde las ${esc(x.desde)} (${x.minutos} min)</dd>
+      <dt>Frases oídas</dt><dd>${x.frases}</dd>
+      <dt>Ruido de fondo</dt><dd>${x.piso === null ? "calibrando…" : x.piso + (x.piso < 200 ? " · bien" : x.piso < 400 ? " · algo de ruido" : " · mucho ruido")}</dd>
+      <dt>Último texto</dt><dd>${x.ultimo ? "“" + esc(x.ultimo) + "”" : "–"}</dd>
+      <dt>Bluetooth</dt><dd>${x.ble.yo ? "se anuncia como <b>" + esc(x.ble.yo) + "</b>" : "apagado (firmware sin Bluetooth)"}</dd></dl>
+      ${x.ble.yo ? bleLista(x.ble) : ""}
+      ${x.estado === "sin datos" ? '<p class="aviso">Esta conexión dejó de mandar audio: el ESP32 se reconectó o se apagó. Se cierra sola en 2 minutos.</p>' : ""}
+    </div>`).join("") : '<div class="vacio">No hay ningún ESP32 conectado. Sigue los pasos de abajo.</div>';
+  const conBle = d.dispositivos.filter((x) => x.ble.yo && x.ble.hace !== null && x.ble.hace < 120);
+  $("#ble-chip").textContent = conBle.length ? "Activo" : "Sin datos";
+  $("#ble-chip").className = "chip-estado" + (conBle.length ? " escuchando" : "");
+  $("#ble-texto").textContent = conBle.length
+    ? `${conBle.map((x) => x.ble.yo).join(", ")} ve ${conBle.reduce((s, x) => s + x.ble.vistos.length, 0)} dispositivo(s) cerca. Búscalo desde el móvil con una app de Bluetooth LE, como nRF Connect.`
+    : "Con el firmware nuevo, el ESP32 se anuncia por Bluetooth y cada 30 segundos busca los dispositivos que tiene cerca. La lista aparece en su tarjeta.";
+  $("#ip-servidor").textContent = d.servidor.ip;
+  $("#portal-clave").textContent = d.portal.clave;
+  $("#kv-servidor").innerHTML = `<dt>IP</dt><dd class="mono">${esc(d.servidor.ip)}</dd><dt>Puerto ESP32</dt><dd class="mono">${d.servidor.puerto}</dd>
+    <dt>Este panel</dt><dd class="mono">http://${esc(d.servidor.ip)}:${d.servidor.panel}</dd>
+    <dt>Reconocimiento</dt><dd>Whisper ${esc(d.servidor.stt)}</dd><dt>IA</dt><dd>${esc(d.servidor.llm)} ${d.servidor.ollama ? "· lista" : "· apagada"}</dd>`;
+
+  // cuentas
+  const chip = $("#g-chip"), boton = $("#g-vincular"), aviso = $("#g-aviso");
+  chip.textContent = g.vinculada ? "Vinculada" : g.estado === "esperando" ? "Esperando en el navegador" : "No vinculada";
+  chip.className = "chip-estado" + (g.vinculada ? " escuchando" : g.estado === "esperando" ? " pronto" : "");
+  boton.disabled = !g.credenciales || g.estado === "esperando";
+  boton.textContent = g.vinculada ? "Volver a vincular" : "Vincular con Google";
+  aviso.hidden = g.credenciales && g.estado !== "error";
+  aviso.textContent = g.estado === "error" ? "No se pudo vincular: " + g.error
+    : "Antes hay que crear las credenciales en Google Cloud y guardarlas como google_cliente.json en la carpeta del asistente.";
+  $("#lista-contactos").innerHTML = d.cuentas.contactos.length ? d.cuentas.contactos.map((c) => `
+    <div class="fila"><div class="txt"><b>${esc(c.nombre)}</b><small class="mono">${esc(c.correo)}</small></div>
+    <button class="btn peligro" type="button" data-borrar-contacto="${esc(c.nombre)}">Quitar</button></div>`).join("")
+    : '<div class="vacio">Aún no hay contactos.</div>';
+
+  // agenda
+  $("#lista-recordatorios").innerHTML = nr ? d.agenda.recordatorios.map((r) => filaAgenda(r, "recordatorio")).join("") : '<div class="vacio">No hay recordatorios pendientes.</div>';
+  $("#lista-eventos").innerHTML = ne ? d.agenda.eventos.map((e) => filaAgenda(e, "evento")).join("") : '<div class="vacio">No hay eventos desde hoy.</div>';
+
+  // agente: el formulario se pinta una vez, para no pisar lo que se está escribiendo
+  if (!agenteListo) {
+    const a = d.agente.ajustes;
+    $("#activacion").textContent = d.agente.activacion;
+    $("#voces").innerHTML = d.agente.voces.map((v) => `<label class="voz"><input type="radio" name="voz" value="${esc(v.id)}" ${v.id === a.voz ? "checked" : ""}><span>${esc(v.nombre)}</span></label>`).join("");
+    $("#personalidad").value = a.personalidad;
+    document.querySelectorAll('input[name=respuesta]').forEach((r) => { r.checked = r.value === a.respuesta; });
+    document.querySelectorAll('input[name=salida_voz]').forEach((r) => { r.checked = r.value === a.salida_voz; });
+    contar();
+    agenteListo = true;
+  }
+}
+
+async function refrescar() {
+  try {
+    const r = await fetch("/api/estado", {cache: "no-store"});
+    pintar(await r.json());
+  } catch (e) {
+    pill("#pill-servidor", "warn", "Servidor sin respuesta");
+    $("#hero-estado").textContent = "No llego al servidor";
+    $("#latido").className = "latido";
+  }
+}
+
+function contar() { $("#contador").textContent = $("#personalidad").value.length + " / 300"; }
+$("#personalidad").addEventListener("input", contar);
+$("#presets").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-texto]"); if (!b) return;
+  $("#personalidad").value = b.dataset.texto; contar();
+});
+function datosAgente() {
+  const voz = document.querySelector("input[name=voz]:checked"), resp = document.querySelector("input[name=respuesta]:checked");
+  const salida = document.querySelector("input[name=salida_voz]:checked");
+  return {voz: voz && voz.value, respuesta: resp && resp.value, personalidad: $("#personalidad").value,
+          salida_voz: salida ? salida.value : "esp32"};
+}
+$("#f-agente").addEventListener("submit", (e) => { e.preventDefault(); enviar("/api/agente", datosAgente()); });
+$("#guardar-probar").addEventListener("click", async () => {
+  if (await enviar("/api/agente", datosAgente())) enviar("/api/agente/probar");
+});
+$("#f-contacto").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (await enviar("/api/contactos", {nombre: $("#c-nombre").value, correo: $("#c-correo").value})) { $("#c-nombre").value = ""; $("#c-correo").value = ""; }
+});
+$("#g-vincular").addEventListener("click", () => enviar("/api/google/vincular"));
+document.addEventListener("click", (e) => {
+  const probar = e.target.closest("[data-probar]");
+  if (probar) enviar("/api/agente/probar");
+  const b = e.target.closest("[data-borrar]");
+  if (b) enviar("/api/agenda/borrar", {tipo: b.dataset.borrar, id: Number(b.dataset.id)});
+  const c = e.target.closest("[data-borrar-contacto]");
+  if (c) enviar("/api/contactos/borrar", {nombre: c.dataset.borrarContacto});
+  if (e.target.closest("#b-buscar")) {
+    busqueda = {t0: Date.now(), listo: false}; aceptando = null;
+    $("#busqueda").innerHTML = '<div class="buscando"><span class="giro"></span>Buscando…</div>';
+    refrescar();
+  }
+  const a = e.target.closest("[data-aceptar]");
+  if (a) {
+    aceptando = a.dataset.aceptar;
+    a.closest(".fila").innerHTML = `<form class="form-aceptar" data-mac="${esc(aceptando)}">
+      <label class="sub" for="nombre-disp">Nombre para ${esc(aceptando)}</label>
+      <input type="text" id="nombre-disp" maxlength="40" required value="${esc(a.dataset.nombre || "")}" placeholder="Mi reloj">
+      <button class="btn primario" type="submit">Guardar</button><button class="btn" type="button" data-cancelar>Cancelar</button></form>`;
+    $("#nombre-disp").focus();
+  }
+  if (e.target.closest("[data-cancelar]")) { aceptando = null; refrescar(); }
+  const o = e.target.closest("[data-olvidar]");
+  if (o) enviar("/api/dispositivos/olvidar", {mac: o.dataset.olvidar});
+  const bt = e.target.closest("[data-bt]");
+  if (bt && !bt.disabled) enviar("/api/bt/" + bt.dataset.bt, {mac: bt.dataset.mac || ""});
+});
+document.addEventListener("submit", async (e) => {
+  const f = e.target.closest(".form-aceptar");
+  if (!f) return;
+  e.preventDefault();
+  const mac = f.dataset.mac, nombre = $("#nombre-disp").value;
+  aceptando = null;
+  await enviar("/api/dispositivos/aceptar", {mac, nombre});
+});
+
+vista();
+refrescar();
+setInterval(refrescar, 3000);
+</script>
+</body>
+</html>

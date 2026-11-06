@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<meta name="description" content="Panel de Píxel, el asistente de voz local">
+<title>Píxel</title>
+<link rel="icon" href="icono.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="marca">
+      <img class="logo" src="icono.svg" alt="">
+      <div><b>Píxel</b><small>Tu asistente de voz</small></div>
+    </div>
+    <div class="pills">
+      <button class="pill" id="pill-servidor" type="button"><i></i>Servidor</button>
+      <span class="pill" id="pill-esp"><i></i>ESP32</span>
+      <span class="pill" id="pill-ollama"><i></i>IA local</span>
+    </div>
+  </div>
+  <div class="wrap">
+    <nav class="tabs" aria-label="Secciones">
+      <a href="#inicio" data-vista="inicio">Inicio</a>
+      <a href="#dispositivos" data-vista="dispositivos">Dispositivos</a>
+      <a href="#agente" data-vista="agente">Personalidad</a>
+      <a href="#agenda" data-vista="agenda">Agenda</a>
+      <a href="#cuentas" data-vista="cuentas">Cuentas</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- INICIO -->
+  <section class="vista" id="v-inicio">
+    <div class="hero">
+      <div class="escena" id="escena">
+        <span class="nube n1"></span><span class="nube n2"></span>
+        <canvas id="cara" tabindex="0" aria-label="Píxel en 3D. Arrástrale la cara para estirarla."></canvas>
+        <svg class="cara-plana" id="cara-plana" viewBox="0 0 200 200" hidden aria-hidden="true">
+          <defs><radialGradient id="g-cara" cx="38%" cy="32%" r="70%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#cfe6f7"/></radialGradient>
+          <linearGradient id="g-led" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4dabf7"/><stop offset="1" stop-color="#20c997"/></linearGradient></defs>
+          <circle cx="100" cy="100" r="92" fill="url(#g-cara)" stroke="#d3e8f7" stroke-width="2"/>
+          <rect x="52" y="54" width="34" height="48" rx="11" fill="#13305a"/><rect x="114" y="54" width="34" height="48" rx="11" fill="#13305a"/>
+          <rect x="58" y="60" width="22" height="36" rx="7" fill="url(#g-led)"/><rect x="120" y="60" width="22" height="36" rx="7" fill="url(#g-led)"/>
+          <path d="M80 128q20 16 40 0" fill="none" stroke="#1c3a66" stroke-width="7" stroke-linecap="round"/>
+        </svg>
+        <div class="zzz" id="zzz" hidden aria-hidden="true"><span>z</span><span>z</span><span>Z</span></div>
+        <p class="pista" id="pista">Arrástrale la cara</p>
+      </div>
+      <div class="charla">
+        <div class="burbuja" role="status">
+          <div class="estado"><span class="latido" id="latido"></span><span id="hero-estado">Conectando…</span></div>
+          <p id="hero-sub">Un momento, estoy buscando el servidor.</p>
+          <div class="acciones" id="hero-acciones" style="margin-top:12px" hidden><button class="btn primario grande" type="button" data-buscar-pixel>Buscar a Píxel</button></div>
+        </div>
+        <div class="card">
+          <h3>Lo último que oí</h3>
+          <div class="cita" id="ultimo">Todavía nada.</div>
+          <div class="acciones"><button class="btn suave" type="button" data-probar>Oír mi voz</button></div>
+        </div>
+        <div class="mini">
+          <a class="card" href="#dispositivos" style="text-decoration:none;color:inherit"><div class="dato" id="r-disp">–</div><p class="sub" id="r-disp-sub">dispositivos</p></a>
+          <a class="card" href="#agenda" style="text-decoration:none;color:inherit"><div class="dato" id="r-agenda">–</div><p class="sub" id="r-agenda-sub">en la agenda</p></a>
+        </div>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3"/></svg></div><h2>Cómo hablarme</h2></div>
+        <p class="sub">Di <b id="palabra">Píxel</b> y tu orden: "Píxel, pon Queen en YouTube", "Píxel, recuérdame comprar pan en 10 minutos".</p>
+      </div>
+      <div class="card">
+        <div class="titulo"><div class="ico verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 12a8 8 0 0 1 16 0v5a2 2 0 0 1-2 2h-1v-6h3M4 13h3v6H6a2 2 0 0 1-2-2z"/></svg></div><h2>Mi voz</h2></div>
+        <div class="dato" id="r-voz" style="font-size:22px">–</div>
+        <p class="sub" id="r-voz-sub">por el ESP32</p>
+      </div>
+      <div class="card">
+        <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></div><h2>Cuentas</h2></div>
+        <div class="dato" id="r-cuentas" style="font-size:22px">–</div>
+        <p class="sub" id="r-cuentas-sub">Google</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- DISPOSITIVOS -->
+  <section class="vista" id="v-dispositivos" hidden>
+    <div class="cabecera">
+      <div><h1>Dispositivos</h1><p class="sub">Altavoces y audífonos por Bluetooth, aparatos de tu red WiFi y los Píxel conectados.</p></div>
+      <button class="btn primario grande" type="button" data-agregar>+ Agregar dispositivo</button>
+    </div>
+    <div class="card">
+      <div class="head"><div class="titulo"><div class="ico verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg></div><h2>Mis dispositivos</h2></div>
+        <span class="chip" id="musica-chip" hidden></span></div>
+      <div id="lista-mios" class="lista"></div>
+    </div>
+    <div class="cabecera"><h2>Píxel conectados</h2><span class="sub" id="pixeles-sub"></span></div>
+    <div class="lista" id="lista-disp"></div>
+    <div class="card">
+      <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div><h2>Este servidor</h2></div>
+      <dl class="kv" id="kv-servidor"></dl>
+    </div>
+  </section>
+
+  <!-- AGENTE -->
+  <section class="vista" id="v-agente" hidden>
+    <div><h1>Personalidad</h1><p class="sub">Cómo habla Píxel. Los cambios se aplican en la siguiente respuesta, sin reiniciar nada.</p></div>
+    <form class="card" id="f-agente">
+      <div class="head"><h2>Palabra de activación</h2><span class="chip">Fija</span></div>
+      <p class="sub">Se dice <b id="activacion">Píxel</b> antes de cada orden. Está ajustada al reconocimiento de voz y no se cambia desde aquí.</p>
+
+      <h2>Por dónde habla</h2>
+      <div class="voces">
+        <label class="voz"><input type="radio" name="salida_voz" value="esp32"><span><b>Por el ESP32</b><br><small class="sub">su propio altavoz</small></span></label>
+        <label class="voz"><input type="radio" name="salida_voz" value="pc"><span><b>Por el altavoz del PC</b><br><small class="sub" id="salida-pc-nota">el altavoz Bluetooth si está conectado</small></span></label>
+      </div>
+
+      <h2>Voz</h2>
+      <div class="voces" id="voces"></div>
+      <div class="acciones"><button class="btn suave" type="button" id="guardar-probar">Guardar y probar</button></div>
+
+      <h2>Personalidad</h2>
+      <div class="presets" id="presets">
+        <button type="button" data-texto="Amable y cercano, con frases sencillas.">Amable</button>
+        <button type="button" data-texto="Entusiasta y con humor, sin exagerar.">Divertido</button>
+        <button type="button" data-texto="Paciente, explica como un buen profesor y pone un ejemplo.">Profesor</button>
+        <button type="button" data-texto="Formal y preciso, trata de usted.">Formal</button>
+        <button type="button" data-texto="">Sin estilo</button>
+      </div>
+      <label class="campo">Cómo quieres que hable<textarea id="personalidad" maxlength="300" placeholder="Por ejemplo: amable y cercano, con frases sencillas."></textarea></label>
+      <div class="contador" id="contador">0 / 300</div>
+
+      <h2>Largo de las respuestas</h2>
+      <div class="segmento" role="radiogroup" aria-label="Largo de las respuestas">
+        <label><input type="radio" name="respuesta" value="corta">Corta · 1–2 frases</label>
+        <label><input type="radio" name="respuesta" value="normal">Normal · 2–4 frases</label>
+      </div>
+      <div class="acciones"><button class="btn primario" type="submit">Guardar cambios</button></div>
+    </form>
+  </section>
+
+  <!-- AGENDA -->
+  <section class="vista" id="v-agenda" hidden>
+    <div><h1>Agenda</h1><p class="sub">Lo que se creó por voz. Los recordatorios suenan a su hora.</p></div>
+    <div class="grid">
+      <div class="card"><h2>Recordatorios</h2><div class="lista" id="lista-recordatorios"></div><p class="sub">"Píxel, recuérdame comprar pan en 10 minutos"</p></div>
+      <div class="card"><h2>Eventos del calendario</h2><div class="lista" id="lista-eventos"></div><p class="sub">"Píxel, agenda la reunión mañana a las 3"</p></div>
+    </div>
+  </section>
+
+  <!-- CUENTAS -->
+  <section class="vista" id="v-cuentas" hidden>
+    <div><h1>Cuentas</h1><p class="sub">Vincula servicios para que Píxel pueda usar tu calendario y enviar correos.</p></div>
+    <div class="card">
+      <div class="head">
+        <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 12h8M12 3v9"/></svg></div><h2>Google</h2></div>
+        <span class="chip" id="g-chip">No vinculada</span>
+      </div>
+      <p class="sub">Con Google vinculado, Píxel usa tu Google Calendar en vez del calendario local y puede enviar correos (siempre después de que digas "sí, mándalo").</p>
+      <div class="acciones"><button class="btn primario" type="button" id="g-vincular">Vincular con Google</button></div>
+      <p class="aviso" id="g-aviso" hidden></p>
+    </div>
+    <div class="card">
+      <div class="head">
+        <div class="titulo"><div class="ico verde" data-icono="movil"></div><h2>Píxel en tu móvil</h2></div>
+        <span class="chip" id="nube-chip">…</span>
+      </div>
+      <div class="grupo" id="nube-cuerpo"></div>
+    </div>
+    <div class="card">
+      <div class="titulo"><div class="ico verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></div><h2>Contactos para el correo</h2></div>
+      <p class="sub">Píxel solo puede escribir a estas personas. Di: "Píxel, manda un correo a Ana diciendo que llego tarde".</p>
+      <div class="lista" id="lista-contactos"></div>
+      <form class="form-fila" id="f-contacto">
+        <label class="campo">Nombre<input type="text" id="c-nombre" maxlength="40" placeholder="Ana" required></label>
+        <label class="campo">Correo<input type="email" id="c-correo" placeholder="ana@gmail.com" required></label>
+        <button class="btn primario" type="submit">Añadir</button>
+      </form>
+    </div>
+  </section>
+</main>
+
+<!-- AGREGAR DISPOSITIVO -->
+<dialog class="hoja" id="agregar" aria-labelledby="agregar-titulo">
+  <div class="hoja-cab">
+    <button class="icono-btn" type="button" id="agregar-atras" aria-label="Atrás" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 18 9 12l6-6"/></svg></button>
+    <h2 id="agregar-titulo">Agregar dispositivo</h2>
+    <button class="icono-btn" type="button" data-cerrar aria-label="Cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <div class="hoja-cuerpo" id="paso-elegir">
+    <p class="sub">¿Qué quieres conectar?</p>
+    <div class="opciones">
+      <button class="opcion" type="button" data-paso="bt"><span class="ico" data-icono="bluetooth"></span><span><b>Por Bluetooth</b><small>Altavoces, audífonos y móviles. Se conectan al PC de Píxel.</small></span><span class="flecha">›</span></button>
+      <button class="opcion" type="button" data-paso="wifi"><span class="ico verde" data-icono="wifi"></span><span><b>Por WiFi</b><small>Enchufes, luces, pantallas y otros aparatos de tu red.</small></span><span class="flecha">›</span></button>
+      <button class="opcion" type="button" data-paso="pixel"><span class="ico" data-icono="pixel"></span><span><b>Otro Píxel</b><small>Un ESP32 nuevo, con el portal Pixel asistente de voz.</small></span><span class="flecha">›</span></button>
+    </div>
+  </div>
+  <div class="hoja-cuerpo" id="paso-bt" hidden>
+    <div id="bt-encabezado"></div>
+    <div id="bt-encontrados"></div>
+    <details class="mas" id="bt-movil">
+      <summary>¿Es un móvil?</summary>
+      <div class="grupo">
+        <p class="sub">Los móviles se conectan mejor desde el propio móvil: haz visible el PC y búscalo en los ajustes de Bluetooth del móvil.</p>
+        <div class="acciones"><button class="btn suave" type="button" data-bt="visible">Hacer visible el PC</button></div>
+        <div id="bt-visible"></div>
+      </div>
+    </details>
+    <details class="mas" id="ble-cerca">
+      <summary>Detectar cuando está cerca de Píxel</summary>
+      <div class="grupo">
+        <p class="sub">El ESP32 mira cada 30 segundos qué hay a su alrededor por Bluetooth de bajo consumo. Recuerda relojes, pulseras o balizas para saber si están cerca. Los móviles cambian su dirección cada pocos minutos, así que con ellos dura poco.</p>
+        <div class="acciones"><button class="btn suave" type="button" id="b-buscar">Buscar con Píxel</button></div>
+        <div id="busqueda"></div>
+      </div>
+    </details>
+  </div>
+  <div class="hoja-cuerpo" id="paso-wifi" hidden>
+    <div id="wifi-encabezado"></div>
+    <div id="wifi-encontrados"></div>
+    <p class="nota">Por ahora Píxel los reconoce y te dice si están encendidos. Para encenderlos y apagarlos por voz falta saber la marca (Tuya/Smart Life, Shelly, Sonoff, Tapo…).</p>
+  </div>
+  <div class="hoja-cuerpo" id="paso-pixel" hidden>
+    <ol class="pasos">
+      <li>Enciende el ESP32. Si no encuentra su red, abre la red <b>Pixel asistente de voz</b> y el LED se pone <b>morado</b>. También puedes abrirla manteniendo pulsado el botón <b>BOOT</b> 3 segundos.</li>
+      <li>Desde el móvil, conéctate a <b>Pixel asistente de voz</b> (clave <code id="portal-clave">…</code>).</li>
+      <li>Se abre la página de configuración. Si no se abre, entra a <code>http://192.168.4.1</code>.</li>
+      <li>Elige la red WiFi y pon como IP del servidor <code id="ip-servidor">…</code>. Al guardar, el ESP32 se reinicia y aparece en "Píxel conectados".</li>
+    </ol>
+    <p class="aviso">Requiere el firmware con portal (<code>Pixel_portal.ino</code>).</p>
+  </div>
+</dialog>
+
+<!-- ENLAZAR (app en internet): buscar a Pixel y escribir el codigo que dice -->
+<dialog class="hoja" id="enlazar" aria-labelledby="enlazar-titulo">
+  <div class="hoja-cab">
+    <button class="icono-btn" type="button" id="enlazar-atras" aria-label="Atrás" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 18 9 12l6-6"/></svg></button>
+    <h2 id="enlazar-titulo">Buscar a Píxel</h2>
+    <button class="icono-btn" type="button" data-cerrar-enlazar aria-label="Cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <div class="hoja-cuerpo" id="enlazar-buscar">
+    <p class="sub">Aquí aparece Píxel cuando está encendido y esperando a enlazarse.</p>
+    <div id="lista-visibles"></div>
+  </div>
+  <form class="hoja-cuerpo" id="enlazar-codigo" hidden>
+    <div class="fila"><span class="ico" data-icono="pixel"></span><div class="txt"><b id="enlazar-nombre">Píxel</b><small>Escribe el código de 6 cifras que dice Píxel. También sale en el PC: panel → Cuentas.</small></div></div>
+    <p class="nota" id="enlazar-nota">Pidiéndole a Píxel que diga el código…</p>
+    <label class="campo">Código<input type="text" class="codigo-input" id="codigo" inputmode="numeric" maxlength="7" autocomplete="one-time-code" placeholder="000 000" required></label>
+    <p class="aviso" id="enlazar-error" hidden></p>
+    <div class="acciones"><button class="btn primario grande" type="submit">Enlazar</button><button class="btn suave" type="button" id="b-decir">Que lo diga otra vez</button></div>
+  </form>
+  <div class="hoja-cuerpo" id="enlazar-listo" hidden>
+    <div class="vacio" style="border-style:solid;background:var(--green-soft);color:var(--green);font-weight:650">¡Listo! Esta app ya maneja a Píxel.</div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="cara3d.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

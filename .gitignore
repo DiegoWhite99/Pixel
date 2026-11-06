@@ -1,0 +1,29 @@
+# entornos de Python (unos 550 MB cada uno)
+.venv/
+venv/
+__pycache__/
+
+# modelos de voz de Piper: demasiado grandes para GitHub (ver README.md)
+voces/
+voces_prueba/
+
+# grabaciones reales y registro: llevan la voz y las frases del usuario
+capturas/
+servidor.log
+respuesta_*.wav
+
+# claves: dan acceso a las cuentas, no se comparten
+nube_token.json
+google_cliente.json
+google_token.json
+gemini*.json
+
+# datos de uso que el servidor cambia solo
+ajustes.json
+contactos.json
+dispositivos.json
+eventos.json
+recordatorios.json
+
+# cache del CLI de Firebase
+.firebase/

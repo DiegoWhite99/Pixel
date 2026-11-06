@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+"""Fase 3 - Cliente de Ollama en streaming.
+
+Usa solo urllib (libreria estandar): no hace falta instalar nada.
+"""
+
+import json
+import threading
+import urllib.error
+import urllib.request
+
+# Una sola generacion de Ollama a la vez: el modelo es uno y la CPU tambien.
+# Es de modulo, no de instancia, porque cada conversacion tiene su propio Llm.
+_OLLAMA = threading.Lock()
+
+SYSTEM_PROMPT = (
+    "Te llamas Píxel y eres el asistente de voz de una demo en una feria tecnológica; hablas en español. "
+    "Responde en 2 a 4 frases. "
+    "Sé concreto: da datos específicos como cifras, nombres, fechas o ejemplos, "
+    "en vez de generalidades. "
+    "Si no sabes algo o no estás seguro, dilo claramente en vez de inventar. "
+    "No uses listas, viñetas, markdown ni emojis, porque tu respuesta se lee en voz alta. "
+    "Tú no puedes agendar, recordar, poner música ni enviar nada: nunca digas que lo hiciste. "
+    "Si te piden algo así, di que lo repitan empezando con 'agenda', 'recuérdame' o 'pon'. "
+    "Si viene al caso, puedes mencionar que funcionas 100% en local, sin conexión a la nube."
+)
+
+DIAS = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
+MESES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+         "agosto", "septiembre", "octubre", "noviembre", "diciembre")
+
+
+def prompt_con_fecha(hoy):
+    """SYSTEM_PROMPT + la fecha de hoy, escrita en espanol (sin depender del locale)."""
+    fecha = "%s %d de %s de %d" % (DIAS[hoy.weekday()], hoy.day, MESES[hoy.month - 1], hoy.year)
+    return "%s Hoy es %s." % (SYSTEM_PROMPT, fecha)
+
+
+
+class Llm:
+    def __init__(self, modelo="qwen2.5:3b", host="http://127.0.0.1:11434",
+                 system=SYSTEM_PROMPT, num_predict=60, temperatura=0.7,
+                 max_turnos=4, keep_alive="30m", timeout=30, espera_lock=20):
+        self.modelo = modelo
+        self.host = host.rstrip("/")
+        self.system = system
+        self.num_predict = num_predict
+        self.temperatura = temperatura
+        self.max_turnos = max_turnos      # cuantos pares usuario/asistente recordar
+        self.keep_alive = keep_alive
+        self.timeout = timeout
+        self.espera_lock = espera_lock
+        self.historial = []               # propio de esta conversacion
+
+    # -- utilidades -------------------------------------------------------
+
+    def _mensajes(self, texto_usuario):
+        msgs = [{"role": "system", "content": self.system}]
+        msgs.extend(self.historial[-self.max_turnos * 2:])
+        msgs.append({"role": "user", "content": texto_usuario})
+        return msgs
+
+    def _peticion(self, cuerpo, ruta):
+        return urllib.request.Request(
+            self.host + ruta,
+            data=json.dumps(cuerpo).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+
+    def calentar(self):
+        """Fuerza a Ollama a cargar el modelo en RAM (evita 10 s en el 1er turno)."""
+        req = self._peticion({"model": self.modelo, "keep_alive": self.keep_alive}, "/api/chat")
+        with urllib.request.urlopen(req, timeout=self.timeout) as r:
+            r.read()
+
+    # -- generacion -------------------------------------------------------
+
+    def responder(self, texto_usuario):
+        """Generador: cede trozos de texto segun los va soltando el modelo.
+
+        Al terminar guarda el turno en el historial.
+        """
+        if not _OLLAMA.acquire(timeout=self.espera_lock):
+            raise RuntimeError("Ollama sigue ocupado tras %s s" % self.espera_lock)
+        try:
+            cuerpo = {
+                "model": self.modelo,
+                "messages": self._mensajes(texto_usuario),
+                "stream": True,
+                "keep_alive": self.keep_alive,
+                "options": {
+                    "num_predict": self.num_predict,
+                    "temperature": self.temperatura,
+                },
+            }
+            completo = []
+            req = self._peticion(cuerpo, "/api/chat")
+            with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                for linea in r:
+                    if not linea.strip():
+                        continue
+                    dato = json.loads(linea)
+                    if "error" in dato:
+                        raise RuntimeError("Ollama: %s" % dato["error"])
+                    trozo = dato.get("message", {}).get("content", "")
+                    if trozo:
+                        completo.append(trozo)
+                        yield trozo
+                    if dato.get("done"):
+                        break
+
+            texto = "".join(completo).strip()
+            if texto:
+                self.historial.append({"role": "user", "content": texto_usuario})
+                self.historial.append({"role": "assistant", "content": texto})
+                sobran = len(self.historial) - self.max_turnos * 2
+                if sobran > 0:
+                    del self.historial[:sobran]
+        finally:
+            _OLLAMA.release()
