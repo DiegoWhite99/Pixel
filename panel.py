@@ -107,7 +107,7 @@ def aplicar_ajustes():
         system += " Tu estilo: %s" % AJUSTES["personalidad"]
     S.LLM_SYSTEM = system
     with S._sesiones_lock:
-        for sesion in S.SESIONES:
+        for sesion in S.SESIONES + list(S.MOVILES.values()):
             sesion.llm.system = system
     S.SALIDA_VOZ = AJUSTES["salida_voz"]
     S.log("panel: voz %s por %s, respuestas %s, personalidad %r"
@@ -185,6 +185,7 @@ def estado():
                      "ollama": _ollama_ok(), "stt": S.STT_MODELO, "llm": S.LLM_MODELO},
         "dispositivos": dispositivos,
         "activos": len(activos),
+        "celulares": nube.celulares(),      # Fase 11: las apps enlazadas que hacen de Pixel, escuchen o no
         "mis_dispositivos": mios,
         "bt_pc": bluetooth_pc.estado(),
         "wifi": wifi,
@@ -243,14 +244,19 @@ def probar_voz(d):
             raise ErrorPanel("El PC no tiene salida de audio.")
         threading.Thread(target=lambda: S.SALIDA_PC.reproducir(S.TTS.sintetizar(PRUEBA_PC)), daemon=True).start()
         return {"mensaje": "Escucha: suena por %s." % bluetooth_pc.estado()["musica_en"]}
-    with S._sesiones_lock:
-        sesion = S.SESIONES[-1] if S.SESIONES else None
-    if sesion is None:
-        raise ErrorPanel("No hay ningún ESP32 conectado para oír la prueba.")
     if donde == "esp32":
+        with S._sesiones_lock:
+            sesion = S.SESIONES[-1] if S.SESIONES else None
+        if sesion is None:
+            raise ErrorPanel("No hay ningún ESP32 conectado para oír la prueba.")
         sesion.cola.put(("decir_esp32", PRUEBA_VOZ % S.ACTIVACION))
         return {"mensaje": "Escucha el altavoz de Píxel."}
+    sesion = S.sesion_que_habla()       # sin ESP32, el celular que escucha (Fase 11)
+    if sesion is None:
+        raise ErrorPanel("No hay ningún ESP32 conectado ni ningún celular escuchando para oír la prueba.")
     sesion.cola.put(("decir", PRUEBA_VOZ % S.ACTIVACION))
+    if isinstance(sesion, S.SesionMovil):
+        return {"mensaje": "Escucha el celular."}
     return {"mensaje": "Escucha: suena por el altavoz del PC." if AJUSTES["salida_voz"] == "pc" else "Escucha el ESP32."}
 
 

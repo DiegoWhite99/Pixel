@@ -152,10 +152,13 @@ LLM_SYSTEM = None           # prompt con la fecha; se arma en main()
 
 # Fase 11: Gemini (Google) en vez de Ollama si hay clave; sin clave, o si falla, responde Ollama
 GEMINI_CLAVE = "gemini_clave.json"     # la pega el usuario en el panel (Cuentas); da acceso a su cuenta: no se comparte
-GEMINI_MODELO = "gemini-3.8-flash"     # el Flash vigente en nov 2026 (ai.google.dev); "Probar" del panel lo busca con ListModels
-GEMINI_PENSAR = "low"                  # thinkingLevel mas rapido que admite 3.8 Flash ("minimal" da 400)
+GEMINI_MODELO = "gemini-3.5-flash-lite"   # medido el 6 nov con la clave real: 0,88 s. 3.8 Flash daba 429 (20 peticiones/dia gratis)
+GEMINI_PENSAR = "low"                  # thinkingLevel; 3.5 Flash-Lite lo acepta ("minimal" daba 400 en 3.8 Flash)
 GEMINI_MAX_TOKENS = 1024               # holgado: el razonamiento tambien gasta tokens del tope
 GEMINI_TIMEOUT = 10.0                  # s sin recibir nada antes de pasarse a Ollama
+
+# Fase 11: el celular hace de ESP32 remoto por la nube (SesionMovil, nube.py y la app de internet)
+MOVIL_LATENCIA_S = 1.0      # de dejar la voz en la nube a que suena en el celular (estimado, para las ventanas)
 
 # TTS (Piper)
 TTS_VOZ = "voces/es_ES-sharvard-medium.onnx"     # antes es_MX-ald-medium (masculina)
@@ -171,6 +174,7 @@ AGENDA = None
 SALIDA_PC = None          # salida_pc.SalidaPc, para SALIDA_VOZ = "pc"
 
 SESIONES = []            # conexiones abiertas; los recordatorios van a la mas reciente
+MOVILES = {}             # uid -> SesionMovil: los celulares enlazados que le han hablado o escuchan (Fase 11)
 PIXELES_VISTOS = {}      # ip -> nombre de los ESP32 que buscaron el servidor (la busqueda WiFi los reconoce)
 AL_HABLAR = None         # funcion sin argumentos que se llama con cada trozo de voz nuevo (la nube la publica)
 _sesiones_lock = threading.Lock()
@@ -860,7 +864,7 @@ class Sesion:
     def _accion(self, hallada):
         """Ejecuta una accion detectada y responde por voz sin pasar por el LLM."""
         nombre, params, funcion = hallada
-        log("%s  INTENCION: %s  %s" % (self.peer, nombre, params))
+        log("%s  INTENCION: %s  %s" % (self.peer, nombre, {k: v for k, v in params.items() if not callable(v)}))
         res = funcion(params)
         log("%s  ACCION %s %s: %s" % (self.peer, nombre, "OK" if res["ok"] else "FALLO",
                                       " | ".join("%s=%s" % kv for kv in res["log"].items())))
@@ -910,6 +914,104 @@ class Sesion:
                 % (self.peer, self.pico_sesion))
 
 
+# ----------------------------------------------------------------- celular (Fase 11)
+
+class SesionMovil(Sesion):
+    """El celular hace de ESP32 remoto, a traves de la nube (nube.py y la app de internet).
+
+    El VAD corre en el navegador: llegan frases ya cortadas (alimentar_frase) y el turno es el
+    de Sesion (Silero, Whisper, "Pixel", acciones, IA, Piper). La voz no va por un socket: cada
+    trozo se le da a escribir(tipo, pcm, dime, **extra) y nube.py lo deja en la Realtime
+    Database para que el celular lo toque. tipo: "oido" (beep de frase aceptada), "voz",
+    "cierre" (beep de fin), "fin" (fin de turno, sin audio) o "video" (YouTube: id y titulo,
+    para el boton "Abrir en YouTube"). dime=True en el "Dime" de la palabra sola: el celular
+    lo salta si el usuario ya sigue hablando (aqui no se sabe: el VAD esta alli).
+
+    Va en MOVILES, no en SESIONES. Sin ESP32 conectado, sesion_que_habla() elige el celular que
+    escucha para los recordatorios, "Probar voz" y el codigo de enlace. El celular calla su micro
+    mientras toca la voz, asi que aqui no se espera a que acabe.
+    """
+
+    def __init__(self, uid, escribir):
+        self.uid = uid
+        self.escribir = escribir
+        self.dime = False
+        self.escucha_hasta = 0.0        # la app tiene "Escuchar" puesto (latido de nube.py) hasta entonces
+        self.escucha_desde = 0.0
+        super().__init__(None, ("movil-" + uid[:6], 0))
+        self.peer = "movil:" + uid[:6]
+
+    def escuchando(self):
+        return time.monotonic() < self.escucha_hasta
+
+    def _accion(self, hallada):
+        """Las acciones van igual, pero YouTube no abre el PC: el video se manda al celular."""
+        nombre, params, funcion = hallada
+        super()._accion((nombre, dict(params, abrir=self._abrir_video), funcion))
+
+    def _abrir_video(self, vid, titulo):
+        self.escribir("video", None, False, id=vid, titulo=titulo or "")
+
+    def _enviar(self, msg_type, payload=b""):
+        if msg_type == MSG_END_TURN:
+            self.escribir("fin", None, self.dime)
+        # el texto de debug (0x04) no le sirve al celular
+
+    def enviar_audio(self, pcm):
+        dur = len(pcm) / float(SAMPLE_RATE * SAMPLE_WIDTH)
+        inicio = max(time.monotonic() + MOVIL_LATENCIA_S, self.fin_reproduccion)
+        self.fin_reproduccion = inicio + dur        # para la ventana del "Dime" y la del "sí, envíalo"
+        tipo = "oido" if pcm is BEEP_RECIBIDO else "cierre" if pcm is BEEP_SALIDA else "voz"
+        self.escribir(tipo, pcm, self.dime)
+
+    def _decir(self, texto):
+        self.dime = texto == ACTIVACION_RESPUESTA
+        try:
+            super()._decir(texto)
+        finally:
+            self.dime = False
+
+    def _con_micro_sordo(self, funcion, *args):
+        """Como en Sesion, pero sin esperar a que acabe de sonar: el celular se ensordece solo."""
+        try:
+            funcion(*args)
+        except Exception as e:
+            log("%s  ERROR en el pipeline: %s: %s" % (self.peer, type(e).__name__, e))
+            self.escribir("fin", None, False)       # que el celular no se quede "pensando"
+        finally:
+            self.respondiendo.clear()
+
+    def _reposo(self):
+        """En el celular el reposo no se dice (sonaria en el bolsillo): solo se olvida la conversacion."""
+        log("%s  REPOSO: %.0f s sin interaccion, olvido %d mensajes del historial (sin decirlo)"
+            % (self.peer, time.monotonic() - self.ultima_interaccion, len(self.llm.historial)))
+        self.ultima_interaccion = None
+        self.ventana_hasta = 0.0
+        self.llm.historial.clear()
+
+    def alimentar_frase(self, pcm):
+        """Una frase que corto el celular: se guarda en capturas/ como las del ESP32 y va al turno."""
+        dur_s = len(pcm) / float(SAMPLE_RATE * SAMPLE_WIDTH)
+        ahora = time.monotonic()
+        pico = frame_peak(pcm)
+        self.total_bytes += len(pcm)
+        self.ultimo_audio = ahora
+        self.pico_sesion = max(self.pico_sesion, pico)
+        self.n_frases += 1
+        nombre = "%s_%s_%02d.wav" % (datetime.now().strftime("%Y%m%d_%H%M%S"), self.addr[0], self.n_frases)
+        guardar_wav(os.path.join(CAPTURE_DIR, nombre), pcm)
+        log("%s  FRASE %d guardada: %s  (%d ms, pico=%d, del celular)"
+            % (self.peer, self.n_frases, nombre, dur_s * 1000, pico))
+        # cuando empezo a hablar, en el reloj de aqui (para la ventana del "Dime"): mas pronto que tarde
+        self.cola.put((pcm, ahora - dur_s - MOVIL_LATENCIA_S))
+
+    def cerrar(self):
+        self.cola.put(None)
+        self.worker.join(timeout=30)
+        log("%s  cerrada. %.1f s de audio en %d frase(s)"
+            % (self.peer, self.total_bytes / float(SAMPLE_RATE * SAMPLE_WIDTH), self.n_frases))
+
+
 # ----------------------------------------------------------------- conexion
 
 def recv_exacto(sock, n):
@@ -923,17 +1025,26 @@ def recv_exacto(sock, n):
     return bytes(buf)
 
 
-def vigilar_recordatorios():
-    """Hilo: cada recordatorio que vence va a la cola de la conexion mas reciente.
+def sesion_que_habla():
+    """Por donde dice Pixel lo que no es respuesta (recordatorios, "Probar voz", el codigo de enlace):
+    el ESP32 mas reciente y, sin ESP32, el celular que se puso a escuchar el ultimo (Fase 11). None si no hay."""
+    with _sesiones_lock:
+        if SESIONES:
+            return SESIONES[-1]
+        oyen = [m for m in MOVILES.values() if m.escuchando()]
+    return max(oyen, key=lambda m: m.escucha_desde) if oyen else None
 
-    Pasa por la cola para no mezclarse con una respuesta que este sonando. Sin
-    nadie conectado se quedan en el JSON y se dicen en cuanto alguien se conecte.
+
+def vigilar_recordatorios():
+    """Hilo: cada recordatorio que vence va a la cola de sesion_que_habla().
+
+    Pasa por la cola para no mezclarse con una respuesta que este sonando. Sin ESP32
+    ni celular escuchando se quedan en el JSON y se dicen en cuanto alguien este.
     """
     while True:
         time.sleep(RECORDATORIOS_REVISAR_S)
         try:
-            with _sesiones_lock:
-                sesion = SESIONES[-1] if SESIONES else None
+            sesion = sesion_que_habla()
             if sesion is None:
                 continue
             for r in AGENDA.vencidos(datetime.now()):

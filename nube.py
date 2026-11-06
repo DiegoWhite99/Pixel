@@ -22,9 +22,19 @@ Estructura (las reglas estan en database.rules.json):
     pixeles/<pid>/solicitudes/<uid>  {codigo, n, nombre}: codigo vacio = "dilo en voz alta"
     pixeles/<pid>/ordenes/<id>       {uid, ruta, cuerpo (JSON), t}
     pixeles/<pid>/respuestas/<id>    {uid, ok, mensaje | error, n}
+    pixeles/<pid>/frases/<id>        {uid, pcm, t}: frase que oyo el celular (PCM 16 kHz en base64)
+    pixeles/<pid>/habla/<uid>/<id>   {tipo, pcm, dime, id, titulo}: voz (o video) de Pixel para ese celular
+    pixeles/<pid>/escuchando/<uid>   latido del celular con "Escuchar" puesto
     usuarios/<uid>/pixeles/<pid>     {nombre, desde}: los Pixel de cada app
+
+Fase 11: con "Escuchar" en la app, el celular hace de ESP32 remoto. Corta las frases en el
+navegador y las deja en frases/; aqui cada una va a la SesionMovil de ese uid (servidor.py),
+que hace el mismo turno que con el ESP32, y su voz se escribe en habla/<uid>, en orden. Sin
+ESP32 conectado, el celular que escucha dice tambien los recordatorios y el codigo de enlace.
 """
 
+import base64
+import binascii
 import hmac
 import json
 import os
@@ -48,6 +58,11 @@ DECIR_CADA_S = 12       # como mucho, cada cuanto se dice el codigo en voz alta
 FRASE_CODIGO = "Para enlazar la app, mi código es: %s."
 FRASE_ENLAZADO = "¡Listo! Ya estoy enlazado con tu app."
 SV = {".sv": "timestamp"}
+MOVIL_MAX_S = 12        # frase mas larga que se acepta del celular (el corta a los 10 s)
+MOVIL_VIEJA_S = 30      # frases que esperaban mas que esto (Pixel estaba apagado) se tiran
+MOVIL_INACTIVO_S = 600  # sin frases en este rato, la sesion del celular se cierra
+HABLA_S = 60            # la voz para el celular se borra pasado este tiempo (el la borra al tocarla)
+ESCUCHA_S = 45          # el celular escucha si su latido (cada 15 s) es de hace menos de esto
 
 S = None                # modulo del servidor
 P = None                # modulo del panel
@@ -60,6 +75,12 @@ _respuestas = []        # (monotonic, id) para borrarlas pasado RESPUESTA_S
 _mirando = {"hasta": 0.0}
 _hay_voz = threading.Event()
 _dicho = {"t": 0.0}
+_frases = queue.Queue()
+_frases_vistas = set()  # como _hechas, para las frases del celular
+_habla = queue.Queue()  # (uid, tipo, pcm, dime, extra) que escribir, en orden
+_hablas = []            # (monotonic, uid, clave) para borrarlas pasado HABLA_S
+_ultima_clave = [0]
+_reloj = {"offset": 0}  # reloj de Firebase - reloj de aqui (ms), de lo que devuelve el latido
 
 
 class SinNube(Exception):
@@ -161,12 +182,11 @@ def cerrar_enlace():
 
 
 def decir_codigo():
-    """Pixel dice el codigo por su altavoz. False si no hay ningun ESP32 conectado para decirlo."""
+    """Pixel dice el codigo por su altavoz (o por el celular que escucha). False si no hay por donde."""
     enlace = _estado["enlace"]
     if enlace is None:
         return False
-    with S._sesiones_lock:
-        sesion = S.SESIONES[-1] if S.SESIONES else None
+    sesion = S.sesion_que_habla()
     if sesion is None:
         return False
     if time.monotonic() - _dicho["t"] > DECIR_CADA_S:
@@ -205,8 +225,7 @@ def _solicitud(uid, s):
         cerrar_enlace()
         _responder(clave, uid, True, "Enlazado.", n=n, enlazado=True)
         S.log("nube: app enlazada: %s (%s)" % (app, uid))
-        with S._sesiones_lock:
-            sesion = S.SESIONES[-1] if S.SESIONES else None
+        sesion = S.sesion_que_habla()
         if sesion is not None:
             sesion.cola.put(("decir", FRASE_ENLAZADO))
         return
@@ -346,6 +365,131 @@ def _publicar_voz():
             _estado["error"] = str(e)[:200]
 
 
+# ------------------------------------------------------------------ el celular como ESP32 remoto (Fase 11)
+
+def _al_frase(id_, f):
+    """Del streaming de frases/: solo encola, para no frenar la lectura."""
+    if isinstance(f, dict) and id_ not in _frases_vistas:
+        if len(_frases_vistas) > 2000:
+            _frases_vistas.clear()
+        _frases_vistas.add(id_)
+        _frases.put((id_, f))
+
+
+def _movil(uid):
+    with S._sesiones_lock:
+        sesion = S.MOVILES.get(uid)
+        if sesion is None:
+            escribir = lambda tipo, pcm=None, dime=False, **extra: _habla.put((uid, tipo, pcm, dime, extra))
+            sesion = S.MOVILES[uid] = S.SesionMovil(uid, escribir)
+            nueva = True
+        else:
+            nueva = False
+    if nueva:
+        S.log("nube: sesion %s para el celular de %s (%s)" % (sesion.peer, _app(uid), uid))
+    return sesion
+
+
+def _app(uid):
+    return (_estado["duenos"].get(uid) or {}).get("nombre") or "App"
+
+
+def _al_escuchando(uid, t):
+    """Latido de "Escuchar" (o su borrado al parar o al cerrar la app)."""
+    if uid not in _estado["duenos"]:
+        return
+    if isinstance(t, (int, float)) and (_ahora_ms() + _reloj["offset"] - t) / 1000.0 < ESCUCHA_S:
+        sesion = _movil(uid)
+        if not sesion.escuchando():
+            sesion.escucha_desde = time.monotonic()
+            S.log("nube: el celular de %s escucha (%s)" % (_app(uid), sesion.peer))
+        sesion.escucha_hasta = time.monotonic() + ESCUCHA_S
+        return
+    with S._sesiones_lock:
+        sesion = S.MOVILES.get(uid)
+    if sesion is not None and sesion.escuchando():
+        sesion.escucha_hasta = 0.0
+        S.log("nube: el celular de %s deja de escuchar (%s)" % (_app(uid), sesion.peer))
+
+
+def celulares():
+    """Para el panel: las apps enlazadas como celulares de Pixel, escuchen o no."""
+    lista = []
+    for uid, d in sorted(_estado["duenos"].items(), key=lambda x: x[1].get("desde") or 0):
+        with S._sesiones_lock:
+            s = S.MOVILES.get(uid)
+        oye = bool(s and s.escuchando())
+        lista.append({"uid": uid, "nombre": "Celular de %s" % (d.get("nombre") or "App"), "escuchando": oye,
+                      "estado": ("hablando" if s.fin_reproduccion > time.monotonic() else "escuchando") if oye else "sin escuchar",
+                      "frases": s.n_frases if s else 0, "ultimo": s.ultimo_texto if s else ""})
+    return lista
+
+
+def _atender_frases():
+    """Hilo: cada frase del celular se borra de la nube y va a la sesion de su uid."""
+    while True:
+        id_, f = _frases.get()
+        try:
+            _db("DELETE", "pixeles/%s/frases/%s" % (_pid(), id_))
+        except Exception as e:
+            S.log("nube: no pude borrar una frase del celular: %s" % e)
+        uid = str(f.get("uid") or "")
+        t = f.get("t")
+        if uid not in _estado["duenos"]:
+            S.log("nube: frase de una app que no esta enlazada (%s): la tiro" % uid)
+            continue
+        espera = (_ahora_ms() + _reloj["offset"] - t) / 1000.0 if isinstance(t, (int, float)) else 0.0
+        if espera > MOVIL_VIEJA_S:
+            S.log("nube: frase del celular de hace %.0f s (Pixel no estaba): la tiro" % espera)
+            continue
+        try:
+            pcm = base64.b64decode(str(f.get("pcm") or ""), validate=True)
+        except (ValueError, binascii.Error):
+            S.log("nube: frase del celular ilegible: la tiro")
+            continue
+        pcm = pcm[:len(pcm) // 2 * 2]
+        dur = len(pcm) / float(S.SAMPLE_RATE * S.SAMPLE_WIDTH)
+        if not S.MIN_PHRASE_MS / 1000.0 <= dur <= MOVIL_MAX_S:
+            S.log("nube: frase del celular de %.1f s: la tiro" % dur)
+            continue
+        try:
+            _movil(uid).alimentar_frase(pcm)
+        except Exception as e:
+            S.log("nube: ERROR con una frase del celular: %s: %s" % (type(e).__name__, e))
+
+
+def _escribir_habla():
+    """Hilo: la voz para cada celular, en orden. Las claves (milisegundos) siempre crecen."""
+    while True:
+        uid, tipo, pcm, dime, extra = _habla.get()
+        clave = max(_ahora_ms(), _ultima_clave[0] + 1)
+        _ultima_clave[0] = clave
+        datos = dict(extra, tipo=tipo)
+        if pcm:
+            datos["pcm"] = base64.b64encode(pcm).decode("ascii")
+        if dime:
+            datos["dime"] = True
+        try:
+            _db("PUT", "pixeles/%s/habla/%s/%013d" % (_pid(), uid, clave), datos)
+            _hablas.append((time.monotonic(), uid, clave))
+        except Exception as e:
+            S.log("nube: no pude dejar la voz para el celular: %s" % e)
+
+
+def _limpiar_moviles(ahora):
+    """Desde _publicar: borra la voz vieja y cierra las sesiones de celular que ya no hablan."""
+    while _hablas and ahora - _hablas[0][0] > HABLA_S:
+        _, uid, clave = _hablas.pop(0)
+        _db("DELETE", "pixeles/%s/habla/%s/%013d" % (_pid(), uid, clave))
+    with S._sesiones_lock:
+        cerrar = [(uid, s) for uid, s in S.MOVILES.items() if uid not in _estado["duenos"] or (
+            not s.escuchando() and ahora - s.ultimo_audio > MOVIL_INACTIVO_S and s.cola.empty())]
+        for uid, _ in cerrar:
+            del S.MOVILES[uid]
+    for _, sesion in cerrar:
+        threading.Thread(target=sesion.cerrar, daemon=True).start()
+
+
 def _publicar():
     """Hilo: latido, estado (deprisa si alguien tiene la app abierta) y limpieza de respuestas."""
     hecho = {"estado": -1e9, "vivo": -1e9, "mirar": -1e9}
@@ -373,11 +517,14 @@ def _publicar():
                     anterior = texto
                 hecho["estado"] = ahora
             if ahora - hecho["vivo"] > VIVO_S:
-                _db("PUT", "pixeles/%s/vivo" % _pid(), SV)
+                t_nube = _db("PUT", "pixeles/%s/vivo" % _pid(), SV)    # devuelve la hora de Firebase
+                if isinstance(t_nube, (int, float)):
+                    _reloj["offset"] = t_nube - _ahora_ms()
                 hecho["vivo"] = ahora
             while _respuestas and ahora - _respuestas[0][0] > RESPUESTA_S:
                 _, clave = _respuestas.pop(0)
                 _db("DELETE", "pixeles/%s/respuestas/%s" % (_pid(), clave))
+            _limpiar_moviles(ahora)
             if not _estado["conectada"]:
                 S.log("nube: conectada como %s (%s), %d app(s) enlazada(s)" % (nombre(), _pid(), len(_estado["duenos"])))
             _estado.update(conectada=True, error="")
@@ -408,8 +555,11 @@ def iniciar(modulo_servidor, modulo_panel):
                 time.sleep(30)
         S.AL_HABLAR = _hay_voz.set
         for objetivo, args in ((_publicar, ()), (_trabajar, ()), (_publicar_voz, ()),
+                               (_atender_frases, ()), (_escribir_habla, ()),
                                (_escuchar, ("pixeles/%s/ordenes" % _pid(), _al_orden)),
-                               (_escuchar, ("pixeles/%s/solicitudes" % _pid(), _al_solicitud))):
+                               (_escuchar, ("pixeles/%s/solicitudes" % _pid(), _al_solicitud)),
+                               (_escuchar, ("pixeles/%s/frases" % _pid(), _al_frase)),
+                               (_escuchar, ("pixeles/%s/escuchando" % _pid(), _al_escuchando))):
             threading.Thread(target=objetivo, args=args, daemon=True).start()
 
     threading.Thread(target=arrancar, daemon=True).start()

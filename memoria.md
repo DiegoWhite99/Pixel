@@ -578,7 +578,13 @@ El usuario pidió que todo fuera con "pixel asistente de voz". Eligió la carpet
 El 22 de octubre el usuario había decidido dejar el cerebro en el PC. El 6 de noviembre pidió cambiar el modelo de IA por la API de Gemini. Todavía no tiene la clave: la está sacando.
 
 - **Qué cambia:** con clave, las respuestas habladas (`llm.Llm`) y el clasificador (`clasificador.Clasificador`) preguntan a Gemini (`gemini.py`, solo `urllib`). Sin clave, o si Gemini falla antes de decir nada, ese turno responde Ollama. Whisper y Piper siguen en el PC.
-- **Modelo:** `gemini-3.8-flash` (salió el 2 de septiembre de 2026; las peticiones a 3.7 Flash ya se redirigen a él, y Google anunció el retiro de 2.5 Flash para el 1 de diciembre). Va con `thinkingLevel: "low"`: 3.8 Flash no admite `"minimal"` (da 400), y `"low"` es su nivel más rápido. Fuentes: la página de novedades de Gemini 3.8 y la de retiradas en ai.google.dev, vistas en resultados de búsqueda, sin abrir las páginas. Por eso "Probar" del panel busca el modelo en ListModels con la clave real.
+- **Modelo:** primero se eligió `gemini-3.8-flash`, el Flash vigente (salió el 2 de septiembre de 2026). No admite `thinkingLevel: "minimal"` (da 400), así que iba con `"low"`.
+- **Medido con la clave real del usuario (6 nov), plan gratis:**
+    - `gemini-3.8-flash` da HTTP 429 RESOURCE_EXHAUSTED desde la primera petición. El detalle de cuota (`GenerateRequestsPerDayPerProjectPerModel-FreeTier` = 20) dice que da 20 peticiones al día. Cada turno gasta 2 (clasificador y respuesta).
+    - `gemini-2.5-flash` y `gemini-2.5-flash-lite` dan 404: ya no están para usuarios nuevos.
+    - Responden bien `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`, `gemini-3.5-flash` y `gemini-flash-lite-latest`. **`gemini-3.5-flash-lite`** contesta en 0,88 s y acepta `"low"`: es el que queda en `GEMINI_MODELO`.
+    - Según una fuente de terceros (scriptbyai.com, "Gemini API free tier limits"), los Flash-Lite tienen unas 500 peticiones al día gratis, y 3.8 y 3.6 Flash solo 20. Google no lo confirma.
+- **Cupo agotado:** un 429 deja a Gemini en pausa `PAUSA_CUPO_S` (10 min). Mientras, responde Ollama sin intentarlo, así que cada turno no pierde la ida y vuelta.
 - **Sin `temperature`:** en Gemini 3, Google recomienda dejarla en su valor por defecto. El largo de la respuesta lo sigue marcando el prompt ("2 a 4 frases"). `maxOutputTokens` va en 1024, holgado, porque el razonamiento también gasta del tope.
 - **Prompt de sistema:** se quitó "funcionas 100% en local, sin conexión a la nube" (pendiente de la Fase 10).
 - **La clave:**
@@ -590,11 +596,49 @@ El 22 de octubre el usuario había decidido dejar el cerebro en el PC. El 6 de n
     - Sin clave responde Ollama: 1er token en 5,39 s, total 16,1 s.
     - Con una clave falsa, el Gemini real contesta "API key not valid". El clasificador cae a Ollama tras 0,35 s y la respuesta tras 0,6 s, y el turno responde igual (1er token de Ollama en 0,80 s). La clave no aparece en el log.
     - Un POST de la clave desde otra página da 403.
-- **No probado:** una respuesta real de Gemini (falta la clave), su latencia y si el 3.8 Flash del usuario acepta `"low"` (si no, reintenta solo, sin él).
+- **No probado:** una conversación entera por voz con Gemini en el servidor real (lo reinicia el coordinador tras revisar).
 
 ## Pendientes
 
-1. Cuando el usuario tenga la clave: pegarla en el panel, tocar "Probar" y medir la latencia de Gemini contra la de Ollama con grabaciones reales.
-2. Con una clave mala, cada turno pierde ~1 s en los dos intentos fallidos, porque solo los fallos de conexión hacen pausa. Si molesta, pausar también los 4xx.
+1. Con la clave ya puesta (6 nov): medir la latencia de Gemini contra la de Ollama con grabaciones reales en el servidor real.
+2. Con una clave mala, cada turno pierde ~1 s en los dos intentos fallidos, porque solo los fallos de conexión y el 429 (cupo) hacen pausa. Si molesta, pausar también los demás 4xx.
 3. Ollama se descarga de la RAM tras 30 min sin usarse (`keep_alive`). Con Gemini contestando siempre, el primer respaldo tras ese rato será lento (~10 s).
 4. La app publicada en Firebase no tiene la tarjeta de Gemini hasta que se vuelva a publicar. Desde internet solo enseña el estado: la clave nunca viaja por la nube.
+
+# Fase 11: el celular como Píxel (6 de noviembre, rama `vinculacion_movil`, sin publicar)
+
+El usuario pidió que Píxel funcione "como un Alexa en el celular" (opción b: decir "Píxel" sin tocar, con la app abierta). Luego dijo que por ahora no puede usar el ESP32, así que el celular tiene que hacer de micrófono y altavoz. Ver CLAUDE.md, "El celular como Píxel".
+
+- **Diseño:**
+    - El celular corta las frases (VAD en el navegador) y las deja en la Realtime Database.
+    - El PC hace el mismo turno que con el ESP32 y deja la voz para ese celular.
+    - Sin ESP32, los recordatorios, "Probar voz" y el código de enlace van al celular que escucha.
+    - YouTube pedido desde el celular sale como tarjeta "Abrir en YouTube" en la app, no en el PC.
+- **Probado en el servidor, con nube falsa y capturas reales:**
+    - Sin "Píxel" no devuelve nada.
+    - Las frases de una app no enlazada y las de hace 60 s se tiran.
+    - "Píxel" sola: beep y "Dime" marcado `dime`. Después, la frase "¿Qué le hace en el fondo?" sin "Píxel" entró por la ventana.
+    - "Píxel, ¿qué es Linux?": 1 beep, 3-4 trozos de voz, cierre y fin, con las claves siempre crecientes.
+    - Con el celular escuchando y sin ESP32: un recordatorio vencido llegó al celular en 0,7 s, y "Probar voz" respondió "Escucha el celular.".
+    - "pon Queen en YouTube": llegó al celular un `video` con el id y el título, y Píxel dijo "Listo, te dejo Queen – Bohemian Rhapsody en la pantalla." No se abrió nada en el PC; sin celular, el PC se abre como siempre.
+    - El ESP32 por TCP (`cliente_prueba.py` con la frase de Linux) respondió igual que antes, sin mandar nada al celular.
+- **Probado en Chrome sin pantalla, con micro falso (la frase de Linux en bucle) y base de datos falsa:**
+    - El contexto iba a 44,1 kHz. Cortó dos frases de 3,56 y 3,58 s (el original dura 3,56 s).
+    - Whisper las entendió como "Píxel, qué es el sistema operativo de Linux?" y se activó.
+    - Mientras suena la voz no capta.
+    - Salta el "Dime" si el usuario sigue hablando.
+    - La tarjeta de YouTube y el latido de "Escuchar" funcionan.
+    - "Parar" suelta el micro, y sin permiso sale el aviso.
+    - En modo local la página carga sin errores y el botón no aparece.
+- **Uso de Firebase (medido):**
+    - Una frase de 3-4 s ocupa unos 130-175 mil caracteres en base64 (100-130 KB).
+    - Una respuesta de 15-23 s de voz ocupa 0,6-1 MB.
+    - El plan gratis (Spark) da 10 GB al mes de descarga. Cada frase con voz que oye el celular sube, lleve "Píxel" o no: en una feria con mucho ruido puede ser mucho.
+- **Latencia (servidor de prueba con Ollama):** el primer trozo de voz de la respuesta de Linux llegó a los 6,8-12 s, porque Piper espera la frase entera. Con Gemini debería bajar.
+
+## Pendientes
+
+1. **Parado a medias:** el usuario está pensando en llevar el cerebro a la nube, y quizá el puente celular→PC ya no haga falta. No está publicado ni probado con un celular real.
+2. Para probarlo de verdad: publicar las reglas (`frases`, `escuchando`, `habla`) y el hosting, reiniciar el servicio y tocar Escuchar en Chrome Android y Safari iPhone.
+3. Ver en iPhone si, con el micro abierto, la voz sale por el auricular en vez del altavoz. Se pone `navigator.audioSession.type = "play-and-record"`, pero no está probado.
+4. Si el uso de Firebase molesta: mandar la voz en μ-law de 8 bits, que pesa la mitad.

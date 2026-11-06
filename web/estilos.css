@@ -211,3 +211,15 @@ dialog.hoja::backdrop { background: rgba(15, 42, 61, 0.35); backdrop-filter: blu
 .codigo-grande { display: grid; justify-items: center; gap: 2px; padding: 16px; border-radius: 16px; background: var(--grad-suave); border: 1px solid #d3e8f7; }
 .codigo-grande b { font-family: var(--mono); font-size: 40px; letter-spacing: 0.12em; color: var(--blue); line-height: 1.15; }
 .codigo-grande small { color: var(--muted); font-size: 13px; }
+
+/* Fase 11: hablarle desde el celular */
+.oido { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+.oido-nivel { flex: 1; min-width: 90px; height: 8px; border-radius: 999px; background: #fff; border: 1px solid #d3e8f7; overflow: hidden; }
+.oido-nivel i { display: block; height: 100%; width: 0; background: var(--grad); transition: width 0.12s linear; }
+.oido-aviso { margin-top: 10px; }
+.video { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 10px; background: #fff; border: 1px solid #d3e8f7; border-radius: 14px; flex-wrap: wrap; }
+.video img { width: 112px; height: 63px; object-fit: cover; border-radius: 8px; flex: none; background: var(--surface-2); }
+.video .txt { flex: 1; min-width: 140px; }
+.video .txt b { display: block; }
+.video .txt small { color: var(--muted); font-size: 13px; }
+.video a.btn { text-decoration: none; }

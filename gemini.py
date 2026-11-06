@@ -24,11 +24,12 @@ import urllib.request
 URL = "https://generativelanguage.googleapis.com/v1beta"
 
 # valores por defecto; servidor.main() pone los suyos con configurar()
-MODELO = "gemini-3.8-flash"
+MODELO = "gemini-3.5-flash-lite"
 PENSAR = "low"          # thinkingLevel; "" = no mandar thinkingConfig
 MAX_TOKENS = 1024
 TIMEOUT = 10.0          # s sin recibir nada antes de darlo por fallido
 PAUSA_S = 60.0          # tras un fallo de conexion no se reintenta en este rato: no pagar el timeout en cada turno
+PAUSA_CUPO_S = 600.0    # tras un HTTP 429 (cupo del plan gratis agotado), igual: cada turno iria y volveria para nada
 LOG = print
 
 _clave = None
@@ -110,11 +111,13 @@ def _limpiar(texto):
     return texto.replace(_clave, "***") if _clave else texto
 
 
-def _fallo(texto, conexion=False):
+def _fallo(texto, pausa=0.0):
+    """Apunta el error para el panel; con pausa, Gemini se salta ese rato y responde Ollama."""
     global _pausa_hasta
     _estado.update(error=_limpiar(texto)[:200], error_t=time.time())
-    if conexion:
-        _pausa_hasta = time.monotonic() + PAUSA_S
+    if pausa:
+        _pausa_hasta = time.monotonic() + pausa
+        LOG("gemini: no lo intento en %.0f s (%s); mientras, responde Ollama" % (pausa, _limpiar(texto)[:120]))
 
 
 def _bien():
@@ -122,7 +125,15 @@ def _bien():
 
 
 class _ErrorConexion(ErrorGemini):
-    pass
+    """Sin internet, DNS o timeout: pausa de PAUSA_S."""
+
+
+class _ErrorCupo(ErrorGemini):
+    """HTTP 429 RESOURCE_EXHAUSTED: el plan gratis cuenta peticiones por dia y modelo. Pausa de PAUSA_CUPO_S."""
+
+
+def _pausa_de(e):
+    return PAUSA_S if isinstance(e, _ErrorConexion) else PAUSA_CUPO_S if isinstance(e, _ErrorCupo) else 0.0
 
 
 def _abrir(ruta, cuerpo=None, timeout=None):
@@ -137,7 +148,7 @@ def _abrir(ruta, cuerpo=None, timeout=None):
     try:
         return urllib.request.urlopen(req, timeout=timeout or TIMEOUT)
     except urllib.error.HTTPError as e:
-        raise ErrorGemini(_resumen_http(e)) from None
+        raise (_ErrorCupo if e.code == 429 else ErrorGemini)(_resumen_http(e)) from None
     except (urllib.error.URLError, OSError) as e:      # sin internet, DNS, timeout
         raise _ErrorConexion(_limpiar("sin conexion: %s" % getattr(e, "reason", e))) from None
 
@@ -213,14 +224,11 @@ def generar(system, mensajes, json_salida=False, timeout=None):
         texto = _texto(d)
         if not texto.strip():
             raise ErrorGemini("respuesta vacia (%s)" % _motivo(d))
-    except _ErrorConexion as e:
-        _fallo(str(e), conexion=True)
-        raise
     except ErrorGemini as e:
-        _fallo(str(e))
+        _fallo(str(e), _pausa_de(e))
         raise
     except (OSError, ValueError) as e:
-        _fallo("respuesta rota: %s" % e, conexion=True)
+        _fallo("respuesta rota: %s" % e, PAUSA_S)
         raise ErrorGemini(_limpiar("respuesta rota: %s" % e)) from None
     _bien()
     return texto
@@ -241,21 +249,19 @@ def generar_stream(system, mensajes, timeout=None):
                 d = json.loads(linea[5:])
                 if "error" in d:
                     err = d["error"]
-                    raise ErrorGemini(_limpiar("%s: %s" % (err.get("status", "error"), err.get("message", "")))[:200])
+                    clase = _ErrorCupo if err.get("status") == "RESOURCE_EXHAUSTED" or err.get("code") == 429 else ErrorGemini
+                    raise clase(_limpiar("%s: %s" % (err.get("status", "error"), err.get("message", "")))[:200])
                 trozo = _texto(d)
                 if trozo:
                     dio = True
                     yield trozo
         if not dio:
             raise ErrorGemini("respuesta vacia")
-    except _ErrorConexion as e:
-        _fallo(str(e), conexion=True)
-        raise
     except ErrorGemini as e:
-        _fallo(str(e))
+        _fallo(str(e), _pausa_de(e))
         raise
     except (OSError, ValueError) as e:      # se corto la conexion o llego algo raro a medias
-        _fallo("se corto: %s" % e, conexion=True)
+        _fallo("se corto: %s" % e, PAUSA_S)
         raise ErrorGemini(_limpiar("se corto: %s" % e)) from None
     _bien()
 
@@ -278,7 +284,7 @@ def probar():
             if not token:
                 break
     except ErrorGemini as e:
-        _fallo(str(e), conexion=isinstance(e, _ErrorConexion))
+        _fallo(str(e), _pausa_de(e))
         return False, "Gemini no acepta la clave o no responde: %s" % e
     except (OSError, ValueError) as e:
         _fallo("lista de modelos rota: %s" % e)
@@ -293,6 +299,8 @@ def probar():
     try:
         texto = generar("Responde con una sola frase corta, en español.",
                         [{"role": "user", "content": "Saluda a los visitantes de la feria."}], timeout=15)
+    except _ErrorCupo as e:
+        return False, "La clave vale, pero se acabó el cupo gratis de %s por hoy (%s). Mientras, responde la IA local." % (MODELO, e)
     except ErrorGemini as e:
         return False, "La clave vale, pero %s no respondió: %s" % (MODELO, e)
     return True, "Gemini %s responde en %.1f s: %s" % (MODELO, time.monotonic() - t0, texto.strip()[:150])

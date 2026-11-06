@@ -167,13 +167,41 @@ Buscar en la red WiFi sin el servidor: `.venv/bin/python red_wifi.py` (tarda uno
 
 **Gemini** (`gemini.py`, Fase 11): si hay clave, `Llm.responder()` y el `Clasificador` le preguntan a Gemini en vez de a Ollama.
 - REST `v1beta` con `urllib`. La clave va en la cabecera `x-goog-api-key`: nunca en la URL, en el log ni en `/api/estado`. La voz usa `:streamGenerateContent?alt=sse` y el clasificador `responseMimeType` JSON.
-- Si falla antes de decir nada (sin internet, clave mala, 4xx/5xx, `GEMINI_TIMEOUT`), ese turno responde Ollama y queda una línea `gemini: fallo (...)` en el log. Tras un fallo de conexión se salta Gemini `gemini.PAUSA_S` (60 s), para no pagar el timeout en cada turno.
-- `GEMINI_MODELO` = `gemini-3.8-flash` con `thinkingLevel` `"low"`: 3.8 Flash no admite `"minimal"` (400). Si el modelo rechaza `thinkingConfig`, reintenta sin él. No se manda `temperature`: en Gemini 3, Google recomienda dejar la de por defecto.
+- Si falla antes de decir nada (sin internet, clave mala, 4xx/5xx, `GEMINI_TIMEOUT`), ese turno responde Ollama y queda una línea `gemini: fallo (...)` en el log. Tras un fallo de conexión se salta Gemini `gemini.PAUSA_S` (60 s), y tras un HTTP 429 (cupo agotado) `gemini.PAUSA_CUPO_S` (10 min): así no se paga la ida y vuelta en cada turno.
+- `GEMINI_MODELO` = `gemini-3.5-flash-lite` con `thinkingLevel` `"low"`. Medido el 6 nov con la clave del usuario, en el plan gratis:
+    - 3.5 Flash-Lite contesta en 0,88 s y acepta `"low"`. También responden `gemini-3.1-flash-lite`, `gemini-3.5-flash` y `gemini-flash-lite-latest`.
+    - `gemini-3.8-flash` da 429 desde la primera petición: su cupo gratis es de 20 peticiones al día (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`). Según una fuente de terceros, los Flash-Lite tienen unas 500; Google no lo confirma.
+    - `gemini-2.5-flash` y `gemini-2.5-flash-lite` dan 404 a usuarios nuevos.
+    - Cada turno gasta 2 peticiones (clasificador y respuesta).
+- Si el modelo rechaza `thinkingConfig`, reintenta sin él. No se manda `temperature`: en Gemini 3, Google recomienda dejar la de por defecto.
 - La clave se pega en el panel local (Cuentas) y se guarda en `GEMINI_CLAVE` (`gemini_clave.json`, permisos 600, fuera de git). Vale al momento, sin reiniciar. `main()` la carga después de calentar Ollama, para que el respaldo responda rápido.
 - `/api/gemini/clave` y `/api/gemini/probar` están en `panel.RUTAS_SOLO_LOCAL`, no en `RUTAS_POST`: `nube.py` ejecuta `RUTAS_POST` como órdenes de internet, así que la nube no puede poner ni probar la clave. En modo internet la tarjeta solo enseña el estado.
 - "Probar" busca `GEMINI_MODELO` en la lista de modelos (ListModels) y hace una pregunta corta.
 - Los logs del turno dicen quién contestó: `clasificador gemini|ollama` y `LLM gemini|ollama 1er token`.
 - Para probar sin clave real, apuntar `gemini.URL` a un servidor simulado en local.
+
+**El celular como Píxel** (Fase 11, rama `vinculacion_movil`; **sin publicar**: hacen falta las reglas y el hosting nuevos). En la app de internet, "Escuchar" (Inicio) convierte el celular en un ESP32 remoto.
+- **En el navegador** (`app.js`, sección "hablarle desde el celular"):
+    - Hace el VAD por energía con los tiempos de `servidor.py`, pero con `MIN_RMS` 300, porque el celular trae control de ganancia.
+    - Remuestrea a PCM 16 kHz en JS: un FIR seguido de interpolación. No usa `AudioContext({sampleRate})`, que falla en Firefox.
+    - Deja cada frase en `pixeles/<pid>/frases/<id>` (`{uid, pcm, t}`, base64, como mucho 10 s).
+    - No capta mientras suena Píxel ni con la app en segundo plano. Pide Wake Lock para que no se apague la pantalla.
+- **En el servidor:**
+    - `nube.py` escucha `frases` y `escuchando` por SSE.
+    - Cada frase va a la `servidor.SesionMovil` de ese uid. Esas sesiones están en `MOVILES`, no en `SESIONES`, y hacen el mismo `_turno` que el ESP32.
+    - La salida no va por el socket: va a `habla/<uid>/<ms>` como `{tipo: oido|voz|cierre|fin|video, pcm, dime, id, titulo}`. El celular la toca en orden y la borra. Lo que quede se borra al minuto.
+    - El micro no se ensordece en el servidor: lo calla el propio celular.
+- **"Dime" con el usuario hablando:** el "Dime" de "Píxel" sola va marcado `dime`, y el celular lo salta si el usuario ya sigue hablando. Así queda igual que con `en_voz` en el ESP32.
+- **Por dónde habla `sesion_que_habla()`:** por el ESP32 si hay uno. Si no, por el celular que escucha:
+    - el celular escribe un latido en `escuchando/<uid>` cada 15 s, que caduca a los 45 s, y `onDisconnect` lo borra al cerrar la app;
+    - por ahí van los recordatorios, "Probar voz" sin `donde` y el código de enlace;
+    - sin nadie escuchando, los recordatorios esperan en el JSON.
+- **YouTube desde el celular:** no abre el PC. `SesionMovil._accion` le pasa `abrir` a la acción, y la app muestra una tarjeta "Abrir en YouTube": ningún navegador deja poner sonido sin un toque.
+- **Reposo:** en el celular no se dice; solo se olvida el historial.
+- **Panel y app:** `/api/estado` → `celulares` (las apps enlazadas, escuchen o no). Salen en "Píxel conectados", y un celular que escucha cuenta como Píxel activo.
+- **Probar sin Firebase:**
+    - Servidor: sustituir `nube._db` por una función que apunte las llamadas, poner `nube.S`, `nube.P`, `nube._auth["uid"]` y `nube._estado["duenos"]`, arrancar `nube._atender_frases` y `nube._escribir_habla`, y mandar frases con `nube._al_frase(id, {uid, pcm, t})`.
+    - Navegador: `puppeteer-core` con `--use-fake-device-for-media-stream --use-fake-ui-for-media-stream --use-file-for-fake-audio-capture=<wav>`, bloqueando gstatic y poniendo un `nube.d` falso. `nube` y `oido` son `const` de nivel superior, así que se alcanzan desde `page.evaluate`.
 
 **TTS** (`tts.py`): Piper sale a 22050 Hz y se remuestrea a 16000 Hz con numpy (FIR paso bajo + interpolación lineal, sin scipy).
 

@@ -524,6 +524,13 @@ def youtube(params):
     if not vid:
         return {"ok": False, "decir": "No encontré %s en YouTube." % consulta, "log": info}
 
+    if params.get("abrir") is not None:
+        # Fase 11: pedido desde el celular. Ningun navegador deja ponerlo sin un toque: la app
+        # muestra el video con un boton "Abrir en YouTube" (lo manda SesionMovil._abrir_video)
+        params["abrir"](vid, titulo)
+        info["abierto_en"] = "celular"
+        return {"ok": True, "decir": "Listo, te dejo %s en la pantalla." % _hablable(titulo or consulta), "log": info}
+
     rc = _abrir("https://www.youtube.com/watch?v=%s" % vid)
     info["xdg_open"] = "sigue vivo a los 3 s" if rc is None else "exit %d" % rc
     if rc not in (0, None):

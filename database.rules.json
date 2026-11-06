@@ -32,6 +32,25 @@
         },
         "respuestas": {
           "$id": {".read": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid)"}
+        },
+        "frases": {
+          "$id": {
+            ".write": "auth != null && !data.exists() && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()",
+            ".validate": "newData.hasChildren(['uid', 'pcm', 't']) && newData.child('uid').val() === auth.uid && newData.child('pcm').isString() && newData.child('pcm').val().length <= 450000 && newData.child('t').isNumber()"
+          }
+        },
+        "escuchando": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()",
+            ".validate": "newData.isNumber()"
+          }
+        },
+        "habla": {
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()",
+            ".write": "auth != null && auth.uid === $uid && !newData.exists()",
+            "$id": {".write": "auth != null && auth.uid === $uid && !newData.exists()"}
+          }
         }
       }
     },
