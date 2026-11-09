@@ -2,16 +2,28 @@
   "rules": {
     "visibles": {
       ".read": "auth != null",
-      "$pid": {".write": "auth != null && auth.uid === $pid"}
+      "$pid": {
+        ".write": "auth != null && auth.uid === $pid"
+      }
     },
     "pixeles": {
       "$pid": {
         ".read": "auth != null && auth.uid === $pid",
         ".write": "auth != null && auth.uid === $pid",
-        "estado": {".read": "auth != null && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()"},
-        "vivo": {".read": "auth != null && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()"},
-        "voz": {".read": "auth != null && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()"},
-        "duenos": {"$uid": {".read": "auth != null && auth.uid === $uid"}},
+        "estado": {
+          ".read": "auth != null && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()"
+        },
+        "vivo": {
+          ".read": "auth != null && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()"
+        },
+        "voz": {
+          ".read": "auth != null && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()"
+        },
+        "duenos": {
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid"
+          }
+        },
         "mirando": {
           "$uid": {
             ".write": "auth != null && auth.uid === $uid && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()",
@@ -31,25 +43,8 @@
           }
         },
         "respuestas": {
-          "$id": {".read": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid)"}
-        },
-        "frases": {
           "$id": {
-            ".write": "auth != null && !data.exists() && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()",
-            ".validate": "newData.hasChildren(['uid', 'pcm', 't']) && newData.child('uid').val() === auth.uid && newData.child('pcm').isString() && newData.child('pcm').val().length <= 450000 && newData.child('t').isNumber()"
-          }
-        },
-        "escuchando": {
-          "$uid": {
-            ".write": "auth != null && auth.uid === $uid && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()",
-            ".validate": "newData.isNumber()"
-          }
-        },
-        "habla": {
-          "$uid": {
-            ".read": "auth != null && auth.uid === $uid && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()",
-            ".write": "auth != null && auth.uid === $uid && !newData.exists()",
-            "$id": {".write": "auth != null && auth.uid === $uid && !newData.exists()"}
+            ".read": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid)"
           }
         }
       }
@@ -58,7 +53,249 @@
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
         "pixeles": {
-          "$pid": {".write": "auth != null && (auth.uid === $pid || (auth.uid === $uid && !newData.exists()))"}
+          "$pid": {
+            ".write": "auth != null && (auth.uid === $pid || (auth.uid === $uid && !newData.exists()))"
+          }
+        },
+        "recordatorios": {
+          ".write": "auth != null && auth.uid === $uid",
+          "$id": {
+            ".validate": "newData.hasChildren(['texto', 'cuando']) && newData.child('cuando').isNumber() && (!newData.child('creado').exists() || newData.child('creado').isNumber())",
+            "texto": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 200"
+            },
+            "cuando": {
+              ".validate": "newData.isNumber()"
+            },
+            "creado": {
+              ".validate": "newData.isNumber()"
+            },
+            "$otro": {
+              ".validate": false
+            }
+          }
+        },
+        "ajustes": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.hasChildren(['personalidad', 'respuesta'])",
+          "personalidad": {
+            ".validate": "newData.isString() && newData.val().length <= 300"
+          },
+          "respuesta": {
+            ".validate": "newData.val() === 'corta' || newData.val() === 'normal'"
+          },
+          "voz": {
+            ".validate": "newData.isString() && newData.val().length <= 200"
+          },
+          "$otro": {
+            ".validate": false
+          },
+          "tono": {
+            ".validate": "newData.val() === 'normal' || newData.val() === 'infantil' || newData.val() === 'muy_infantil'"
+          }
+        },
+        "cerebro": {
+          ".read": "auth != null && (auth.uid === $uid || root.child('usuarios/' + $uid + '/confio/' + auth.uid).exists())",
+          ".write": "auth != null && (auth.uid === $uid || root.child('usuarios/' + $uid + '/confio/' + auth.uid).exists())",
+          "$id": {
+            ".validate": "newData.hasChildren(['titulo', 'texto', 'tipo'])",
+            "titulo": {
+              ".validate": "newData.isString() && newData.val().length <= 100"
+            },
+            "texto": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 4000"
+            },
+            "tipo": {
+              ".validate": "newData.val() === 'yo' || newData.val() === 'gusto' || newData.val() === 'persona' || newData.val() === 'proyecto' || newData.val() === 'regla' || newData.val() === 'nota'"
+            },
+            "fijo": {
+              ".validate": "newData.isBoolean()"
+            },
+            "actualizado": {
+              ".validate": "newData.isNumber()"
+            },
+            "origen": {
+              ".validate": "newData.isString() && newData.val().length <= 20"
+            },
+            "$otro": {
+              ".validate": false
+            }
+          }
+        },
+        "confio": {
+          "$pid": {
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.isBoolean() || newData.isNumber()"
+          }
+        },
+        "preferencias": {
+          ".write": "auth != null && auth.uid === $uid",
+          "aprender": {
+            ".validate": "newData.isBoolean()"
+          },
+          "enfoque": {
+            ".validate": "newData.hasChildren(['metodo'])",
+            "metodo": {
+              ".validate": "newData.val() === 'pomodoro' || newData.val() === 'eisenhower' || newData.val() === 'ambos'"
+            },
+            "trabajo": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 120"
+            },
+            "descanso": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 60"
+            },
+            "largo": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 90"
+            },
+            "ciclos": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 12"
+            },
+            "$otro": {
+              ".validate": false
+            }
+          },
+          "$otro": {
+            ".validate": false
+          }
+        },
+        "pomodoro": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.hasChildren(['fase', 'ciclo', 'total', 'inicio', 'fin'])",
+          "fase": {
+            ".validate": "newData.val() === 'trabajo' || newData.val() === 'descanso' || newData.val() === 'largo'"
+          },
+          "ciclo": {
+            ".validate": "newData.isNumber()"
+          },
+          "total": {
+            ".validate": "newData.isNumber()"
+          },
+          "inicio": {
+            ".validate": "newData.isNumber()"
+          },
+          "fin": {
+            ".validate": "newData.isNumber()"
+          },
+          "queda": {
+            ".validate": "newData.isNumber()"
+          },
+          "trabajo": {
+            ".validate": "newData.isNumber()"
+          },
+          "descanso": {
+            ".validate": "newData.isNumber()"
+          },
+          "tarea": {
+            ".validate": "newData.isString() && newData.val().length <= 120"
+          },
+          "tareaId": {
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
+          "$otro": {
+            ".validate": false
+          }
+        },
+        "tareas": {
+          ".write": "auth != null && auth.uid === $uid",
+          "$id": {
+            ".validate": "newData.hasChildren(['texto'])",
+            "texto": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 200"
+            },
+            "urgente": {
+              ".validate": "newData.isBoolean()"
+            },
+            "importante": {
+              ".validate": "newData.isBoolean()"
+            },
+            "hecha": {
+              ".validate": "newData.isBoolean()"
+            },
+            "creada": {
+              ".validate": "newData.isNumber()"
+            },
+            "vence": {
+              ".validate": "newData.isNumber()"
+            },
+            "pomodoros": {
+              ".validate": "newData.isNumber()"
+            },
+            "$otro": {
+              ".validate": false
+            }
+          }
+        },
+        "aparatos": {
+          ".write": "auth != null && auth.uid === $uid",
+          "$aid": {
+            ".validate": "newData.hasChildren(['nombre', 'tipo', 'metodo'])",
+            "nombre": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60"
+            },
+            "tipo": {
+              ".validate": "newData.isString() && newData.val().length <= 20"
+            },
+            "metodo": {
+              ".validate": "newData.isString() && newData.val().length <= 10"
+            },
+            "puente": {
+              ".validate": "newData.isString() && newData.val().length <= 64"
+            },
+            "creado": {
+              ".validate": "newData.isNumber()"
+            },
+            "config": {
+              "$k": {
+                ".validate": "newData.isString() && newData.val().length <= 300 || newData.isNumber() || newData.isBoolean()"
+              }
+            },
+            "acciones": {
+              "$accion": {
+                "$k": {
+                  ".validate": "newData.isString() && newData.val().length <= 3000 || newData.isNumber() || newData.isBoolean()"
+                }
+              }
+            },
+            "$otro": {
+              ".validate": false
+            }
+          }
+        },
+        "apuntes": {
+          ".write": "auth != null && auth.uid === $uid",
+          "$id": {
+            ".validate": "newData.hasChildren(['titulo', 'creado'])",
+            "titulo": {
+              ".validate": "newData.isString() && newData.val().length <= 120"
+            },
+            "contexto": {
+              ".validate": "newData.isString() && newData.val().length <= 300"
+            },
+            "texto": {
+              ".validate": "newData.isString() && newData.val().length <= 30000"
+            },
+            "creado": {
+              ".validate": "newData.isNumber()"
+            },
+            "actualizado": {
+              ".validate": "newData.isNumber()"
+            },
+            "analisis": {
+              ".validate": "newData.isString() && newData.val().length <= 15000"
+            },
+            "analizado": {
+              ".validate": "newData.isNumber()"
+            },
+            "$otro": {
+              ".validate": false
+            },
+            "asunto": {
+              ".validate": "newData.isString() && newData.val().length <= 40"
+            },
+            "importante": {
+              ".validate": "newData.isString() && newData.val().length <= 300"
+            }
+          }
         }
       }
     }

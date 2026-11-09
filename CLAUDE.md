@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Asistente de voz para una demo de feria, todo en el PC salvo la IA de Gemini, que es opcional (Fase 11). Un ESP32-S3 (micrófono INMP441; su firmware **no** está en este repo) manda audio por TCP; el servidor en Python lo transcribe (faster-whisper), decide qué hacer (acciones por regex, clasificador LLM o respuesta libre del LLM vía Ollama) y devuelve voz sintetizada (Piper). Palabra de activación: "Píxel" (antes "Nova", que Whisper oía como "No, no."; ver `memoria.md`).
 
-Git: https://github.com/DiegoWhite99/Pixel, **público**. Ahí no entran claves, grabaciones ni datos personales: ver `.gitignore`. `main` guarda el estado del 6 nov, y el trabajo nuevo va en la rama `vinculacion_movil`. El repositorio tiene su propio `core.sshCommand` con `~/.ssh/id_ed25519_wikiia`: la llave por defecto, `id_ed25519`, es una deploy key del repo AGATA, y GitHub la rechaza aquí. No hay `requirements.txt`, ni tests, ni linter. Las dependencias viven en `.venv/` (Python 3.10: faster-whisper 1.2.1, piper-tts 1.8.0, numpy, yt-dlp); `venv/` es una copia con los mismos paquetes que no se usa. Ollama corre aparte en `127.0.0.1:11434` con el modelo `qwen2.5:3b`. Con clave de Gemini, Gemini responde y Ollama queda de respaldo (ver **Gemini**).
+Git: https://github.com/DiegoWhite99/Pixel, **público**. Ahí no entran claves, grabaciones ni datos personales: ver `.gitignore`. El 9 nov se fusionó `vinculacion_movil` (Fases 11 a 13) en `main`; el trabajo nuevo sigue en `vinculacion_movil`. El repositorio tiene su propio `core.sshCommand` con `~/.ssh/id_ed25519_wikiia`: la llave por defecto, `id_ed25519`, es una deploy key del repo AGATA, y GitHub la rechaza aquí. No hay `requirements.txt` ni linter; las únicas pruebas son las de la Fase 13 (`tools/prueba_*`). Las dependencias viven en `.venv/` (Python 3.10: faster-whisper 1.2.1, piper-tts 1.8.0, numpy, yt-dlp y, desde la Fase 13, androidtvremote2 0.3.3); `venv/` es una copia con los mismos paquetes que no se usa. Ollama corre aparte en `127.0.0.1:11434` con el modelo `qwen2.5:3b`. Con clave de Gemini, Gemini responde y Ollama queda de respaldo (ver **Gemini**).
 
 ## Comandos
 
@@ -54,6 +54,21 @@ Servidor de prueba aislado, para no tocar el real ni sus JSON (luego `tools/clie
 Probar la web en un Chrome sin pantalla (la cara usa WebGL): `puppeteer-core` instalado fuera del repo, con `executablePath: "/usr/bin/google-chrome"` y `args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"]`. `http://localhost:8081/?nube` abre la app en modo internet desde el panel de prueba. Con `?nube=anonimo` (solo en localhost) entra sin Google: una prueba automática no puede iniciar sesión con Google. El código de enlace sale de `/api/estado` (`nube.enlace.codigo`) del panel local, y `POST /api/nube/enlazar` lo reabre.
 
 Buscar en la red WiFi sin el servidor: `.venv/bin/python red_wifi.py` (tarda unos 10 s).
+
+Pruebas de la Fase 13 (las únicas automáticas del proyecto):
+
+```bash
+node tools/prueba_modulos.js                 # funciones puras de web/*.js en Node, sin página (segundos)
+.venv/bin/python tools/prueba_obsidian.py    # sincronización con Obsidian, con base de datos falsa
+# de punta a punta: Chrome sin pantalla, Gemini y Firebase de verdad (cuenta anónima que se borra al final),
+# Google simulado y un ESP32 simulado (tools/puente_simulado.py). Gasta ~35 peticiones de Gemini.
+python3 -m http.server 8099 -d web &
+PUPPETEER=<carpeta>/node_modules/puppeteer-core node tools/prueba_app.js [cerebro|enfoque|google|aparatos]
+```
+
+`prueba_app.js` espera `PAUSA` ms (3000) antes de cada frase: el plan gratis de Gemini tiene un límite por minuto (429).
+
+La parte `musica` necesita que YouTube suene en Chrome sin pantalla. Tras muchas pruebas seguidas, YouTube le pide "Accede para confirmar que no eres un bot" (en la app sale como error 150 en todos los videos). No se esquiva: la prueba lo detecta, comprueba que Píxel lo dice y deja el botón, y marca lo demás `OMIT`. Lo mismo si se acaba el cupo diario de búsquedas de la YouTube Data API (429; Píxel dice "No puedo buscar el video exacto"). El 9 nov se gastaron los dos. Para ver el modo música sin gastar cupo: interceptar la petición a Gemini con una llamada `poner_musica` falsa, poner un `window.YT` falso y usar `PixelMusica.usarBuscador()`.
 
 ## Arquitectura
 
@@ -109,11 +124,18 @@ Buscar en la red WiFi sin el servidor: `.venv/bin/python red_wifi.py` (tarda uno
     - `"pc"` la manda a `salida_pc.SalidaPc`: un `pacat` persistente con un hilo escritor, así que suena por el sink por defecto, el altavoz Bluetooth si está conectado. No se envía 0x02 (el LED no se pone amarillo), pero sí 0x03. `fin_reproduccion` suma `salida_pc.LATENCIA_S` (0,4 s) para que el micro siga sordo mientras suena.
 - No tiene autenticación: cualquiera en la red puede usarlo. Sí rechaza (403) un POST con la cabecera `Origin` de otra página, para que otra web abierta en el navegador no pueda manejarlo. No hay CORS: la app de internet no llama a esta API.
 
-**App web y Firebase** (`web/`, Fase 9): una sola app para el panel local y para Firebase Hosting. HTML, CSS y JS sin compilar y sin librerías. El modo local no usa nada de internet; el modo internet carga el SDK de Firebase 10.14.1 de gstatic.
-- `cara3d.js`: la cara de Píxel en WebGL 1 a mano.
-    - Es una esfera UV de 40×64. Ojos y boca son LED dibujados en dos texturas equirectangulares de 2048×1024 (color y brillo). Solo se repinta y se sube con `texSubImage2D` la zona de la cara, y solo cuando cambia.
+**App web y Firebase** (`web/`, Fase 9): una sola app para el panel local y para Firebase Hosting. HTML, CSS y JS sin compilar y sin librerías. El modo local no usa nada de internet; el modo internet carga el SDK de Firebase 13.1.0 de gstatic (`SDK` en `app.js`; la 13 trae `firebase-ai.js`).
+- `cara3d.js`: la cara de Píxel en WebGL 1 a mano. Desde el 9 nov (Fase 13, a pedido del usuario) no tiene boca, y los ojos son dos LED amarillos **dentro del visor negro**: el usuario los quiso "como un LED, dentro de lo negro, no afuera".
+    - La cabeza es una esfera UV de 48×72, con una textura fija: blanca, con el visor oscuro y mejillas.
     - Arrastrarla desplaza los vértices con peso gaussiano alrededor del punto agarrado. Al soltar vuelve con muelles amortiguados, como la cara de Mario 64.
-    - `app.js` le pasa el estado de `/api/estado` ("esperando", "escuchando", "hablando", "sin-servidor") y emociones de un rato ("feliz", "sorpresa"). Sin WebGL se ve un SVG plano.
+    - Los LED se dibujan en el shader de la cabeza (`FS_CARA`), en longitud y latitud sacadas de la UV, así que se estiran con la cara. Por ojo van `uC` (centro y escala), `uA` (párpado de arriba y apertura) y `uB` (párpado de abajo, brillo y forma).
+    - Formas por distancia con signo: 0 = ojo con párpados (curvas `arriba`/`incl`/`curvaA` y `abajo`/`curvaB`), 1 corazón, 2 X, 3 "> <" y 4 espiral. Llevan rejilla de puntos de LED, núcleo casi blanco, borde naranja y un halo que ilumina el visor (retroiluminación). Fuera del visor no se pintan.
+    - `GESTOS` define normal, escuchando, hablando, pensando, feliz (^ ^ con rubor), sorpresa, triste, enojado, curioso, guiño, dormido, aburrido, bostezo, amor (corazones que laten), error (X), mareado (espirales), risa/apretado ("> <") y bailando (ver **Música**).
+    - La cabeza acompaña cada gesto (`CABEZA`: ladeo, cabeceo, salto y vaivén). `evento(nombre)` encadena gestos cortos (`EVENTOS`: bostezo, estornudo, tararear, mareo, risa, corazones, guiño, mirar).
+    - El tamaño va con un muelle que rebota al cambiar de gesto. Parpadea (a veces doble) y mira al ratón, o vistazos al azar. Sin boca, al hablar los ojos laten con `boca(nivel)`.
+    - `app.js` y `agente.js` le pasan el estado ("esperando", "escuchando", "pensando", "hablando", "sin-servidor", "normal") y emociones de un rato; `emocion(n, 0)` las quita. `alAgarrar` y `alSoltar(toque, info)` avisan a `humor.js`.
+    - `depurar()` da los valores de los ojos, para las pruebas. El `dt` va de 0 a 1/30: el primer cuadro puede traer una hora anterior a la de montar, y con dt negativo los muelles explotaban.
+    - Sin WebGL se ve un SVG plano parecido. `icono.svg` también cambió.
 - `estilos.css`: solo tema claro, porque se pidió fondo blanco con azules y verdes.
 - Modo internet (`*.web.app`, `*.firebaseapp.com` o `?nube`): no llama a `/api`, todo pasa por la nube (abajo).
     - Se entra con Google (`signInWithPopup`) y el enlace es de la cuenta.
@@ -138,13 +160,20 @@ Buscar en la red WiFi sin el servidor: `.venv/bin/python red_wifi.py` (tarda uno
 **Firmware** (fuera del repo, en `~/Arduino/`). No se sabe cuál lleva la placa: preguntarlo antes de suponerlo.
 - `Pixel_portal/Pixel_portal.ino`, con portal WiFi y BLE:
     - Busca el servidor por broadcast, vacía el micro al arrancar y al conectar, y reconecta si un envío queda a medias.
-    - Se compila sin subirlo con `~/.local/bin/arduino-cli compile --fqbn esp32:esp32:esp32s3 --build-path <carpeta temporal> ~/Arduino/Pixel_portal` (core esp32 3.3.12).
+    - Se compila sin subirlo con `~/.local/bin/arduino-cli compile --fqbn esp32:esp32:esp32s3:PartitionScheme=huge_app --build-path <carpeta temporal> ~/Arduino/Pixel_portal` (core esp32 3.3.12; desde la Fase 13 necesita la partición grande).
     - Guarda red, IP del servidor, volumen y ganancia en Preferences.
     - Si no encuentra la red, o si se mantiene BOOT 3 s, abre la red `Pixel asistente de voz` (clave `pixel2026`) con un formulario en `192.168.4.1`, y el LED se pone morado.
 - `Etb_boot/Etb_boot.ino` es el básico del 21 oct:
     - Red e IP del servidor fijas (`SERVER_IP` = 192.168.1.216), sin portal, sin Bluetooth y sin descubrimiento.
     - Su `sendDebug` solo manda el primer byte del largo: un texto de más de 255 bytes rompe el protocolo.
     - Las mejoras de `Pixel_portal.ino` para él están en `Etb_boot.ino.mejoras-22oct`, sin aplicar. El 22 oct a las 14:59, `Etb_boot.ino` volvió a la versión original (igual a `Etb_boot.ino.respaldo-22oct`).
+
+- **Fase 13:** `Pixel_portal/puente.ino` (con `certs.h`) hace del ESP32 un puente de aparatos (ver **Aparatos**). Pide la librería ArduinoJson 7. La placa es un ESP32-S3 N16R8 (16 MB de flash y 8 MB de PSRAM octal, MAC 20:6e:f1:91:87:7c).
+    - Se compila y se carga con `--fqbn esp32:esp32:esp32s3:PartitionScheme=huge_app,PSRAM=opi`. Ocupa 1,35 MB; la partición de por defecto tiene 1,3. Con la PSRAM, las conexiones TLS no le quitan RAM al Bluetooth.
+    - **Cargado el 9 nov a las 14:41**, con permiso del usuario: Pixel_portal + puente. Antes llevaba Etb_boot, y su copia completa está en `~/Arduino/respaldos/esp32_etb_boot_09nov_16MB.bin` (para volver: `esptool write_flash 0 <archivo>`).
+    - Su cuenta de Firebase es `3t0baibQJBdUr51eWATNEUQnvWp2`. Aún sin dueño: se enlaza desde la app por Bluetooth.
+    - Hay que cerrar el Arduino IDE para cargar: su monitor serie se queda con `/dev/ttyUSB0`. Abrir el puerto reinicia la placa (`stty -F /dev/ttyUSB0 115200 raw -hupcl; cat`).
+    - Cuidado al escribir para el ESP32: `Stream::setTimeout` va en **milisegundos**. Google contesta con `Transfer-Encoding: chunked`.
 
 **Bluetooth en `Pixel_portal.ino`:** solo BLE, porque el S3 no tiene Bluetooth clásico.
 - Se anuncia como `Pixel asistente de voz` (`NOMBRE_PIXEL`, el mismo nombre que la red del portal), con una característica de solo lectura con la red y el servidor. Va sin tildes y sin las cifras de la MAC: el nombre va en la respuesta al escaneo BLE (31 bytes), y con 4 bytes más ya no cabría entero.
@@ -180,30 +209,128 @@ Buscar en la red WiFi sin el servidor: `.venv/bin/python red_wifi.py` (tarda uno
 - Los logs del turno dicen quién contestó: `clasificador gemini|ollama` y `LLM gemini|ollama 1er token`.
 - Para probar sin clave real, apuntar `gemini.URL` a un servidor simulado en local.
 
-**El celular como Píxel** (Fase 11, rama `vinculacion_movil`; **sin publicar**: hacen falta las reglas y el hosting nuevos). En la app de internet, "Escuchar" (Inicio) convierte el celular en un ESP32 remoto.
-- **En el navegador** (`app.js`, sección "hablarle desde el celular"):
-    - Hace el VAD por energía con los tiempos de `servidor.py`, pero con `MIN_RMS` 300, porque el celular trae control de ganancia.
-    - Remuestrea a PCM 16 kHz en JS: un FIR seguido de interpolación. No usa `AudioContext({sampleRate})`, que falla en Firefox.
-    - Deja cada frase en `pixeles/<pid>/frases/<id>` (`{uid, pcm, t}`, base64, como mucho 10 s).
-    - No capta mientras suena Píxel ni con la app en segundo plano. Pide Wake Lock para que no se apague la pantalla.
-- **En el servidor:**
-    - `nube.py` escucha `frases` y `escuchando` por SSE.
-    - Cada frase va a la `servidor.SesionMovil` de ese uid. Esas sesiones están en `MOVILES`, no en `SESIONES`, y hacen el mismo `_turno` que el ESP32.
-    - La salida no va por el socket: va a `habla/<uid>/<ms>` como `{tipo: oido|voz|cierre|fin|video, pcm, dime, id, titulo}`. El celular la toca en orden y la borra. Lo que quede se borra al minuto.
-    - El micro no se ensordece en el servidor: lo calla el propio celular.
-- **"Dime" con el usuario hablando:** el "Dime" de "Píxel" sola va marcado `dime`, y el celular lo salta si el usuario ya sigue hablando. Así queda igual que con `en_voz` en el ESP32.
-- **Por dónde habla `sesion_que_habla()`:** por el ESP32 si hay uno. Si no, por el celular que escucha:
-    - el celular escribe un latido en `escuchando/<uid>` cada 15 s, que caduca a los 45 s, y `onDisconnect` lo borra al cerrar la app;
-    - por ahí van los recordatorios, "Probar voz" sin `donde` y el código de enlace;
-    - sin nadie escuchando, los recordatorios esperan en el JSON.
-- **YouTube desde el celular:** no abre el PC. `SesionMovil._accion` le pasa `abrir` a la acción, y la app muestra una tarjeta "Abrir en YouTube": ningún navegador deja poner sonido sin un toque.
-- **Reposo:** en el celular no se dice; solo se olvida el historial.
-- **Panel y app:** `/api/estado` → `celulares` (las apps enlazadas, escuchen o no). Salen en "Píxel conectados", y un celular que escucha cuenta como Píxel activo.
-- **Probar sin Firebase:**
-    - Servidor: sustituir `nube._db` por una función que apunte las llamadas, poner `nube.S`, `nube.P`, `nube._auth["uid"]` y `nube._estado["duenos"]`, arrancar `nube._atender_frases` y `nube._escribir_habla`, y mandar frases con `nube._al_frase(id, {uid, pcm, t})`.
-    - Navegador: `puppeteer-core` con `--use-fake-device-for-media-stream --use-fake-ui-for-media-stream --use-file-for-fake-audio-capture=<wav>`, bloqueando gstatic y poniendo un `nube.d` falso. `nube` y `oido` son `const` de nivel superior, así que se alcanzan desde `page.evaluate`.
+**El celular como micrófono del PC** (Fase 11, commit `b51e2cb`; **sin uso**): el celular mandaba sus frases a `pixeles/<pid>/frases` y el PC le devolvía la voz por `habla/<uid>`. Se cambió por "Píxel en la app" (abajo), que no necesita el PC. El cliente de `app.js` y sus reglas (`frases`, `escuchando`, `habla`) se quitaron. Están en ese commit, igual que su descripción en este archivo. El código del servidor sigue ahí, sin uso: `SesionMovil`, `MOVILES` y `sesion_que_habla()` en `servidor.py`, y `_atender_frases` y `_escribir_habla` en `nube.py`.
+
+**Píxel en la app** (`web/agente.js`, Fase 12, rama `vinculacion_movil`): en la app de internet, el celular es Píxel entero, sin PC ni servidor. Vale para cualquier cuenta de Google. Enlazar el Píxel del PC queda opcional, para manejar el ESP32 y el panel.
+- `app.js` carga `agente.js` solo en modo internet, al iniciar Firebase, y llama a `Agente.iniciar(app)`. En modo internet, Inicio, Personalidad y Agenda son del agente. Al cargarse, `agente.js` no toca la página: sus funciones de texto (`Agente.texto`) se prueban en Node.
+- **Oír:** `webkitSpeechRecognition` continuo, con resultados intermedios. Se vuelve a arrancar cada vez que se corta, y Android lo corta tras cada frase. No funciona en Firefox: sale un aviso y queda la caja "Escribe a Píxel". Mientras habla, el reconocimiento se para. Pide Wake Lock.
+- **Activación:** `activacion()` porta `servidor.quitar_activacion`, con variantes, prefijos, "Píxel, Píxel" y "Píxel" en medio de la frase. El reconocimiento del navegador casi no pone comas: en medio también vale si lo que sigue es una orden o una pregunta (`ARRANQUE`, `PREGUNTA`). "Píxel" sola dice "Dime" y abre 8 s para una frase sin "Píxel".
+- **Pensar:** Gemini por Firebase AI Logic (`gemini-3.5-flash-lite`, `thinkingLevel` LOW), en streaming, con 4 turnos de historial que se olvidan tras 2 min. No hay clave en la página: AI Logic usa la Gemini Developer API del proyecto, en el plan gratis. Hace una petición por turno, o dos si una herramienta devuelve datos (Fase 13).
+    - Acciones por function calling: `poner_musica`, `crear_recordatorio` (`en_minutos` para "en 10 minutos", que la app suma a la hora actual; `cuando` en ISO local para horas concretas, que calcula Gemini con la hora del prompt), `ver_recordatorios` y `borrar_recordatorio`. La frase de confirmación se arma en local.
+    - Un 429 por minuto avisa y reintenta una vez; el del día dice que se acabó el cupo de hoy.
+- **Hablar:** `speechSynthesis` frase a frase, con `extraerFrases()` portado de `servidor.extraer_frases`. Elige la mejor voz en español o la de los ajustes. La boca de la cara sigue `Agente.nivelBoca()`.
+    - **Voz infantil** (pedido del usuario el 9 nov): "Tipo de voz" en Personalidad (`ajustes.tono`: `normal`, `infantil` o `muy_infantil`; por defecto `infantil`). `TONOS` en `agente.js` sube `pitch` y `rate` de cada frase (1,55 en infantil). No hay voces de niño en español para Piper ni para el navegador (ver **TTS**), así que es la misma voz más aguda.
+- **YouTube:** sin servidor no se busca el video exacto. Sale una tarjeta "Abrir en YouTube" con la búsqueda.
+- **Datos:** `usuarios/<uid>/recordatorios/<id>` (`{texto, cuando ms, creado}`) y `usuarios/<uid>/ajustes` (`{personalidad, respuesta, voz}`). Solo el dueño los lee o escribe, con tipos y tamaños validados en `database.rules.json`.
+    - Un recordatorio vencido se borra con una transacción antes de decirlo, así lo dice un solo aparato. Con la app cerrada no suena: se dice al volver, avisando que va tarde.
+- **App Check:** al activar AI Logic en la consola, Firebase lo dejó "aplicado" (ENFORCED) para `firebaseml.googleapis.com`, y Gemini daba 401 "Firebase App Check token is invalid". Ver `memoria.md`, Fase 12.
+    - El 6 nov se dejó en UNENFORCED por la API de App Check (`firebaseappcheck.googleapis.com/v1/projects/pixelassitance/services/firebaseml.googleapis.com`). Un cambio tarda unos 15 min en hacer efecto.
+    - Para volver a activarlo: clave de reCAPTCHA v3 en `APP_CHECK_CLAVE` (`agente.js`), la app web registrada en App Check y luego ENFORCED.
+- **Probar sin celular:** con `web/` servido en localhost, abrir `?nube=anonimo` con `puppeteer-core`, poniendo un `webkitSpeechRecognition` falso que dicte frases y la caja de texto. Chrome sin pantalla no tiene reconocimiento de voz real. Las cuentas anónimas de prueba quedan en Firebase Auth: hay que borrarlas.
+
+**Fase 13: el agente completo** (rama `vinculacion_movil`). `agente.js` es el núcleo: voz, Gemini y confirmaciones. Las capacidades van en módulos que carga al iniciar (`MODULOS`) y que se registran con `Agente.modulo({...})`: herramientas (function calling), `ejecutar`, `contexto` para el prompt, `capacidad`, `montar`, `pintar`, `alUsuario`, `alSegundo`, `alTurno`, `alOirParcial`, `atajo`, `dictar` y `hero`. Todos se cargan solo en modo internet.
+- **Modo música** (pedido del usuario el 9 nov: "diferenciar cuándo se queda en modo música y no"): el gancho `hero()` de un módulo cambia el recuadro de Inicio. `musica.js` lo usa mientras hay música: el título y la píldora dicen "♪ Modo música" (o "Música en pausa") y `.hero.modo-musica` lo pinta de morado y naranja. Al quitar la música vuelve a "Te escucho".
+- **Modelos:** `MODELOS` = `gemini-3.5-flash-lite` y, de respaldo, `gemini-3.1-flash-lite`. El cupo gratis es por modelo y por día.
+    - Con un 429 `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, pasa al siguiente sin decir nada y lo recuerda hasta medianoche del Pacífico (`localStorage` `pixel.modelo`).
+    - `gemini-flash-lite-latest` es el mismo 3.5: comparte su cupo.
+    - El 9 nov las pruebas agotaron el cupo diario del 3.5 (unas 300 peticiones). Las pruebas de punta a punta gastan ~45 cada vez: no se deben correr enteras sin necesidad.
+- **Atajos** (`atajo(texto)` de un módulo): órdenes que se resuelven sin Gemini. La música las usa mientras suena ("para", "pausa", "sigue", "cambia de canción", "la anterior", "más alto", "volumen al 40"): son instantáneas y no gastan cupo.
+- **Bucle con Gemini** (`pensar`): una herramienta devuelve un texto, que se dice tal cual (la app confirma en local, sin otra petición), o `{respuesta}`: datos que vuelven a Gemini para que los resuma (correos, eventos, tareas). Hasta `MAX_RONDAS` vueltas.
+    - Las respuestas de función van con rol `"user"` (con `"function"`, 400). Cada llamada lleva su respuesta, con el `id` de la llamada si lo trae (3.1 lo pone), y las partes del modelo vuelven con su `thoughtSignature`: Gemini 3 lo exige.
+    - Un 429 por minuto avisa y reintenta una vez tras lo que pide Google (5-20 s). El del día dice "mañana".
+- **Confirmaciones** (`Agente.nucleo.confirmar`): lo que no tiene vuelta atrás espera un "sí" por voz (`si`: RegExp sobre el texto plano, sin "pero/cambia…") o el botón de la tarjeta `#ag-confirmar`.
+    - Lo usan enviar un correo (solo "envíalo/mándalo"; `seguir`: una corrección va a Gemini y la pregunta sigue en pie 30 min), borrar un evento, la papelera y suspender el PC.
+    - **Gemini no tiene herramienta para enviar**: solo redacta borradores.
+- **Instrucciones:** `web/agente.md` es el prompt de sistema, con `{{ACTIVACION}}`, `{{LARGO}}`, `{{CAPACIDADES}}`, `{{ESTILO}}` y `{{FECHA}}`. Le siguen el contexto de los módulos y, si hay, la pregunta pendiente.
+- **Cerebro** (`cerebro.js`): notas en `usuarios/<uid>/cerebro/<id>` = `{titulo, texto, tipo, fijo, actualizado, origen}`. Tipos: `yo`, `gusto`, `persona`, `proyecto`, `regla` y `nota`.
+    - RAG sin servicios de fuera: BM25 (palabras de 5 letras, sin tildes ni palabras vacías, más un extra por las palabras del título) sobre las notas y los trozos `## ` de `web/saber.md`.
+    - Las reglas, las de tipo `yo` y las fijas entran siempre. El resto, las 5 que más tienen que ver con la frase y la anterior.
+    - Herramientas: `recordar` (un dato por nota; si el título coincide, la actualiza), `olvidar` y `que_sabes_de_mi`.
+    - Con "aprender" activo (`preferencias/aprender`), al acabar cada conversación (2 min sin hablar, al menos 2 turnos) una petición a Gemini con JSON extrae hasta 3 datos nuevos (`origen: "aprendido"`).
+    - La tarjeta va en Personalidad. El correo de una persona (tipo `persona`) lo usa Gmail.
+- **Google** (`google.js`): Calendar y Gmail con fetch, con el token de `reauthenticateWithPopup` y los alcances `calendar.events` y `gmail.modify`. Las API se activaron en el proyecto el 9 nov.
+    - El token dura 1 h y Firebase no lo renueva. Se guarda en `localStorage` (`pixel.google`, por uid). Sin él, la herramienta dice que toque "Conectar Google" (`#ag-google`), y al conectar repite lo que se pidió.
+    - Con cuentas anónimas no se puede: en las pruebas se pone un token falso en `localStorage` y se interceptan `googleapis.com`.
+    - Calendario: `ver_calendario`, `crear_evento`, `mover_evento` y `borrar_evento`. Los eventos de 7 días salen en Agenda.
+    - Gmail: `buscar_correos` (numerados, `g.ultimos`), `leer_correo` (sin citas, lo marca leído), `redactar_correo` (borrador en Gmail; si es respuesta, en el hilo con `In-Reply-To`), `corregir_borrador` y `ordenar_correos` (archivar, leído, destacar, importante, spam, etiquetas, papelera).
+    - El destinatario sale del correo dicho, de las notas `persona` o de quien le escribió.
+- **Enfoque** (`tiempo.js`, pestaña Enfoque): el usuario elige Pomodoro, Eisenhower o los dos (`preferencias/enfoque`), y según eso Gemini tiene unas herramientas u otras.
+    - `usuarios/<uid>/pomodoro` lleva `fin` fijo; pausado, `fin: 0` y `queda`. El fin de fase se pasa con una transacción y lo anuncia el aparato que la gana. Si la app estuvo cerrada más de 5 min, solo se avisa.
+    - Tareas en `usuarios/<uid>/tareas/<id>` `{texto, urgente, importante, hecha, creada, vence, pomodoros}`. `que_hago_ahora` va por cuadrante y por lo que vence antes.
+- **Aparatos** (`aparatos.js`, Dispositivos): el navegador no puede hablar con la red de casa ni mandar infrarrojo, así que las órdenes van por Firebase a un **puente**.
+    - Un puente es un Píxel enlazado (`usuarios/<uid>/pixeles/<pid>`) que recibe `pixeles/<pid>/ordenes` como el PC. Las capacidades salen de su estado: el del PC las trae en `puente`; el del ESP32 es `{tipo: "puente", capacidades}`. `app.js` (`elegirPixel`) ignora los de `tipo: "puente"`.
+    - Aparatos en `usuarios/<uid>/aparatos/<aid>` = `{nombre, tipo, metodo, puente, config, acciones}`. Métodos: `pc`, `atv` (TV Android), `ir`, `rele`, `wol` y `http`.
+    - `plan()` traduce la acción a la orden. Una acción propia (`acciones.encender = {metodo: "wol", mac, puente}`) manda sobre el método: así el PC se enciende por red desde el ESP32.
+    - Herramientas `controlar_aparato` y `ver_aparatos`. Botones rápidos; "⋯" para aprender botones infrarrojos (`/api/ir/aprender`), emparejar el TV y la MAC de Wake-on-LAN.
+    - "Agregar ESP32 por Bluetooth" usa Web Bluetooth (Chrome): lee la característica `BLE_NUBE`, le pasa la red si no tiene y luego el uid del dueño.
+- **PC como puente** (`puente_pc.py`, rutas en `panel.RUTAS_POST`):
+    - `/api/pc`: volumen con `pactl`, música con `playerctl` (MPRIS), abrir y YouTube con `xdg-open`, bloquear con `gdbus` (GNOME), apagar la pantalla con `xset` y suspender con `systemctl`, 2 s después de contestar.
+    - `/api/aparato`: Wake-on-LAN, y http solo a IP privadas.
+    - `/api/youtube/buscar`: busca para el reproductor de la app del celular (capacidad `youtube`).
+    - `/api/tv`, `/api/tv/emparejar` y `/api/tv/codigo`: TV Android con `androidtvremote2` (instalado en `.venv` el 9 nov). Va en un bucle asyncio propio, con el certificado en `tv_cert.pem`/`tv_clave.pem`, fuera de git.
+    - `nube._trabajar` pasa `decir`, `codigo` y `resultados` de la respuesta.
+    - Para probar sin tocar el escritorio, sustituir `puente_pc._correr` y `puente_pc._abrir`.
+- **ESP32 como puente** (`~/Arduino/Pixel_portal/puente.ino`): una tarea en el núcleo 0 que no depende del servidor de voz.
+    - Entra con una cuenta anónima, cuyo token de renovación queda en Preferences "puente". Escucha `ordenes` por SSE con HTTPS a mano, contra las raíces GTS R1/R4 de `certs.h`, y escribe con una conexión keep-alive.
+    - Órdenes: infrarrojo por RMT (`nec:0x…` o `raw:…`, emisor en IO16 y receptor en IO15), relé (pines de `PINES_RELE`, con `invertido`), Wake-on-LAN y http solo a la red de casa.
+    - Enlace: un toque corto a BOOT da 2 min de modo emparejar, con el LED cian. La pulsación de 3 s sigue abriendo el portal.
+    - `tools/puente_simulado.py` hace lo mismo en el PC: es la referencia del protocolo.
+- **Música** (`musica.js`): "Píxel, pon…" la pone ya, y se maneja por voz como un asistente de verdad: "para", "pausa", "sigue", "cambia de canción", "la anterior", "más alto" (pedidos del usuario el 9 nov). Hay tres salidas con la misma interfaz (`SALIDAS`: `poner`, `pausar`, `seguir`, `parar`, `volumen` y `estado`). Se elige en Personalidad (`localStorage` `pixel.musica`, por aparato) o por voz (`donde`):
+    - `ventana` (por defecto; él la quiere "en otra ventana"): `web/reproductor.html`, la ventana de música de Píxel, con el reproductor de YouTube dentro. Se reutiliza para cada canción, y en la app queda solo la barra de mando (`.musica.remota`).
+        - No se abre youtube.com directamente: manda `Cross-Origin-Opener-Policy: same-origin-allow-popups`, y la página que lo abre pierde la ventana (no podría pararla ni cambiarla).
+        - La app la maneja por `ventana.Pixel` (mismo origen). Es una ventana aparte (`popup`): en una pestaña, la de Píxel quedaría oculta y dejaría de oír.
+        - Hay que permitir una vez las ventanas emergentes. Si no, suena en la app y lo dice. Si Chrome no la deja sonar sola, la ventana pide un toque una sola vez.
+        - En Android suena en la app: una ventana sería una pestaña que tapa a Píxel, y una web no maneja la app de YouTube. Hay un botón para abrirla en la app de YouTube (`intent://`), ya sin control.
+    - `app`: el reproductor embebido de Inicio (IFrame Player API).
+    - `pc`: el navegador del PC (`/api/pc`: `youtube` con la URL exacta). `pausar` es `playerctl --all-players pause`, `play` es `playerctl play` (no el alternar de los aparatos), y antes de cada canción se pausa la anterior.
+    - Para buscar el video exacto, primero prueba la YouTube Data API con `YOUTUBE_CLAVE`, que sale de `web/claves.js` (fuera de git; la plantilla es `claves.ejemplo.js`, y Hosting publica la carpeta local con la clave). Es la clave de navegador "Pixel: buscar en YouTube (app web)", creada el 9 nov con permiso del usuario: solo `youtube.api.v3.V3DataSearchService.List`, y solo desde pixelassitance.web.app, firebaseapp.com, el canal `prueba` y localhost:8099/8081. Un canal de prueba nuevo hay que añadirlo a la clave. Cupo: unas 100 búsquedas al día.
+    - Si no, un puente con `youtube` en línea (el PC: `/api/youtube/buscar`, con yt-dlp, 5 resultados en `resultados` como texto JSON). Si tampoco, la tarjeta de antes.
+    - Si un video no deja verse fuera de YouTube (error 101/150), pasa al siguiente resultado. Al acabar uno, sigue con el siguiente.
+    - Si ninguno se deja poner (`videoFallo`), Píxel lo dice ("YouTube no me dejó poner ese video aquí") y deja la tarjeta "Abrir en YouTube". La ventana de música queda abierta con su aviso (`Pixel.aviso`): una barra abajo con el enlace al video, para que se pueda tocar el recuadro de YouTube por si pide iniciar sesión. Si ni con el toque arranca, la ventana muestra ese mismo aviso a los 6 s.
+    - **Píxel baila** mientras suena (pedido del usuario). El audio de YouTube no se puede analizar (va dentro de su iframe), así que `poner_musica` lleva `bpm`: Gemini lo da en la misma petición o lo estima por el género.
+        - `cara.bailar(bpm, reloj)` baila contando con el tiempo del video (`getCurrentTime`, suavizado porque llega a saltos): si se pausa, para, y al seguir retoma el paso. Por encima de 150 BPM va a medio tiempo.
+        - Hay tres pasos que cambian cada 8 tiempos: rebote con vaivén, asentir mirando a los lados, y un giro completo. La cabeza se aplasta en cada golpe (`uEscala`) y los ojos ^ ^ saltan y destellan.
+        - Hablando o pensando, baila menos. `humor.js` no lanza eventos mientras baila.
+        - **Según el género** (`genero` de `poner_musica`, que lo da Gemini; `estiloDe()` también entiende nombres sueltos), `ESTILOS` define los pasos, los ojos, el color de los LED y las figuras:
+            - Reguetón: perreo y lado, ojos «chévere» y guiño.
+            - Rock y metal: cabezazos y sacudidas, ojos "> <".
+            - Electrónica: robot y pulso, **LED neón** que cambian de color en cada golpe (`uTinte`).
+            - Balada: se mece, ojos de éxtasis y corazones.
+            - Salsa y cumbia: cadera, paso y giro.
+            - Rap: asentir con actitud.
+            - Clásica: director de orquesta.
+            - Jazz.
+        - Los pasos están en `PASOS` y se mueven también de lado (`centro.x`).
+        - **Fondo** (`.fondo-musica`, una capa que `cara3d.js` pone detrás del lienzo, en `.escena`): en cada golpe (o cada 2, según `cada`) sube una figura (♪ ♫ ♬ ♩; ♥ en balada, ⚡ ★ en rock, ◆ ▲ ● en electrónica) del color del género, con un destello radial. Con movimiento reducido no hay figuras.
+        - **Escenarios por género** (`web/escenarios.js`, pedido del usuario el 9 nov). Son SVG hechos a mano, sin imágenes ni nada de internet, en la capa `.escenario` del fondo:
+            - Salsa y cumbia: una playa del Caribe de día, con palmeras que se mecen, olas y una garita del Morro (Puerto Rico). Reguetón: la misma playa al atardecer.
+            - Rock: escenario negro con luces ámbar tenues que barren, amplificadores y humo. Metal: igual, con luces rojas.
+            - Electrónica: láseres que barren, bola de espejos, focos de colores y un suelo de rejilla que avanza.
+            - Balada: noche con luna y estrellas. Rap: la ciudad de noche. Clásica: teatro con telón rojo. Jazz: telón azul. Pop: guirnalda de bombillos y confeti.
+            - `cara3d.js` pone el golpe del compás en la variable CSS `--golpe` (0 a 1): con ella laten las luces, los láseres y los bombillos (reglas `.es-*` en `estilos.css`). Con escena, el suelo de cuadros del WebGL se funde a solo la sombra (`uSoloSombra`), y Píxel queda de pie en la arena o en el escenario.
+            - Se dibujan en 400×300 con `slice`: lo importante va entre y=30 y 270 y entre x=25 y 375. Los ids de cada escena llevan su nombre (`es-playa-…`).
+            - En pausa la escena se va (deja de bailar). `tools/prueba_modulos.js` comprueba que cada género tiene escena y que el SVG está bien cerrado.
+    - La música (en la app o en la ventana) baja a 12 en cuanto lo provisional trae "Píxel" (`alOirParcial`) y mientras Píxel piensa o habla.
+    - Para las pruebas, `PixelMusica.usarBuscador()` cambia la búsqueda y `PixelMusica.estado()` da la cola, la salida y el estado de la ventana o del reproductor.
+- **Notas dictadas** (`apuntes.js`, pestaña Notas; pedido del usuario el 9 nov):
+    - "Píxel, toma nota [de …]" es un atajo, sin Gemini (también existe la herramienta `tomar_nota`). Píxel dice "Tomando notas para el lunes 9 de noviembre a las 2:49 de la tarde…" y la cara se pone en "escribiendo".
+    - Desde ahí, `dictar()` (un gancho que el núcleo llama antes de buscar "Píxel") se queda con todo lo que se oye: cada frase con mayúscula y punto, y un párrafo nuevo tras 6 s de pausa.
+    - "Píxel, termina la nota", "deja de tomar notas" o "Píxel, listo" (`esFin`) la guardan y preguntan si la analiza: un "sí" sin "Píxel" en la ventana basta. Tras 5 min de silencio se cierra sola.
+    - "Analizar con Píxel" (botón o `analizar_nota`) hace una petición a Gemini con JSON: `resumen`, `ideas_generales`, `ideas_especificas`, `destacado` y `pendientes`.
+    - Al guardar una nota, `clasificar()` hace una petición a Gemini que le pone `asunto` (1 a 3 palabras, reusando los que ya hay) e `importante` (una frase). Si falla, salen del título y de la primera frase. El análisis también los actualiza.
+    - La pestaña es una lista compacta (pedido del usuario: la hoja "ocupa mucha pantalla"): una fila por nota (hora, título, ★ lo importante, asunto), agrupadas por día ("Hoy", "Ayer", "Jueves 5 de noviembre"). Se filtra por fecha (todas, hoy, ayer, 7 días o un día), por asunto (botones con su cantidad) y por palabras. Al tocar una fila se abre su hoja completa, y solo una a la vez.
+    - **A los 30 días se borran solas** (`limpiarViejas`, una vez por sesión al cargar, porque no hay servidor). La hoja dice "se borra en N días".
+    - Datos en `usuarios/<uid>/apuntes/<id>` = `{titulo, contexto, creado, actualizado, texto, asunto, importante, analisis (texto JSON), analizado}`, con reglas publicadas.
+    - La hoja usa la clase `.nota-hoja`, no `.hoja`: `.hoja` es la de los `<dialog>`, y un `display` sobre ella mostraba los diálogos cerrados.
+    - `humor.js` no se duerme ni lanza eventos mientras se dicta.
+- **Obsidian** (`obsidian.py`): sincroniza `OBSIDIAN_BOVEDA` (`~/Obsidian/Pixel`) con el cerebro, en los dos sentidos, cada 5 s.
+    - Hay una carpeta por tipo, el nombre del archivo es el título y lleva un frontmatter con id, tipo y fijo. Gana el cambio más nuevo, y lo borrado en un lado se borra en el otro. `.pixel-sync.json` recuerda lo sincronizado.
+    - Solo para las cuentas que lo activan en la app: el botón escribe `usuarios/<uid>/confio/<pid>`, y las reglas solo dejan leer el cerebro así.
+    - Obsidian 1.15 está instalado como AppImage en `~/Aplicaciones/obsidian`, con un acceso en el menú y la bóveda registrada en `~/.config/obsidian/obsidian.json`.
 
 **TTS** (`tts.py`): Piper sale a 22050 Hz y se remuestrea a 16000 Hz con numpy (FIR paso bajo + interpolación lineal, sin scipy).
+- **Voz infantil** (9 nov): no existe una voz de niño en español para Piper. Se revisaron HirCoir/Piper-TTS-Spanish, la colección piper-tts-onnx-models de Trelis y AIHeaven/piper_unofficial_voices (Hugging Face), y para el navegador vits-web y piper-tts-web: solo hay voces adultas.
+- Por eso `TTS.agudo` (1,0 normal) sube el tono sin cambiar la duración: Piper habla `agudo` veces más lento (`length_scale`) y luego se remuestrea como si su frecuencia fuera `sr × agudo`. `panel.TONOS` = normal 1,0, infantil 1,32 y muy infantil 1,55, en `ajustes.json` (`tono`; por defecto `infantil`, como en el celular), y se aplica en vivo. Medido: 216, 283 y 327 Hz de tono medio.
 
 **Configuración:** todos los parámetros (VAD, modelos, variantes de activación, beeps, `STT_PROMPT`) son constantes al inicio de `servidor.py`; no hay CLI ni variables de entorno. El prompt de sistema lleva la fecha, que se fija al arrancar.
 

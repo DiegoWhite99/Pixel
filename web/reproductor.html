@@ -1,0 +1,147 @@
+<!doctype html>
+<!-- Fase 13 - La ventana de musica de Pixel (musica.js, modo "youtube" en el PC).
+     El usuario quiere que la musica salga en otra ventana con YouTube y que Pixel la maneje por voz
+     ("para", "cambia de cancion"). Abrir youtube.com directamente no sirve: YouTube manda
+     Cross-Origin-Opener-Policy y la pagina que lo abre pierde la ventana (no puede pausarla ni
+     cambiarla). Esta ventana es de Pixel (mismo origen) y lleva dentro el reproductor de YouTube:
+     la app la maneja llamando a window.Pixel (poner, pausar, seguir, volumen, estado) y la reutiliza
+     para cada cancion. Si Chrome no la deja sonar sola, pide un toque una vez. -->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Píxel · Música</title>
+<link rel="icon" href="icono.svg" type="image/svg+xml">
+<style>
+  html, body { margin: 0; height: 100%; background: #08152b; color: #fff; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+  #barra { height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: #0e2343; border-bottom: 1px solid #1b3a66; }
+  #barra img { width: 26px; height: 26px; }
+  #titulo { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 650; }
+  #estado { color: #ffd43b; font-size: 13px; white-space: nowrap; }
+  #pantalla { position: absolute; top: 45px; left: 0; right: 0; bottom: 0; }
+  #pantalla iframe, #yt { width: 100%; height: 100%; border: 0; display: block; }
+  #toque { position: absolute; inset: 45px 0 0 0; display: grid; place-items: center; background: rgba(8, 21, 43, 0.85); cursor: pointer; text-align: center; }
+  #toque[hidden] { display: none; }
+  #toque b { display: block; font-size: 22px; margin-top: 14px; }
+  #toque span { color: #cfe3ff; }
+  .play { width: 92px; height: 92px; border-radius: 50%; background: #ff0033; display: inline-grid; place-items: center; }
+  .play svg { width: 44px; height: 44px; margin-left: 6px; }
+  #toque a { display: inline-block; margin-top: 16px; padding: 10px 18px; border-radius: 999px; background: #ff0033; color: #fff; font-weight: 650; text-decoration: none; }
+  #toque a[hidden] { display: none; }
+  /* si YouTube no la deja sonar: barra abajo, para que se pueda tocar su recuadro ("Acceder") */
+  #toque.aviso { inset: auto 0 0 0; padding: 12px 14px 14px; background: rgba(8, 21, 43, 0.96); border-top: 1px solid #1b3a66; }
+  #toque.aviso .play, #toque.aviso br { display: none; }
+  #toque.aviso b { font-size: 17px; margin: 0 0 4px; }
+  #toque.aviso a { margin-top: 10px; padding: 8px 16px; }
+</style>
+</head>
+<body>
+<div id="barra"><img src="icono.svg" alt=""><div id="titulo">Píxel · Música</div><div id="estado">Cargando…</div></div>
+<div id="pantalla"><div id="yt"></div></div>
+<div id="toque" hidden><div><span class="play"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="#fff"/></svg></span>
+  <b id="toque-titulo">Toca para que suene</b><span id="toque-texto">Solo esta vez: Chrome pide un toque para dejar sonar esta ventana.</span>
+  <br><a id="toque-yt" href="#" target="_blank" rel="noopener" hidden>Abrir en YouTube</a></div></div>
+<script>
+"use strict";
+(function () {
+  let jugador = null, listo = false, pendiente = null, volumen = 80, estado = -1, empezo = false, comprobar = null;
+  const $ = (s) => document.querySelector(s);
+  const ESTADOS = {"-1": "Cargando…", 0: "Terminó", 1: "Sonando", 2: "En pausa", 3: "Cargando…", 5: "Listo"};
+  const pintar = () => { $("#estado").textContent = ESTADOS[estado] || ""; };
+  let alTerminar = null;   // la app pone aqui que hacer al acabar (la siguiente de la lista)
+
+  function poner(id, titulo) {
+    $("#titulo").textContent = titulo || "Píxel · Música";
+    document.title = (titulo ? titulo + " · " : "") + "Píxel";
+    if (!listo) { pendiente = {id}; return; }
+    empezo = false;
+    // otro video: el aviso de antes se quita (si este tampoco suena, vuelve a salir)
+    $("#toque").hidden = true;
+    $("#toque").classList.remove("aviso");
+    $("#toque-titulo").textContent = "Toca para que suene";
+    $("#toque-texto").textContent = "Solo esta vez: Chrome pide un toque para dejar sonar esta ventana.";
+    $("#toque-yt").hidden = true;
+    jugador.loadVideoById(id);
+    jugador.setVolume(volumen);
+    vigilarArranque();
+  }
+
+  // si Chrome no la deja sonar sola, que se vea el boton (un toque y ya suena todo lo que venga)
+  function vigilarArranque() {
+    clearTimeout(comprobar);
+    comprobar = setTimeout(() => {
+      if (!empezo && jugador && jugador.getPlayerState() !== 1 && jugador.getPlayerState() !== 3) $("#toque").hidden = false;
+    }, 3500);
+  }
+
+  // el primer video tambien con loadVideoById (con videoId en el constructor no arrancaba solo)
+  const ini = /v=([\w-]{11})/.exec(location.hash);
+  if (ini) pendiente = {id: ini[1]};
+  window.onYouTubeIframeAPIReady = () => {
+    jugador = new YT.Player("yt", {width: "100%", height: "100%",
+      playerVars: {autoplay: 1, playsinline: 1, rel: 0, modestbranding: 1, fs: 1},
+      events: {
+        onReady: (e) => {
+          listo = true;
+          e.target.setVolume(volumen);
+          if (pendiente) e.target.loadVideoById(pendiente.id);
+          pendiente = null;
+          vigilarArranque();
+        },
+        onStateChange: (e) => {
+          estado = e.data;
+          if (e.data === 1) { empezo = true; $("#toque").hidden = true; $("#toque").classList.remove("aviso"); clearTimeout(tocado); }
+          if (e.data === 0 && alTerminar) alTerminar();
+          pintar();
+        },
+        onError: (e) => { estado = -2; $("#estado").textContent = "No deja verse aquí (" + e.data + ")"; if (alTerminar) alTerminar(true); },
+      }});
+  };
+  const s = document.createElement("script");
+  s.src = "https://www.youtube.com/iframe_api";
+  document.head.append(s);
+
+  // si ni con el toque arranca, es YouTube el que no lo deja (por ejemplo, cuando pide "confirmar que no
+  // eres un bot"; desde aqui no se puede leer su recuadro): se dice y se ofrece abrirlo en YouTube
+  let tocado = null;
+  $("#toque").addEventListener("click", (ev) => {
+    if (ev.target.closest("a")) return;
+    $("#toque").hidden = true;
+    if (!jugador) return;
+    jugador.unMute(); jugador.setVolume(volumen); jugador.playVideo();
+    clearTimeout(tocado);
+    tocado = setTimeout(() => {
+      if (empezo || estado === 1 || estado === 3) return;
+      avisar((jugador.getVideoData && (jugador.getVideoData() || {}).video_id) || "");
+    }, 6000);
+  });
+  // barra abajo (el recuadro de YouTube sigue a la vista y se puede tocar) con el boton a YouTube
+  function avisar(id) {
+    clearTimeout(comprobar);
+    $("#toque-titulo").textContent = "YouTube no deja sonar aquí";
+    $("#toque-texto").textContent = "Mira el recuadro de YouTube (a veces pide iniciar sesión) o ábrelo directamente en YouTube.";
+    $("#toque-yt").href = "https://www.youtube.com/watch?v=" + id;
+    $("#toque-yt").hidden = !id;
+    $("#toque").classList.add("aviso");
+    $("#estado").textContent = "Sin sonar";
+    $("#toque").hidden = false;
+  }
+
+  // lo que maneja la app (musica.js), por voz
+  window.Pixel = {
+    poner,
+    pausar: () => { if (jugador) jugador.pauseVideo(); },
+    seguir: () => { if (jugador) jugador.playVideo(); },
+    parar: () => { if (jugador) jugador.stopVideo(); },
+    volumen: (n) => { volumen = Math.max(0, Math.min(100, Math.round(n))); if (jugador && listo) jugador.setVolume(volumen); },
+    volumenTemporal: (n) => { if (jugador && listo) jugador.setVolume(n); },    // bajar mientras Pixel oye o habla
+    alTerminar: (f) => { alTerminar = f; },
+    aviso: (id) => avisar(id || ""),                   // la app: ningun resultado se dejo poner aqui
+    tiempo: () => (jugador && jugador.getCurrentTime ? jugador.getCurrentTime() : 0),   // para bailar a su ritmo
+    estado: () => ({estado, empezo, volumen, pideToque: !$("#toque").hidden, silencio: !!(jugador && jugador.isMuted && jugador.isMuted()),
+      video: jugador && jugador.getVideoData ? (jugador.getVideoData() || {}).video_id : null}),
+  };
+})();
+</script>
+</body>
+</html>

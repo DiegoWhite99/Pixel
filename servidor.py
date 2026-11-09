@@ -82,6 +82,9 @@ NUBE_API_KEY = "AIzaSyAKcuXL3qvNDCUPUlZXjrSOUKW3k4z2hZ8"    # publica: la seguri
 NUBE_DB = "https://pixelassitance-default-rtdb.firebaseio.com"
 NUBE_TOKEN = "nube_token.json"      # la identidad de este Pixel en Firebase: no se comparte
 NUBE_NOMBRE = "Pixel Assistance"    # como sale en la app al buscarlo
+# Fase 13 (obsidian.py): boveda de Obsidian sincronizada con el cerebro de la app (usuarios/<uid>/cerebro),
+# solo para las cuentas que lo activan en la app. Vacio = sin Obsidian. Fuera del repo: son datos personales.
+OBSIDIAN_BOVEDA = "~/Obsidian/Pixel"
 
 # Sonidos de aviso, generados con numpy (sin archivos)
 BEEP_RECIBIDO_HZ = (800.0, 1200.0)      # ascendente: frase aceptada
@@ -1236,6 +1239,8 @@ def main():
     if NUBE_DB:
         import nube
         nube.iniciar(sys.modules[__name__], panel)
+        import obsidian                 # Fase 13: el cerebro de la app en una boveda de Obsidian
+        obsidian.iniciar(sys.modules[__name__], nube)
         log("nube: conectando con %s en segundo plano" % NUBE_DB)
 
     log("palabra de activacion: %s | variantes: %s | con coma o verbo despues: %s | solo con verbo despues: %s | prefijos: %s | ventana: %.0f s"

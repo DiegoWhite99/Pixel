@@ -17,6 +17,11 @@ nube_token.json
 google_cliente.json
 google_token.json
 gemini*.json
+# Fase 13: el certificado con el que el PC se presenta al TV Android
+tv_cert.pem
+tv_clave.pem
+# claves de navegador de la app (web/claves.ejemplo.js es la plantilla)
+web/claves.js
 
 # datos de uso que el servidor cambia solo
 ajustes.json

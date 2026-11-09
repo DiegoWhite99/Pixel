@@ -120,7 +120,9 @@ def _ruta(nombre):
 def _entrar():
     """Renueva el token (o crea la cuenta anonima de este Pixel la primera vez)."""
     with _auth_lock:
-        if _auth["id"] and time.monotonic() < _auth["vence"]:
+        # time.time(), no monotonic(): monotonic no avanza con el PC suspendido, y al despertar el
+        # token caducado seguia pareciendo valido (9 nov: 401 "Permission denied" sin parar)
+        if _auth["id"] and time.time() < _auth["vence"]:
             return
         ruta = _ruta(S.NUBE_TOKEN)
         guardado = {}
@@ -136,7 +138,7 @@ def _entrar():
             r = _json("https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=" + clave, {"returnSecureToken": True})
             uid, token, refresh, dura = r["localId"], r["idToken"], r["refreshToken"], int(r["expiresIn"])
             S.log("nube: cuenta anonima nueva para este Pixel: %s" % uid)
-        _auth.update(uid=uid, id=token, refresh=refresh, vence=time.monotonic() + dura - 300)
+        _auth.update(uid=uid, id=token, refresh=refresh, vence=time.time() + dura - 300)
         if guardado.get("refresh") != refresh or guardado.get("uid") != uid:
             tmp = ruta + ".tmp"
             with open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w", encoding="utf-8") as f:
@@ -303,7 +305,7 @@ def _escuchar(ruta, al_cambiar):
                             hijo = camino.strip("/").split("/")[0]
                             if camino.strip("/") == hijo:
                                 al_cambiar(hijo, valor)
-                    if time.monotonic() > _auth["vence"]:
+                    if time.time() > _auth["vence"]:
                         break                       # token a punto de caducar: reconectar con uno nuevo
         except Exception as e:
             _estado["error"] = str(e)[:200]
@@ -340,13 +342,15 @@ def _trabajar():
             cuerpo = json.loads(o.get("cuerpo") or "{}")
             res = funcion(cuerpo if isinstance(cuerpo, dict) else {})
             ok, texto = True, res.get("mensaje", "Hecho.")
+            # Fase 13: lo que la app debe decir (puente_pc) va tambien en la respuesta
+            extra = {k: res[k] for k in ("decir", "codigo", "resultados") if res.get(k)}
         except P.ErrorPanel as e:
-            ok, texto = False, str(e)
+            ok, texto, extra = False, str(e), {}
         except Exception as e:
             S.log("nube: ERROR en la orden %s: %s: %s" % (o.get("ruta"), type(e).__name__, e))
-            ok, texto = False, "Algo falló en el servidor."
+            ok, texto, extra = False, "Algo falló en el servidor.", {}
         try:
-            _responder(id_, uid, ok, texto)
+            _responder(id_, uid, ok, texto, **extra)
             _db("DELETE", "pixeles/%s/ordenes/%s" % (_pid(), id_))
         except Exception as e:
             S.log("nube: no pude responder una orden: %s" % e)

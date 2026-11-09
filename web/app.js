@@ -3,7 +3,9 @@
    Fase 10: desde internet no hay direcciones que escribir. Se entra con Google, se busca a Pixel
    (visibles), se enlaza con el codigo que el dice y desde entonces la app lee su estado y le
    manda ordenes por la Realtime Database (ver nube.py). El enlace es de la cuenta de Google:
-   vale en cualquier movil o PC donde se entre con ella. */
+   vale en cualquier movil o PC donde se entre con ella.
+   Fase 12: en la app de internet el propio celular es Pixel (agente.js: oye, piensa con Gemini por
+   Firebase AI Logic y habla). Enlazar el Pixel del PC queda como algo opcional. */
 "use strict";
 
 const $ = (s) => document.querySelector(s);
@@ -19,7 +21,7 @@ const URL_APP = "https://pixelassitance.web.app";
 const NUBE = {apiKey: "AIzaSyAKcuXL3qvNDCUPUlZXjrSOUKW3k4z2hZ8", authDomain: "pixelassitance.firebaseapp.com",
   databaseURL: "https://pixelassitance-default-rtdb.firebaseio.com", projectId: "pixelassitance",
   appId: "1:794659517422:web:43c3cb46985a905d0c54ff"};
-const SDK = "https://www.gstatic.com/firebasejs/10.14.1/";
+const SDK = "https://www.gstatic.com/firebasejs/13.1.0/";     // 13.1.0 trae firebase-ai.js (Fase 12)
 const nube = {d: null, au: null, auth: null, db: null, usuario: null, uid: "", offset: 0, mios: null, pid: null,
   estado: null, vivo: 0, enLinea: false, quitar: [], quitarMios: null, visibles: {}, quitarVisibles: null, latidoT: 0, error: ""};
 
@@ -108,8 +110,12 @@ function decir(titulo, sub, ms) {
 }
 if (cara) {
   let veces = 0;
-  cara.alSoltar = (toque) => {
+  // Fase 13: con Pixel en este celular, reacciona humor.js (se rie, se cansa, se enoja y lo dice en voz alta)
+  const conHumor = () => window.PixelHumor && window.Agente && window.Agente.activo();
+  cara.alAgarrar = () => { if (conHumor()) window.PixelHumor.alAgarrar(); };
+  cara.alSoltar = (toque, info) => {
     $("#pista").classList.add("fuera");
+    if (conHumor()) { window.PixelHumor.alSoltar(toque, info); return; }
     veces++;
     decir(toque ? "¡Jiji, cosquillas!" : veces > 3 ? "¡Eh, que me deformo!" : "¡Boiiing!", toque ? "Tócame otra vez, o estírame la cara." : "Vuelvo a mi forma solito.");
   };
@@ -121,7 +127,8 @@ function feliz(texto) {
 
 // ------------------------------------------------------------------ boca sincronizada con la voz
 // El servidor apunta el volumen de cada trozo de voz y a que hora (de su reloj) empieza a sonar;
-// aqui se busca el trozo que suena ahora y la boca se abre segun su volumen.
+// aqui se busca el trozo que suena ahora y la boca se abre segun su volumen. En la app de internet,
+// mientras Pixel habla en este celular (agente.js), la boca sigue esa voz.
 const voz = {segmentos: [], offset: 0, recibida: 0};      // offset: reloj del servidor - reloj de aqui (ms)
 
 async function pedirVoz() {
@@ -136,9 +143,11 @@ async function pedirVoz() {
 
 function moverBoca() {
   if (!cara) return;
+  const propia = window.Agente ? window.Agente.nivelBoca() : null;
+  if (propia !== null) { cara.boca(propia); return; }
   const t = Date.now() + (EN_INTERNET ? nube.offset : voz.offset);
   let nivel = null;
-  for (const s of oido.boca.concat(voz.segmentos)) {     // primero la voz que suena en este celular
+  for (const s of voz.segmentos) {
     const i = Math.floor((t - s.t) / s.paso);
     if (i >= 0 && i < s.niveles.length) { nivel = s.niveles[i]; break; }
   }
@@ -147,343 +156,24 @@ function moverBoca() {
 setInterval(moverBoca, 50);
 if (!EN_INTERNET) setInterval(() => { if (!document.hidden && !$("#v-inicio").hidden) pedirVoz(); }, 300);
 
-// ------------------------------------------------------------------ hablarle desde el celular (Fase 11)
-// Solo en la app de internet. El celular hace de ESP32 remoto: corta las frases con un VAD por
-// energia (los mismos tiempos que servidor.py), las pasa a PCM 16 kHz y las deja en
-// pixeles/<pid>/frases. Pixel las trata como las del ESP32 ("Píxel", acciones, IA) y deja su voz
-// en pixeles/<pid>/habla/<uid>: aqui se toca en orden y, mientras suena, el micro no capta.
-const OIDO = {
-  TRAMA: 320,             // 20 ms a 16 kHz
-  CALIB: 25,              // 500 ms para medir el ruido de fondo (mediana)
-  MULT: 3.5, MIN_RMS: 300, MAX_RMS: 4000,      // MIN_RMS mas bajo que el del ESP32: el celular trae control de ganancia
-  PISO_BAJA: 0.05, PISO_SUBE: 0.002,           // fuera de las frases el piso sigue al ruido
-  ABRIR: 3, CERRAR: 35, PREROLL: 15,           // 60 ms de voz abren, 700 ms de silencio cierran, 300 ms de antes
-  MIN_TRAMAS: 15, MAX_TRAMAS: 500,             // de 300 ms a 10 s
-  MARGEN_S: 0.35,         // tras la voz de Pixel, el micro sigue sordo este rato
-  PENSAR_MS: 30000,       // como mucho, cuanto se muestra "pensando"
-};
-const oido = {activo: false, ctx: null, stream: null, fuente: null, nodo: null, mudo: null, remuestrear: null,
-  trama: new Int16Array(OIDO.TRAMA), lleno: 0, calib: [], piso: 0, umbral: OIDO.MIN_RMS, enVoz: false, seguidas: 0,
-  silencio: 0, frase: [], preroll: [], finVoz: 0, finHabla: 0, pensandoHasta: 0, nivel: 0, boca: [], quitar: null, pantalla: null,
-  aviso: "", reloj: null, latido: null, refEscucha: null, enviadas: 0};    // finVoz: acaba de sonar todo (micro sordo); finHabla: acaba la voz, sin beeps
-
-// Remuestreo a 16 kHz: paso bajo (FIR con ventana de Hamming) e interpolacion lineal, por bloques.
-// No se usa AudioContext({sampleRate: 16000}): Firefox no conecta el micro a un contexto con otra frecuencia.
-function remuestreador(origen) {
-  const paso = origen / 16000, N = 31, m = (N - 1) / 2, corte = 7600 / origen, h = new Float32Array(N);
-  let suma = 0;
-  for (let i = 0; i < N; i++) {
-    const x = i - m;
-    h[i] = (x === 0 ? 2 * corte : Math.sin(2 * Math.PI * corte * x) / (Math.PI * x)) * (0.54 - 0.46 * Math.cos(2 * Math.PI * i / (N - 1)));
-    suma += h[i];
-  }
-  for (let i = 0; i < N; i++) h[i] /= suma;
-  let historia = new Float32Array(N - 1), anterior = 0, pos = 1;
-  return (entrada) => {
-    const buf = new Float32Array(historia.length + entrada.length);
-    buf.set(historia);
-    buf.set(entrada, historia.length);
-    const f = new Float32Array(entrada.length + 1);      // f[0]: la ultima filtrada del bloque anterior
-    f[0] = anterior;
-    for (let k = 0; k < entrada.length; k++) {
-      let s = 0;
-      for (let j = 0; j < N; j++) s += h[j] * buf[k + j];
-      f[k + 1] = s;
-    }
-    const salida = [];
-    for (; pos <= f.length - 2; pos += paso) {
-      const i = Math.floor(pos), fr = pos - i, v = f[i] * (1 - fr) + f[i + 1] * fr;
-      salida.push(Math.max(-32768, Math.min(32767, Math.round(v * 32767))));
-    }
-    pos -= f.length - 1;
-    anterior = f[f.length - 1];
-    historia = buf.slice(buf.length - (N - 1));
-    return salida;
-  };
-}
-
-function sordo() { return !!oido.ctx && oido.ctx.currentTime < oido.finVoz + OIDO.MARGEN_S; }
-
-function umbralOido() { oido.umbral = Math.min(OIDO.MAX_RMS, Math.max(oido.piso * OIDO.MULT, OIDO.MIN_RMS)); }
-
-function procesarOido(e) {
-  if (!oido.activo || document.hidden) return;        // en segundo plano (p. ej. YouTube abierto) no se capta
-  const muestras = oido.remuestrear(e.inputBuffer.getChannelData(0));
-  for (const v of muestras) {
-    oido.trama[oido.lleno++] = v;
-    if (oido.lleno === OIDO.TRAMA) { oirTrama(oido.trama.slice()); oido.lleno = 0; }
-  }
-}
-
-function oirTrama(t) {
-  let suma = 0;
-  for (let i = 0; i < t.length; i++) suma += t[i] * t[i];
-  const rms = Math.sqrt(suma / t.length);
-  oido.nivel = rms;
-  if (sordo()) {                          // suena Pixel: que no se oiga a si mismo
-    Object.assign(oido, {enVoz: false, frase: [], preroll: [], seguidas: 0, silencio: 0});
-    return;
-  }
-  if (!oido.enVoz) {
-    oido.preroll.push(t);
-    if (oido.preroll.length > OIDO.PREROLL) oido.preroll.shift();
-  }
-  if (oido.calib.length < OIDO.CALIB) {
-    oido.calib.push(rms);
-    if (oido.calib.length === OIDO.CALIB) { oido.piso = oido.calib.slice().sort((a, b) => a - b)[OIDO.CALIB >> 1]; umbralOido(); }
-    return;
-  }
-  const hayVoz = rms >= oido.umbral;
-  if (!oido.enVoz) {
-    oido.piso += (rms - oido.piso) * (rms < oido.piso ? OIDO.PISO_BAJA : OIDO.PISO_SUBE);
-    umbralOido();
-    if (!hayVoz) { oido.seguidas = 0; return; }
-    if (++oido.seguidas >= OIDO.ABRIR) Object.assign(oido, {enVoz: true, silencio: 0, frase: oido.preroll, preroll: []});
-    return;
-  }
-  oido.frase.push(t);
-  oido.silencio = hayVoz ? 0 : oido.silencio + 1;
-  if (oido.silencio >= OIDO.CERRAR || oido.frase.length >= OIDO.MAX_TRAMAS) cerrarFraseOido();
-}
-
-function cerrarFraseOido() {
-  const tramas = oido.frase;
-  Object.assign(oido, {frase: [], enVoz: false, seguidas: 0, silencio: 0});
-  if (tramas.length < OIDO.MIN_TRAMAS) return;
-  const pcm = new Int16Array(tramas.length * OIDO.TRAMA);
-  tramas.forEach((t, i) => pcm.set(t, i * OIDO.TRAMA));
-  mandarFrase(pcm);
-}
-
-function aBase64(bytes) {
-  let s = "";
-  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-  return btoa(s);
-}
-
-function mandarFrase(pcm) {
-  if (!nube.pid || !nube.enLinea) return;        // Pixel desconectado: que no se amontonen frases en la nube
-  const d = nube.d, r = d.push(d.ref(nube.db, `pixeles/${nube.pid}/frases`));
-  // Int16Array va en el orden de bytes del aparato: todos los celulares son little-endian, como el PCM del servidor
-  d.set(r, {uid: nube.uid, pcm: aBase64(new Uint8Array(pcm.buffer)), t: d.serverTimestamp()})
-    .then(() => { if (oido.aviso.startsWith("No pude mandar")) avisoOido(""); })
-    .catch((e) => avisoOido("No pude mandar lo que dijiste a Píxel (" + (e.code || e.message) + ")."));
-  oido.enviadas++;
-}
-
-// La voz de Pixel: {tipo: "oido" | "voz" | "cierre" | "fin", pcm, dime}. "oido" es el beep de "te escuche".
-function alHabla(s) {
-  const v = s.val();
-  nube.d.remove(s.ref).catch(() => {});
-  if (!v || !oido.activo) return;
-  if (v.tipo === "video") { mostrarVideo(v.id, v.titulo); return; }
-  if (v.tipo === "oido") oido.pensandoHasta = Date.now() + OIDO.PENSAR_MS;
-  if (v.tipo === "voz" || v.tipo === "fin") oido.pensandoHasta = 0;
-  // "Píxel" y sigue hablando: sin beep ni "Dime", que le cortarian la orden (como con el ESP32)
-  if (!v.pcm || ((v.tipo === "oido" || v.dime) && oido.enVoz)) return;
-  tocar(v.pcm, v.tipo === "voz");
-}
-
-function tocar(b64, esVoz) {
-  const bin = atob(b64), n = bin.length >> 1, f = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const x = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8);
-    f[i] = (x >= 32768 ? x - 65536 : x) / 32768;
-  }
-  const ctx = oido.ctx;
-  let buf;
-  try {
-    buf = ctx.createBuffer(1, n, 16000);
-    buf.getChannelData(0).set(f);
-  } catch (e) {                           // Safari viejo no crea buffers de 16 kHz: se sube a la del contexto
-    const r = ctx.sampleRate / 16000, m = Math.floor(n * r);
-    buf = ctx.createBuffer(1, m, ctx.sampleRate);
-    const c = buf.getChannelData(0);
-    for (let i = 0; i < m; i++) { const p = i / r, j = Math.floor(p), fr = p - j; c[i] = f[j] * (1 - fr) + (f[j + 1] || 0) * fr; }
-  }
-  const fuente = ctx.createBufferSource();
-  fuente.buffer = buf;
-  fuente.connect(ctx.destination);
-  const ahora = ctx.currentTime, inicio = Math.max(ahora + 0.05, oido.finVoz);
-  fuente.start(inicio);
-  oido.finVoz = inicio + buf.duration;
-  if (esVoz) { oido.finHabla = oido.finVoz; apuntarBoca(f, inicio - ahora); }
-}
-
-// YouTube pedido desde el celular: ningun navegador deja ponerlo sin un toque, asi que se
-// muestra el video con un boton. En Android y iPhone el enlace abre la app de YouTube.
-function mostrarVideo(id, titulo) {
-  if (!/^[\w-]{6,20}$/.test(id || "")) return;
-  $("#oido-video").innerHTML = `<img src="https://i.ytimg.com/vi/${id}/mqdefault.jpg" alt="" width="112" height="63">
-    <div class="txt"><b>${esc(titulo || "Video de YouTube")}</b><small>Te lo dejé aquí: tócalo para ponerlo.</small></div>
-    <a class="btn primario" href="https://www.youtube.com/watch?v=${id}" target="_blank" rel="noopener">Abrir en YouTube</a>
-    <button class="btn" type="button" data-quitar-video aria-label="Quitar el video">✕</button>`;
-  $("#oido-video").hidden = false;
-}
-$("#oido-video").addEventListener("click", (e) => { if (e.target.closest("[data-quitar-video]")) $("#oido-video").hidden = true; });
-
-function apuntarBoca(f, retrasoS) {        // como _apuntar_voz() del servidor: volumen cada 50 ms
-  const paso = 800, niveles = [];
-  for (let i = 0; i + paso <= f.length; i += paso) {
-    let s = 0;
-    for (let j = i; j < i + paso; j++) s += f[j] * f[j];
-    niveles.push(Math.min(1, Math.round(Math.sqrt(s / paso) * 32768 / 5000 * 100) / 100));
-  }
-  const ahora = Date.now() + nube.offset;
-  oido.boca = oido.boca.filter((x) => x.t + x.niveles.length * x.paso > ahora - 1000);
-  oido.boca.push({t: ahora + retrasoS * 1000, paso: 50, niveles});
-}
-
-async function pedirPantalla() {
-  try { if (oido.activo && !oido.pantalla && "wakeLock" in navigator && !document.hidden) {
-    oido.pantalla = await navigator.wakeLock.request("screen");
-    oido.pantalla.addEventListener("release", () => { oido.pantalla = null; });
-  } } catch (e) { /* sin Wake Lock: la pantalla se apaga segun el ajuste del celular */ }
-}
-
-document.addEventListener("visibilitychange", () => {
-  if (!oido.activo || document.hidden) return;
-  pedirPantalla();
-  if (oido.ctx && oido.ctx.state !== "running") oido.ctx.resume().catch(() => {});
-});
-
-function avisoOido(texto) { oido.aviso = texto; pintarOido(); }
-
-// "este celular escucha": Pixel le manda los recordatorios y "Probar voz" si no hay ESP32, y el
-// panel lo muestra como activo. Al cerrar la app, Firebase lo borra solo (onDisconnect).
-function latidoOido() {
-  if (oido.activo && oido.refEscucha) nube.d.set(oido.refEscucha, nube.d.serverTimestamp()).catch(() => {});
-}
-
-async function empezarOido() {
-  avisoOido("");
-  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    avisoOido("Este navegador no deja usar el micrófono aquí. Abre la app en Chrome (Android) o Safari (iPhone).");
-    return;
-  }
-  if (!nube.pid || !nube.enLinea) { avisoOido("Píxel no está conectado ahora mismo."); return; }
-  // todo esto dentro del toque: en iPhone el audio solo arranca asi
-  const Ctx = window.AudioContext || window.webkitAudioContext;
-  if (!oido.ctx) oido.ctx = new Ctx();
-  oido.ctx.resume().catch(() => {});
-  const silencio = oido.ctx.createBufferSource();
-  silencio.buffer = oido.ctx.createBuffer(1, 1, oido.ctx.sampleRate);
-  silencio.connect(oido.ctx.destination);
-  silencio.start(0);
-  try { if (navigator.audioSession) navigator.audioSession.type = "play-and-record"; } catch (e) { /* Safari 16.4+ */ }
-  let stream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1}});
-  } catch (e) {
-    avisoOido(e.name === "NotAllowedError" || e.name === "SecurityError"
-      ? "El navegador no dio permiso para el micrófono. Permítelo en los ajustes del sitio (el candado junto a la dirección) y toca Escuchar otra vez."
-      : e.name === "NotFoundError" ? "No encuentro ningún micrófono en este aparato."
-      : "No pude abrir el micrófono (" + e.name + ").");
-    return;
-  }
-  const ctx = oido.ctx;
-  Object.assign(oido, {activo: true, stream, remuestrear: remuestreador(ctx.sampleRate), lleno: 0, calib: [], piso: 0,
-    umbral: OIDO.MIN_RMS, enVoz: false, seguidas: 0, silencio: 0, frase: [], preroll: [], finVoz: 0, finHabla: 0, pensandoHasta: 0, boca: []});
-  oido.fuente = ctx.createMediaStreamSource(stream);
-  oido.nodo = ctx.createScriptProcessor(2048, 1, 1);     // AudioWorklet pediria otro archivo; esto va en todos los navegadores
-  oido.mudo = ctx.createGain();
-  oido.mudo.gain.value = 0;                              // Chrome solo procesa si el nodo llega a la salida
-  oido.nodo.onaudioprocess = procesarOido;
-  oido.fuente.connect(oido.nodo);
-  oido.nodo.connect(oido.mudo);
-  oido.mudo.connect(ctx.destination);
-  const d = nube.d, ref = d.ref(nube.db, `pixeles/${nube.pid}/habla/${nube.uid}`);
-  await d.remove(ref).catch(() => {});                  // la voz de antes ya no se toca
-  if (!oido.activo) return;
-  oido.quitar = d.onChildAdded(ref, alHabla, (e) => avisoOido("No puedo oír a Píxel (" + (e.code || e.message) + ")."));
-  oido.refEscucha = d.ref(nube.db, `pixeles/${nube.pid}/escuchando/${nube.uid}`);
-  try { d.onDisconnect(oido.refEscucha).remove(); } catch (e) { /* sin onDisconnect: caduca solo en 45 s */ }
-  latidoOido();
-  clearInterval(oido.latido);
-  oido.latido = setInterval(latidoOido, 15000);
-  pedirPantalla();
-  clearInterval(oido.reloj);
-  oido.reloj = setInterval(pintarOido, 150);
-  pintarOido();
-}
-
-function pararOido() {
-  if (!oido.activo) return;
-  oido.activo = false;
-  if (oido.quitar) oido.quitar();
-  if (oido.nodo) oido.nodo.onaudioprocess = null;
-  for (const n of [oido.fuente, oido.nodo, oido.mudo]) { try { if (n) n.disconnect(); } catch (e) { /* ya estaba suelto */ } }
-  if (oido.stream) oido.stream.getTracks().forEach((t) => t.stop());
-  if (oido.pantalla) oido.pantalla.release().catch(() => {});
-  clearInterval(oido.reloj);
-  clearInterval(oido.latido);
-  if (oido.refEscucha && nube.d) {
-    nube.d.remove(oido.refEscucha).catch(() => {});
-    try { nube.d.onDisconnect(oido.refEscucha).cancel(); } catch (e) { /* nada que cancelar */ }
-  }
-  Object.assign(oido, {quitar: null, fuente: null, nodo: null, mudo: null, stream: null, pantalla: null, reloj: null,
-    latido: null, refEscucha: null, boca: [], enVoz: false, nivel: 0});
-  pintarOido();
-  if (nube.estado) pintarInicio(nube.estado);
-  revisarNube();
-}
-
-function revisarOido() {
-  $("#oido").hidden = !EN_INTERNET || (!oido.activo && !(nube.pid && nube.enLinea));
-  if (oido.activo && !nube.pid) pararOido();
-}
-
-function pintarOido() {
-  const b = $("#oido-btn");
-  b.textContent = oido.activo ? "Parar" : "Escuchar";
-  b.className = "btn grande" + (oido.activo ? "" : " primario");
-  b.setAttribute("aria-pressed", oido.activo ? "true" : "false");
-  $("#oido-nivel").hidden = !oido.activo;
-  $("#oido-nivel i").style.width = oido.activo && !sordo() ? Math.min(100, Math.round(oido.nivel / (2 * oido.umbral) * 100)) + "%" : "0%";
-  $("#oido-aviso").hidden = !oido.aviso;
-  $("#oido-aviso").textContent = oido.aviso;
-  if (!oido.activo || !nube.enLinea) return;
-  const habla = oido.ctx.currentTime < oido.finHabla, ahora = Date.now();     // los beeps no cuentan como hablar
-  if (cara) cara.estado("escuchando");    // la boca la mueve moverBoca() con la voz que suena aqui
-  $("#zzz").hidden = true;
-  $("#latido").className = "latido " + (habla ? "habla" : "ok");
-  if (ahora < dichoHasta) return;
-  const palabra = nube.estado ? nube.estado.agente.activacion : "Píxel";
-  const [titulo, sub] = habla ? ["Estoy hablando…", "Te contesto por el celular."]
-    : ahora < oido.pensandoHasta ? ["Déjame pensar…", "Te oí. Ya te contesto."]
-    : oido.enVoz ? ["Te oigo…", "Sigue, te escucho."]
-    : oido.calib.length < OIDO.CALIB ? ["Un momento…", "Estoy midiendo el ruido de fondo."]
-    : ["Te escucho", `Di "${palabra}" y tu pregunta. Deja la app abierta en pantalla.`];
-  $("#hero-estado").textContent = titulo;
-  $("#hero-sub").textContent = sub;
-}
-
-$("#oido-btn").addEventListener("click", () => (oido.activo ? pararOido() : empezarOido()));
-
 // ------------------------------------------------------------------ inicio
 function pintarInicio(d) {
-  const cel = (d.celulares || []).filter((c) => c.escuchando), hablaCel = cel.some((c) => c.estado === "hablando");
-  const hablaEsp = d.dispositivos.some((x) => x.estado === "hablando");
-  const activos = d.activos + cel.length, hablando = hablaEsp || hablaCel;     // un celular que escucha tambien es Pixel
-  if (!EN_INTERNET) $("#hero-acciones").hidden = true;
-  if (oido.activo) pintarOido();          // el celular escucha: la cara y la burbuja son suyas
-  else {
-    // con la voz real la boca la mueve moverBoca(); sin ella, la animacion aproximada de "hablando"
-    if (cara) cara.estado(!activos ? "esperando" : hablando && !voz.recibida ? "hablando" : "escuchando");
-    $("#zzz").hidden = !!activos || !cara;
-    $("#latido").className = "latido" + (hablando ? " habla" : activos ? " ok" : "");
-    if (Date.now() > dichoHasta) {
-      $("#hero-estado").textContent = !activos ? (EN_INTERNET ? "¡Hola! Soy Píxel" : "Estoy dormido") : hablando ? "Estoy hablando…" : "¡Hola! Te escucho";
-      $("#hero-sub").textContent = !activos
-        ? (EN_INTERNET ? "El ESP32 no está conectado, pero puedes hablarme por aquí: toca Escuchar."
-                       : "Espero al ESP32 o a un celular: en la app, toca Escuchar.")
-        : hablando ? (!hablaEsp ? "Sueno por el celular." : d.agente.ajustes.salida_voz === "pc" ? "Sueno por el altavoz del PC." : "Sueno por el ESP32.")
-        : `Di "${d.agente.activacion}" y tu orden.`;
-    }
-  }
+  const activos = d.activos, hablando = d.dispositivos.some((x) => x.estado === "hablando");
   const mios = misDispositivos(d);
   $("#r-disp").textContent = mios.length;
   $("#r-disp-sub").textContent = `dispositivo${mios.length === 1 ? "" : "s"} · ${activos} Píxel`;
+  if (EN_INTERNET) return;                // en la app de internet, Inicio es de Pixel en este celular (agente.js)
+  // con la voz real la boca la mueve moverBoca(); sin ella, la animacion aproximada de "hablando"
+  if (cara) cara.estado(!activos ? "esperando" : hablando && !voz.recibida ? "hablando" : "escuchando");
+  $("#zzz").hidden = !!activos || !cara;
+  $("#latido").className = "latido" + (hablando ? " habla" : activos ? " ok" : "");
+  $("#hero-acciones").hidden = true;
+  if (Date.now() > dichoHasta) {
+    $("#hero-estado").textContent = !activos ? "Estoy dormido" : hablando ? "Estoy hablando…" : "¡Hola! Te escucho";
+    $("#hero-sub").textContent = !activos ? "Espero a que se conecte el ESP32. Enciéndelo o revisa su WiFi."
+      : hablando ? (d.agente.ajustes.salida_voz === "pc" ? "Sueno por el altavoz del PC." : "Sueno por el ESP32.")
+      : `Di "${d.agente.activacion}" y tu orden.`;
+  }
   const nr = d.agenda.recordatorios.length, ne = d.agenda.eventos.length;
   $("#r-agenda").textContent = nr + ne;
   $("#r-agenda-sub").textContent = `${nr} recordatorio${nr === 1 ? "" : "s"} · ${ne} evento${ne === 1 ? "" : "s"}`;
@@ -494,9 +184,8 @@ function pintarInicio(d) {
   const g = d.cuentas.google;
   $("#r-cuentas").textContent = g.vinculada ? "Vinculada" : "Sin vincular";
   $("#r-cuentas-sub").textContent = g.vinculada ? "Google · calendario y correo" : "Google · se usa el calendario local";
-  const conTexto = d.dispositivos.filter((x) => x.ultimo).pop(), celTexto = (d.celulares || []).filter((c) => c.ultimo).pop();
-  $("#ultimo").innerHTML = conTexto ? `<b>"${esc(conTexto.ultimo)}"</b> · desde ${esc(conTexto.ip)}`
-    : celTexto ? `<b>"${esc(celTexto.ultimo)}"</b> · ${esc(celTexto.nombre)}` : "Todavía nada.";
+  const conTexto = d.dispositivos.filter((x) => x.ultimo).pop();
+  $("#ultimo").innerHTML = conTexto ? `<b>"${esc(conTexto.ultimo)}"</b> · desde ${esc(conTexto.ip)}` : "Todavía nada.";
 }
 
 // ------------------------------------------------------------------ mis dispositivos (Bluetooth del PC, WiFi y cerca de Pixel)
@@ -557,16 +246,9 @@ function pintarDispositivos(d) {
     : '<div class="vacio">Aún no hay dispositivos. Pulsa <b>Agregar dispositivo</b> para conectar un altavoz, unos audífonos o un aparato de tu WiFi.</div>';
   $("#lista-mios").innerHTML = h;
 
-  const n = d.dispositivos.length, cels = d.celulares || [], vivos = d.activos + cels.filter((c) => c.escuchando).length;
-  $("#pixeles-sub").textContent = n + cels.length ? `${vivos} activo${vivos === 1 ? "" : "s"}` : "";
-  const tarjetasCel = cels.map((c) => `
-    <div class="card"><div class="head">
-      <div class="titulo"><span class="ico">${icono("movil")}</span><div><h2>${esc(c.nombre)}</h2><span class="sub">Micrófono y altavoz de Píxel, por internet</span></div></div>
-      <span class="chip ${c.estado === "escuchando" ? "ok" : c.estado === "hablando" ? "info" : ""}">${esc(c.estado)}</span></div>
-      <dl class="kv"><dt>Frases oídas</dt><dd>${c.frases}</dd><dt>Último texto</dt><dd>${c.ultimo ? "“" + esc(c.ultimo) + "”" : "–"}</dd></dl>
-      ${c.escuchando ? "" : '<p class="sub">Para que haga de Píxel, abre la app en ese celular y toca <b>Escuchar</b>.</p>'}
-    </div>`).join("");
-  $("#lista-disp").innerHTML = n + cels.length ? d.dispositivos.map((x) => `
+  const n = d.dispositivos.length;
+  $("#pixeles-sub").textContent = n ? `${d.activos} activo${d.activos === 1 ? "" : "s"}` : "";
+  $("#lista-disp").innerHTML = n ? d.dispositivos.map((x) => `
     <div class="card"><div class="head">
       <div class="titulo"><span class="ico">${icono("pixel")}</span><div><h2>${esc(x.ble.yo || "Píxel")} · ESP32-S3</h2><span class="sub mono">${esc(x.ip)}</span></div></div>
       <span class="chip ${x.estado === "escuchando" ? "ok" : x.estado === "hablando" ? "info" : ""}">${esc(x.estado)}</span></div>
@@ -577,7 +259,7 @@ function pintarDispositivos(d) {
       ${x.ble.yo ? `<details class="mas"><summary>Bluetooth cerca · ${x.ble.vistos.length} ${hace(x.ble.hace)}</summary><div class="lista">${x.ble.vistos.slice(0, 12).map((v) => `
         <div class="fila"><div class="txt"><b>${v.nombre ? esc(v.nombre) : "Sin nombre"}</b><small class="mono">${esc(v.mac)}</small></div>${v.aceptado ? '<span class="chip ok">Recordado</span>' : ""}${barras(v.rssi)}</div>`).join("")}</div></details>` : ""}
       ${x.estado === "sin datos" ? '<p class="aviso">Esta conexión dejó de mandar audio: el ESP32 se reconectó o se apagó. Se cierra sola en 2 minutos.</p>' : ""}
-    </div>`).join("") + tarjetasCel : '<div class="vacio">No hay ningún Píxel conectado. Pulsa <b>Agregar dispositivo → Otro Píxel</b> para ver cómo conectarlo.</div>';
+    </div>`).join("") : '<div class="vacio">No hay ningún Píxel conectado. Pulsa <b>Agregar dispositivo → Otro Píxel</b> para ver cómo conectarlo.</div>';
   $("#ip-servidor").textContent = d.servidor.ip;
   $("#portal-clave").textContent = d.portal.clave;
   $("#kv-servidor").innerHTML = `<dt>IP</dt><dd class="mono">${esc(d.servidor.ip)}</dd><dt>Puerto ESP32</dt><dd class="mono">${d.servidor.puerto}</dd>
@@ -753,6 +435,7 @@ function pintarResto(d) {
     <div class="fila"><div class="txt"><b>${esc(c.nombre)}</b><small class="mono">${esc(c.correo)}</small></div>
     <button class="btn peligro" type="button" data-borrar-contacto="${esc(c.nombre)}">Quitar</button></div>`).join("")
     : '<div class="vacio">Aún no hay contactos.</div>';
+  if (EN_INTERNET) return;                // la agenda y la Personalidad de la app son de Pixel en este celular (agente.js)
 
   const nr = d.agenda.recordatorios.length, ne = d.agenda.eventos.length;
   $("#lista-recordatorios").innerHTML = nr ? d.agenda.recordatorios.map((r) => filaAgenda(r, "recordatorio")).join("") : '<div class="vacio">No hay recordatorios pendientes.</div>';
@@ -769,23 +452,30 @@ function pintarResto(d) {
     $("#personalidad").value = a.personalidad;
     document.querySelectorAll("input[name=respuesta]").forEach((r) => { r.checked = r.value === a.respuesta; });
     document.querySelectorAll("input[name=salida_voz]").forEach((r) => { r.checked = r.value === a.salida_voz; });
+    document.querySelectorAll("input[name=tono]").forEach((r) => { r.checked = r.value === (a.tono || "normal"); });
     contar();
     agenteFirma = firma;
   }
 }
 
+let pintadoNube = "";
 function pintarNube(d) {
-  const n = d.nube || {activa: false, duenos: []};
+  const n = (d && d.nube) || {activa: false, duenos: []};
   const chip = $("#nube-chip");
-  chip.textContent = !n.activa ? "Desactivada" : n.conectada ? "Conectada" : "Sin conexión";
-  chip.className = "chip" + (n.conectada ? " ok" : n.activa ? " warn" : "");
   let h = "";
   if (EN_INTERNET) {
-    const u = nube.usuario;
-    h += `<p class="sub">Esta cuenta está enlazada con <b>${esc(n.nombre)}</b>: lo manejas desde cualquier sitio con internet.</p>`;
+    const u = nube.usuario, conectado = !!nube.pid && nube.enLinea;
+    chip.textContent = !u ? "Sin sesión" : !nube.pid ? "PC sin enlazar" : conectado ? "PC conectado" : "PC desconectado";
+    chip.className = "chip" + (conectado ? " ok" : nube.pid ? " warn" : "");
     if (u) h += `<div class="fila"><span class="ico">${icono("pixel")}</span><div class="txt"><small>Sesión iniciada como</small><b>${esc(u.displayName || u.email || "anónimo")}</b>${u.email && u.displayName ? `<small>${esc(u.email)}</small>` : ""}</div>
       <button class="btn" type="button" data-salir>Cerrar sesión</button></div>`;
+    h += nube.pid
+      ? `<p class="sub">Este celular ya es Píxel. Además, esta cuenta maneja <b>${esc(n.nombre || "el Píxel del PC")}</b> (ESP32 y panel) desde cualquier sitio con internet.</p>`
+      : '<p class="sub">Este celular ya es Píxel: no necesita el PC. Si también tienes el Píxel del PC, con el ESP32, puedes enlazarlo para manejarlo desde aquí.</p>';
+    if (u && !nube.pid) h += '<div class="acciones"><button class="btn suave" type="button" data-buscar-pixel>Enlazar el Píxel del PC</button></div>';
   } else {
+    chip.textContent = !n.activa ? "Desactivada" : n.conectada ? "Conectada" : "Sin conexión";
+    chip.className = "chip" + (n.conectada ? " ok" : n.activa ? " warn" : "");
     h += `<p class="sub">En el móvil abre <b>${URL_APP}</b>, entra con Google, toca <b>Buscar a Píxel</b> y escribe el código que diga Píxel.</p>`;
     if (n.activa && !n.conectada) h += `<p class="aviso">Sin conexión con la nube: ${esc(n.error || "¿hay internet?")}</p>`;
     if (n.enlace) {
@@ -801,8 +491,8 @@ function pintarNube(d) {
       <div class="txt"><b>${esc(a.nombre)}</b><small>enlazada ${a.desde ? "el " + new Date(a.desde).toLocaleDateString("es") : ""}</small></div>
       ${a.uid === nube.uid ? '<span class="chip info">Tu cuenta</span>' : ""}
       <button class="btn peligro" type="button" data-nube-quitar="${esc(a.uid)}">${a.uid === nube.uid ? "Desenlazar" : "Quitar"}</button></div>`).join("")}</div>`
-    : n.activa ? '<div class="vacio">Todavía no hay ninguna cuenta enlazada.</div>' : "";
-  $("#nube-cuerpo").innerHTML = h;
+    : n.activa && !EN_INTERNET ? '<div class="vacio">Todavía no hay ninguna cuenta enlazada.</div>' : "";
+  if (h !== pintadoNube) { $("#nube-cuerpo").innerHTML = h; pintadoNube = h; }   // sin repintar botones a cada rato
 }
 
 // ------------------------------------------------------------------ refresco
@@ -814,19 +504,19 @@ function pintar(d) {
     feliz(`¡Listo! Ya conozco ${x ? "a " + x.nombre : "ese aparato"}`);
   }
   ultimaOp = clave;
-  pill("#pill-servidor", "ok", EN_INTERNET ? (d.nube.nombre || "Píxel") : "Servidor · " + d.servidor.ip);
-  const oyen = (d.celulares || []).filter((c) => c.escuchando).length;
-  pill("#pill-esp", d.activos || oyen ? "ok" : "warn", d.activos ? (d.activos === 1 ? "ESP32 conectado" : d.activos + " ESP32")
-    : oyen ? (oyen === 1 ? "Celular escuchando" : oyen + " celulares escuchando") : "ESP32 sin conectar");
-  const gm = d.cuentas.gemini;
-  if (gm && gm.configurada) pill("#pill-ollama", geminiConError(gm) ? "warn" : "ok", geminiConError(gm) ? "Gemini con error" : "IA: Gemini");
-  else pill("#pill-ollama", d.servidor.ollama ? "ok" : "warn", d.servidor.ollama ? "IA local lista" : "IA local apagada");
+  pill("#pill-servidor", "ok", EN_INTERNET ? "PC · " + (d.nube.nombre || "Píxel") : "Servidor · " + d.servidor.ip);
+  if (!EN_INTERNET) {                     // en la app de internet, las de microfono e IA son de agente.js
+    pill("#pill-esp", d.activos ? "ok" : "warn", d.activos ? (d.activos === 1 ? "ESP32 conectado" : d.activos + " ESP32") : "ESP32 sin conectar");
+    const gm = d.cuentas.gemini;
+    if (gm && gm.configurada) pill("#pill-ollama", geminiConError(gm) ? "warn" : "ok", geminiConError(gm) ? "Gemini con error" : "IA: Gemini");
+    else pill("#pill-ollama", d.servidor.ollama ? "ok" : "warn", d.servidor.ollama ? "IA local lista" : "IA local apagada");
+  }
   pintarInicio(d);
   pintarDispositivos(d);
   pintarHoja(d);
   pintarResto(d);
   pintarNube(d);
-  if (EN_INTERNET) { revisarNube(); revisarOido(); }
+  if (EN_INTERNET) revisarNube();
 }
 
 let temporizador = null;
@@ -837,7 +527,6 @@ async function refrescar() {
   if (EN_INTERNET) {                     // el estado llega solo por la nube; aqui solo latido y avisos
     if (nube.pid && Date.now() - nube.latidoT > 20000) latido();
     revisarNube();
-    revisarOido();
     if (nube.estado) pintarHoja(nube.estado);
     if ($("#enlazar").open) pintarVisibles();
     return;
@@ -869,16 +558,22 @@ async function iniciarNube() {
     const app = a.initializeApp(NUBE);
     Object.assign(nube, {d, au, auth: au.getAuth(app), db: d.getDatabase(app), error: ""});
     d.onValue(d.ref(nube.db, ".info/serverTimeOffset"), (s) => { nube.offset = s.val() || 0; });
+    // Fase 12: Pixel vive en este celular (agente.js); el Pixel del PC se enlaza aparte, si se quiere
+    const s = document.createElement("script");
+    s.src = "agente.js";
+    s.onload = () => window.Agente.iniciar(app);
+    s.onerror = () => toast("No pude cargar a Píxel en este celular. Recarga la página.", true);
+    document.head.append(s);
     au.onAuthStateChanged(nube.auth, sesion);          // la sesion de Google se recuerda en este navegador
     if (PRUEBA_ANONIMA) au.signInAnonymously(nube.auth).catch(errorNube);
   } catch (e) { errorNube(e); }
 }
 
 function sesion(u) {
-  pararOido();
   nube.quitar.forEach((f) => f());
   if (nube.quitarMios) nube.quitarMios();
   Object.assign(nube, {usuario: u, uid: u ? u.uid : "", quitar: [], quitarMios: null, mios: null, pid: null, estado: null, vivo: 0});
+  if (window.Agente) window.Agente.usuario(u);
   if (!u) { revisarNube(); return; }
   nube.quitarMios = nube.d.onValue(nube.d.ref(nube.db, `usuarios/${nube.uid}/pixeles`), (s) => { nube.mios = s.val() || {}; elegirPixel(); }, errorNube);
 }
@@ -895,15 +590,16 @@ async function entrar() {
 }
 
 function elegirPixel() {
-  const ids = Object.keys(nube.mios || {});
+  // Fase 13: los ESP32 puente (tipo "puente") tambien estan en usuarios/<uid>/pixeles, pero no son el
+  // Pixel del PC: de esos se encarga aparatos.js
+  const ids = Object.keys(nube.mios || {}).filter((pid) => !(nube.mios[pid] && nube.mios[pid].tipo === "puente"));
   let guardado = "";
   try { guardado = localStorage.getItem("pixel.elegido") || ""; } catch (e) { guardado = ""; }
   const pid = ids.includes(guardado) ? guardado : ids[0] || "";
   if (pid === nube.pid) { revisarNube(); return; }
-  pararOido();
   nube.quitar.forEach((f) => f());
   Object.assign(nube, {quitar: [], pid, estado: null, vivo: 0});
-  if (!pid) { revisarNube(); abrirEnlazar(); return; }
+  if (!pid) { revisarNube(); return; }      // sin Pixel del PC tambien se puede: este celular es Pixel
   const d = nube.d;
   nube.quitar.push(d.onValue(d.ref(nube.db, `pixeles/${pid}/estado`), (s) => {
     const v = s.val();
@@ -933,11 +629,8 @@ function revisarNube() {
     $("#latido").className = "latido";
   };
   const acciones = $("#hero-acciones");
-  acciones.hidden = !nube.d || !!nube.pid;
-  if (!nube.pid) {
-    acciones.innerHTML = !nube.usuario ? '<button class="btn primario grande" type="button" data-entrar>Entrar con Google</button>'
-                                       : '<button class="btn primario grande" type="button" data-buscar-pixel>Buscar a Píxel</button>';
-  }
+  acciones.hidden = !nube.d || !!nube.usuario;          // con sesion, Inicio es de Pixel en este celular
+  if (!nube.usuario) acciones.innerHTML = '<button class="btn primario grande" type="button" data-entrar>Entrar con Google</button>';
   if (!nube.d) {
     pill("#pill-servidor", "warn", nube.error ? "Sin nube" : "Conectando…");
     if (cara) cara.estado("esperando");
@@ -946,25 +639,21 @@ function revisarNube() {
   }
   if (!nube.usuario) {
     pill("#pill-servidor", "warn", "Sin sesión");
+    pill("#pill-esp", "", "Micrófono apagado");
+    pill("#pill-ollama", "", "IA: Gemini");
     if (cara) cara.estado("esperando");
     $("#zzz").hidden = !cara;
-    hero("¡Hola! Soy Píxel", "Entra con tu cuenta de Google para enlazarme y manejarme desde aquí.");
+    hero("¡Hola! Soy Píxel", "Entra con tu cuenta de Google y háblame: vivo en este celular.");
+    pintarNube(null);
     return;
   }
-  if (!nube.pid) {
-    pill("#pill-servidor", "warn", "Sin enlazar");
-    if (cara) cara.estado("esperando");
-    $("#zzz").hidden = !cara;
-    hero("Aún no estoy enlazado", "Búscame y escribe el código que te diga.");
-    return;
-  }
-  nube.enLinea = !!nube.vivo && Date.now() + nube.offset - nube.vivo < 40000;
-  if (!nube.enLinea) {
-    pill("#pill-servidor", "warn", "Píxel desconectado");
-    if (cara) cara.estado("sin-servidor");
-    $("#zzz").hidden = true;
-    hero(nube.estado ? "Estoy desconectado" : "Despertando…", "Enciende mi servidor en el PC y revisa que tenga internet.");
-  }
+  // el Pixel del PC (ESP32 y panel) es opcional: solo su pildora y la tarjeta de Cuentas
+  // en Cuentas, Gemini, Google y los contactos son del Pixel del PC: sin el, no se ensenan
+  ["#card-gemini", "#card-google", "#card-contactos"].forEach((id) => { $(id).hidden = !nube.estado; });
+  nube.enLinea = !!nube.pid && !!nube.vivo && Date.now() + nube.offset - nube.vivo < 40000;
+  pill("#pill-servidor", !nube.pid ? "" : nube.enLinea ? "ok" : "warn",
+    !nube.pid ? "PC sin enlazar" : nube.enLinea ? "PC · " + ((nube.estado && nube.estado.nube.nombre) || "Píxel") : "PC desconectado");
+  pintarNube(nube.estado);
 }
 
 function ordenNube(ruta, cuerpo) {
@@ -1050,13 +739,20 @@ $("#presets").addEventListener("click", (e) => {
 });
 function datosAgente() {
   const voz = document.querySelector("input[name=voz]:checked"), resp = document.querySelector("input[name=respuesta]:checked");
-  const salida = document.querySelector("input[name=salida_voz]:checked");
-  return {voz: voz && voz.value, respuesta: resp && resp.value, personalidad: $("#personalidad").value, salida_voz: salida ? salida.value : "esp32"};
+  const salida = document.querySelector("input[name=salida_voz]:checked"), tono = document.querySelector("input[name=tono]:checked");
+  return {voz: voz && voz.value, respuesta: resp && resp.value, personalidad: $("#personalidad").value, salida_voz: salida ? salida.value : "esp32",
+    tono: tono ? tono.value : undefined};
 }
 $("#f-agente").addEventListener("input", () => { agenteTocado = true; });
 $("#f-agente").addEventListener("change", () => { agenteTocado = true; });
-$("#f-agente").addEventListener("submit", async (e) => { e.preventDefault(); if (await enviar("/api/agente", datosAgente())) agenteTocado = false; });
+// en la app de internet la Personalidad es la de Pixel en este celular (agente.js); en el panel, la del PC
+$("#f-agente").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (EN_INTERNET) { if (window.Agente) window.Agente.guardarAjustes(datosAgente()); return; }
+  if (await enviar("/api/agente", datosAgente())) agenteTocado = false;
+});
 $("#guardar-probar").addEventListener("click", async () => {
+  if (EN_INTERNET) { if (window.Agente) { await window.Agente.guardarAjustes(datosAgente()); window.Agente.probar(); } return; }
   if (await enviar("/api/agente", datosAgente())) { agenteTocado = false; enviar("/api/agente/probar"); }
 });
 $("#f-contacto").addEventListener("submit", async (e) => {
@@ -1112,7 +808,7 @@ document.addEventListener("click", async (e) => {
   if (t.closest("[data-cerrar]")) { hoja.close(); return; }
   const p = t.closest("[data-paso]");
   if (p) { irA(p.dataset.paso); return; }
-  if (t.closest("[data-probar]")) enviar("/api/agente/probar");
+  if (t.closest("[data-probar]")) { if (EN_INTERNET && window.Agente) window.Agente.probar(); else enviar("/api/agente/probar"); }
   const b = t.closest("[data-borrar]");
   if (b) enviar("/api/agenda/borrar", {tipo: b.dataset.borrar, id: Number(b.dataset.id)});
   const c = t.closest("[data-borrar-contacto]");
