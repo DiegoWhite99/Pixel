@@ -7,12 +7,15 @@ y corrige nombres de artistas y canciones que Whisper transcribe mal.
 
 Tambien separa un recordatorio en que recordar y el trozo de la frase que dice
 cuando; ese trozo lo interpreta recordatorios.extraer_hora().
+
+Fase 11: si hay clave de Gemini pregunta a Gemini (gemini.py); si falla, a Ollama.
 """
 
 import json
 import time
 import urllib.request
 
+import gemini
 import llm      # comparte el candado de Ollama: una generacion a la vez
 
 PROMPT = """Clasificas frases dichas a un asistente de voz. Responde SOLO con JSON.
@@ -56,9 +59,18 @@ class Clasificador:
         self.num_predict = num_predict
         self.timeout = timeout
         self.keep_alive = keep_alive
+        self.motor = None       # quien contesto la ultima pregunta: "gemini" u "ollama" (para el log)
 
     def _preguntar(self, prompt, texto, num_predict):
         """El JSON que devuelve el modelo para el texto, o None si algo falla."""
+        if gemini.activo():
+            try:
+                d = json.loads(gemini.generar(prompt, [{"role": "user", "content": texto}], json_salida=True))
+                self.motor = "gemini"
+                return d
+            except (gemini.ErrorGemini, ValueError) as e:
+                gemini.LOG("gemini: el clasificador fallo (%s); pregunta a Ollama" % e)
+        self.motor = "ollama"
         cuerpo = {
             "model": self.modelo,
             "stream": False,

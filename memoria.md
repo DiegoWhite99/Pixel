@@ -570,3 +570,336 @@ El usuario pidió que todo fuera con "pixel asistente de voz". Eligió la carpet
     - `Etb_boot.ino.mejoras-22oct` usa el mismo nombre al buscar el servidor. `Etb_boot.ino` no tiene nombre.
     - Los dos compilan (91 % y 69 %), pero **falta subirlos a la placa**. Copia del anterior en `Pixel_portal.ino.respaldo-06nov`.
 - El panel (`panel.py`) y `web/index.html` ya dicen el nombre nuevo de la red del portal. La app publicada en Firebase sigue diciendo "Pixel-Config" hasta que se vuelva a publicar.
+
+---
+
+# Fase 11: Gemini en vez de Ollama (6 de noviembre, rama `vinculacion_movil`)
+
+El 22 de octubre el usuario había decidido dejar el cerebro en el PC. El 6 de noviembre pidió cambiar el modelo de IA por la API de Gemini. Todavía no tiene la clave: la está sacando.
+
+- **Qué cambia:** con clave, las respuestas habladas (`llm.Llm`) y el clasificador (`clasificador.Clasificador`) preguntan a Gemini (`gemini.py`, solo `urllib`). Sin clave, o si Gemini falla antes de decir nada, ese turno responde Ollama. Whisper y Piper siguen en el PC.
+- **Modelo:** primero se eligió `gemini-3.8-flash`, el Flash vigente (salió el 2 de septiembre de 2026). No admite `thinkingLevel: "minimal"` (da 400), así que iba con `"low"`.
+- **Medido con la clave real del usuario (6 nov), plan gratis:**
+    - `gemini-3.8-flash` da HTTP 429 RESOURCE_EXHAUSTED desde la primera petición. El detalle de cuota (`GenerateRequestsPerDayPerProjectPerModel-FreeTier` = 20) dice que da 20 peticiones al día. Cada turno gasta 2 (clasificador y respuesta).
+    - `gemini-2.5-flash` y `gemini-2.5-flash-lite` dan 404: ya no están para usuarios nuevos.
+    - Responden bien `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`, `gemini-3.5-flash` y `gemini-flash-lite-latest`. **`gemini-3.5-flash-lite`** contesta en 0,88 s y acepta `"low"`: es el que queda en `GEMINI_MODELO`.
+    - Según una fuente de terceros (scriptbyai.com, "Gemini API free tier limits"), los Flash-Lite tienen unas 500 peticiones al día gratis, y 3.8 y 3.6 Flash solo 20. Google no lo confirma.
+- **Cupo agotado:** un 429 deja a Gemini en pausa `PAUSA_CUPO_S` (10 min). Mientras, responde Ollama sin intentarlo, así que cada turno no pierde la ida y vuelta.
+- **Sin `temperature`:** en Gemini 3, Google recomienda dejarla en su valor por defecto. El largo de la respuesta lo sigue marcando el prompt ("2 a 4 frases"). `maxOutputTokens` va en 1024, holgado, porque el razonamiento también gasta del tope.
+- **Prompt de sistema:** se quitó "funcionas 100% en local, sin conexión a la nube" (pendiente de la Fase 10).
+- **La clave:**
+    - Se pega en el panel local (Cuentas → Gemini) y se guarda en `gemini_clave.json` con permisos 600, fuera de git.
+    - Vale al momento, sin reiniciar.
+    - Las rutas para ponerla y probarla no están en `RUTAS_POST`, así que la nube no puede tocarla. Probado: una orden de la nube a `/api/gemini/clave` contesta "Esa orden no existe." y no llama a Gemini.
+- **Probado contra un Gemini simulado en local** (21 comprobaciones): la clave va en la cabecera y no en la URL, el streaming SSE, los roles del historial, el modo JSON, el reintento sin `thinkingConfig`, ListModels, la caída a Ollama con clave mala y sin conexión, la pausa de 60 s tras un fallo de conexión, y que la clave no sale ni en el log ni en el estado.
+- **Probado con el servidor de prueba y la grabación real "Píxel, ¿Qué es el sistema operativo de Linux?":**
+    - Sin clave responde Ollama: 1er token en 5,39 s, total 16,1 s.
+    - Con una clave falsa, el Gemini real contesta "API key not valid". El clasificador cae a Ollama tras 0,35 s y la respuesta tras 0,6 s, y el turno responde igual (1er token de Ollama en 0,80 s). La clave no aparece en el log.
+    - Un POST de la clave desde otra página da 403.
+- **No probado:** una conversación entera por voz con Gemini en el servidor real (lo reinicia el coordinador tras revisar).
+
+## Pendientes
+
+1. Con la clave ya puesta (6 nov): medir la latencia de Gemini contra la de Ollama con grabaciones reales en el servidor real.
+2. Con una clave mala, cada turno pierde ~1 s en los dos intentos fallidos, porque solo los fallos de conexión y el 429 (cupo) hacen pausa. Si molesta, pausar también los demás 4xx.
+3. Ollama se descarga de la RAM tras 30 min sin usarse (`keep_alive`). Con Gemini contestando siempre, el primer respaldo tras ese rato será lento (~10 s).
+4. La app publicada en Firebase no tiene la tarjeta de Gemini hasta que se vuelva a publicar. Desde internet solo enseña el estado: la clave nunca viaja por la nube.
+
+# Fase 11: el celular como Píxel (6 de noviembre, rama `vinculacion_movil`, sin publicar)
+
+El usuario pidió que Píxel funcione "como un Alexa en el celular" (opción b: decir "Píxel" sin tocar, con la app abierta). Luego dijo que por ahora no puede usar el ESP32, así que el celular tiene que hacer de micrófono y altavoz. Ver CLAUDE.md, "El celular como Píxel".
+
+- **Diseño:**
+    - El celular corta las frases (VAD en el navegador) y las deja en la Realtime Database.
+    - El PC hace el mismo turno que con el ESP32 y deja la voz para ese celular.
+    - Sin ESP32, los recordatorios, "Probar voz" y el código de enlace van al celular que escucha.
+    - YouTube pedido desde el celular sale como tarjeta "Abrir en YouTube" en la app, no en el PC.
+- **Probado en el servidor, con nube falsa y capturas reales:**
+    - Sin "Píxel" no devuelve nada.
+    - Las frases de una app no enlazada y las de hace 60 s se tiran.
+    - "Píxel" sola: beep y "Dime" marcado `dime`. Después, la frase "¿Qué le hace en el fondo?" sin "Píxel" entró por la ventana.
+    - "Píxel, ¿qué es Linux?": 1 beep, 3-4 trozos de voz, cierre y fin, con las claves siempre crecientes.
+    - Con el celular escuchando y sin ESP32: un recordatorio vencido llegó al celular en 0,7 s, y "Probar voz" respondió "Escucha el celular.".
+    - "pon Queen en YouTube": llegó al celular un `video` con el id y el título, y Píxel dijo "Listo, te dejo Queen – Bohemian Rhapsody en la pantalla." No se abrió nada en el PC; sin celular, el PC se abre como siempre.
+    - El ESP32 por TCP (`cliente_prueba.py` con la frase de Linux) respondió igual que antes, sin mandar nada al celular.
+- **Probado en Chrome sin pantalla, con micro falso (la frase de Linux en bucle) y base de datos falsa:**
+    - El contexto iba a 44,1 kHz. Cortó dos frases de 3,56 y 3,58 s (el original dura 3,56 s).
+    - Whisper las entendió como "Píxel, qué es el sistema operativo de Linux?" y se activó.
+    - Mientras suena la voz no capta.
+    - Salta el "Dime" si el usuario sigue hablando.
+    - La tarjeta de YouTube y el latido de "Escuchar" funcionan.
+    - "Parar" suelta el micro, y sin permiso sale el aviso.
+    - En modo local la página carga sin errores y el botón no aparece.
+- **Uso de Firebase (medido):**
+    - Una frase de 3-4 s ocupa unos 130-175 mil caracteres en base64 (100-130 KB).
+    - Una respuesta de 15-23 s de voz ocupa 0,6-1 MB.
+    - El plan gratis (Spark) da 10 GB al mes de descarga. Cada frase con voz que oye el celular sube, lleve "Píxel" o no: en una feria con mucho ruido puede ser mucho.
+- **Latencia (servidor de prueba con Ollama):** el primer trozo de voz de la respuesta de Linux llegó a los 6,8-12 s, porque Piper espera la frase entera. Con Gemini debería bajar.
+
+## Pendientes
+
+1. **Parado a medias:** el usuario está pensando en llevar el cerebro a la nube, y quizá el puente celular→PC ya no haga falta. No está publicado ni probado con un celular real.
+2. Para probarlo de verdad: publicar las reglas (`frases`, `escuchando`, `habla`) y el hosting, reiniciar el servicio y tocar Escuchar en Chrome Android y Safari iPhone.
+3. Ver en iPhone si, con el micro abierto, la voz sale por el auricular en vez del altavoz. Se pone `navigator.audioSession.type = "play-and-record"`, pero no está probado.
+4. Si el uso de Firebase molesta: mandar la voz en μ-law de 8 bits, que pesa la mitad.
+
+# Fase 12: Píxel en la app, sin PC (6 de noviembre, rama `vinculacion_movil`, sin publicar)
+
+El usuario no quiere depender del PC: "si lo quiero usar siempre en el cel como un agente tengo que tener el pc, esto no debe funcionar así". Eligió la opción 1: Píxel vive en la app web. Oye con el reconocimiento de voz del navegador, piensa con Gemini por Firebase AI Logic y habla con la voz del celular. Ver CLAUDE.md, "Píxel en la app". El puente celular→PC de la Fase 11 queda sin uso. Su celular es Android y ya tiene instalada la app de pixelassitance.web.app.
+
+## Firebase AI Logic y App Check
+
+- El usuario activó AI Logic con la "Gemini Developer API" (plan Spark, gratis). Con el SDK web 13.1.0, `gemini-3.5-flash-lite` contestó en streaming en 1,4 s, con function calling y `thinkingLevel` LOW (21:53 UTC).
+- **Trampa:** al pulsar "Comienza a usar esta API" a las 21:47:46 UTC, la consola dejó App Check **ENFORCED** para `firebaseml.googleapis.com`, sin que el usuario lo pidiera. Tardó unos 15 min en notarse: hasta las 21:53 funcionó, y desde las 22:06 todo dio 401 "Firebase App Check token is invalid", con sesión y sin ella, en Node y en Chrome.
+- Con el permiso del usuario se dejó en UNENFORCED a las 22:15 UTC, con un PATCH a la API de App Check (`firebaseappcheck.googleapis.com/v1/projects/pixelassitance/services/firebaseml.googleapis.com?updateMask=enforcementMode`). Se usó el token del CLI de firebase-tools, en `~/.config/configstore/firebase-tools.json`, que tiene el alcance cloud-platform.
+- Sin App Check, cualquiera que copie la config pública de la app puede gastar el cupo gratis. No cobra nada: el plan es Spark.
+
+## Pruebas (6 nov, 22:29-22:31 UTC)
+
+Chrome sin pantalla (puppeteer-core), `web/` servido en localhost con `?nube=anonimo`, Gemini de verdad por AI Logic y reconocimiento de voz falso que dicta frases. Los recordatorios y los ajustes, en una base de datos falsa en memoria, porque las reglas nuevas no están publicadas. Pruebas en `scratchpad/navegador/prueba.js` y `prueba_rec.js` de la sesión 9ada51a4.
+
+- **Pregunta:** "¿Cuál es la capital de Francia?" → París, con 2 datos más. La primera frase llega a la voz en 1,4-1,5 s. "¿Y la de Italia?" usa el historial: Roma, 0,6 s.
+- **Música:** "pon Bohemian Rhapsody de Queen" → "Te dejo Bohemian Rhapsody Queen en la pantalla.", con la tarjeta de búsqueda de YouTube.
+- **Voz:**
+    - Una frase sin "Píxel" se ignora.
+    - "Píxel" sola → "Dime", con el reconocimiento parado mientras habla. En la ventana, "qué día es hoy" → "Hoy es viernes 6 de noviembre de 2026 y son las cinco y veintinueve de la tarde."
+    - "oye pixel pixel pon algo de Shakira" → tarjeta de Shakira.
+    - Parar suelta el reconocimiento.
+- **Recordatorios:**
+    - Crear "en 1 minuto", "en 2 horas" y "mañana a las 8 de la mañana", verlos ("Tienes 2 recordatorios: …") y borrar "el de mamá" funcionan.
+    - Uno vencido con la app cerrada → "Se me pasó un recordatorio de hoy a las 5:24 de la tarde: regar las plantas."
+    - El de 1 minuto se dijo a su hora: "Recordatorio: tomar agua."
+    - Contra la base real, sin reglas, sale "No pude guardar el recordatorio…" a los 8 s.
+- **Arreglo:** con `cuando` en ISO, Gemini redondeaba la hora al minuto, y "en 1 minuto" quedaba en 15-23 s. Ahora `crear_recordatorio` tiene `en_minutos`, y la app suma esos minutos a la hora actual: 60 s y 7200 s exactos. `cuando` se queda para horas concretas: "mañana a las 8" quedó a las 08:00:00.
+- Personalidad sin "Por dónde habla", Agenda sin eventos, Cuentas sin las tarjetas del PC. El panel local (8080) sigue igual y no carga `agente.js`.
+- Peticiones a Gemini en las pruebas buenas: 14. Errores de consola: ninguno. La cuenta anónima de cada prueba se borró. En Auth quedan 6 anónimas, todas del 22 oct: el Píxel del PC (z1UAW2…) y 5 restos de pruebas de ese día.
+
+## Pendientes
+
+1. Reglas publicadas el 9 nov (`--only database`, solo añaden `usuarios/<uid>/recordatorios` y `ajustes`). Canal de prueba: https://pixelassitance--prueba-ob3okavt.web.app (`hosting:channel:deploy prueba --expires 7d`, caduca el 16 nov; el dominio quedó autorizado para entrar con Google). Falta probarlo en el Android del usuario, con Chrome. No se pudo probar sin celular: el reconocimiento de voz real y su corte en Android, las voces del celular, el Wake Lock y si la voz se oye a sí misma.
+2. Configurar App Check (reCAPTCHA v3) antes de publicar en pixelassitance.web.app, y luego volver a ENFORCED.
+3. Con la app cerrada no suenan los recordatorios: haría falta Cloud Messaging, y el plan Spark no tiene Cloud Functions.
+4. Borrar las 5 cuentas anónimas de prueba del 22 oct, si se quiere.
+
+## 9 de noviembre: la nube del servidor caía tras suspender el PC
+
+- El PC estuvo suspendido desde el 7 nov a las 12:18 (último `vivo` en Firebase) hasta el 9 nov a las 08:30. Al despertar, `nube.py` daba 401 "Permission denied" cada ~11 s, porque medía la caducidad del token con `time.monotonic()`, que no avanza durante la suspensión: el token caducado seguía pareciendo válido. No tenía que ver con las reglas nuevas, y con un token nuevo se leía todo bien.
+- Arreglo: `_entrar()` y `_escuchar()` usan `time.time()`. Tras reiniciar el servicio: "nube: conectada" en 2 s.
+- El ESP32 se conectó a las 08:43 con `piso=0` y `pico=0`. Ya pasaba el 6 nov a las 17:24 ("1955 s de audio, 0 frases, pico=0"). La ganancia del portal (shift 13-16) no puede dejar el audio en 0, así que el INMP441 manda ceros por el canal izquierdo. Puede ser L/R fuera de GND, VDD o GND sueltos, o SCK (IO4), WS (IO5) o SD (IO6) sueltos. El 21 oct el canal izquierdo daba un piso de 80-370.
+
+## 9 de noviembre: el celular se adelantaba ("Píxel… necesito que reproduzcas No te va a gustar" → "reproduce")
+
+- El usuario lo probó en su Android (canal de prueba). "Píxel" → "Dime", y de lo siguiente solo quedaba "reproduce". El ESP32 no oyó nada: piso 0.
+- Causa: Chrome en Android da el resultado final en cada pausa corta y corta el reconocimiento (`onend`). `agente.js` respondía con cada final, y durante "Dime" y al rearrancar se perdían palabras.
+- Arreglo en `agente.js`:
+    - Los trozos se juntan en `oye.pendiente` y solo se responde tras `PAUSA_FIN_MS` (1,2 s) sin resultados, ni provisionales.
+    - Tras "Píxel" sola se espera `PAUSA_PIXEL_MS` (1,8 s) antes de decir "Dime", por si sigue la orden.
+    - A media frase se rearranca enseguida.
+    - Si se corta sin final, vale lo provisional.
+    - Si la respuesta acaba en "?", se abre la ventana de 8 s.
+    - El prompt avisa a Gemini de que el texto viene de un reconocimiento de voz.
+- Probado con un reconocimiento falso que se corta como el de Android (`prueba_android.js`):
+    - "Píxel" … "necesito que reproduzcas" … "No te va a gustar", con pausas de 0,6-0,7 s → una sola orden, sin "Dime", con la tarjeta "No te va a gustar".
+    - "Píxel" sola → "Dime" a los 2,2 s. En la ventana, "qué hora es" sin "Píxel" → la hora.
+    - "Píxel reproduce" → "¿Qué canción o artista te gustaría escuchar?". "algo de Queen" sin "Píxel" → tarjeta de Queen.
+    - Una frase provisional cortada sin final también vale. Una frase ajena se ignora.
+- Subido al mismo canal de prueba a las 08:56.
+
+# Fase 13: el agente completo (9 de noviembre, rama `vinculacion_movil`)
+
+El usuario pidió cinco cosas para el Píxel del celular:
+1. Manejar aparatos (PC, TV y demás), con el ESP32 de puente.
+2. Conectar Google Calendar ("determinante").
+3. Gmail: leer, redactar, ordenar, corregir y enviar.
+4. Pomodoro y Eisenhower, a elegir.
+5. Un `.md` que Gemini siga, un RAG con su personalidad y lo que hace, y Obsidian para moldearlo y construir la identidad del usuario con el tiempo.
+
+Contestó:
+- Aparatos: TV, PC, luces o enchufes y aire o ventilador.
+- Su TV es Android o Google TV.
+- Piezas: ninguna todavía.
+- Me dio permiso para activar las API de Google y publicar las reglas.
+
+Diseño en CLAUDE.md, "Fase 13".
+
+## Hecho
+
+- APIs `calendar-json` y `gmail` activadas en el proyecto 794659517422, con el token del CLI de firebase-tools (alcance cloud-platform). Reglas publicadas (`--only database`), solo añaden.
+- Obsidian 1.15.0 (AppImage) en `~/Aplicaciones/obsidian`, con un acceso en el menú y la bóveda `~/Obsidian/Pixel` registrada.
+- `androidtvremote2` 0.3.3 instalado en `.venv`, sin conflictos.
+- La placa lleva **Etb_boot.ino**: el log dice "ESP32-S3 conectado" sin nombre, y `Pixel_portal` añade ": Pixel asistente de voz". El firmware del puente compila (1,34 MB con `huge_app`), pero **no se ha cargado**: falta el permiso del usuario.
+
+## Pruebas (9 nov, Chrome sin pantalla, Gemini y Firebase de verdad)
+
+Todas pasan: `tools/prueba_app.js` (36 comprobaciones), `tools/prueba_modulos.js` (19) y `tools/prueba_obsidian.py` (14).
+
+- **Cerebro:**
+    - "recuerda que me llamo Diego y estudio ingeniería de sistemas" → 2 notas. "¿cómo me llamo y qué estudio?" lo sabe.
+    - "¿cómo funciona la técnica pomodoro?" → 25/5/4, sacado de saber.md.
+    - Una regla "termina con cambio y fuera" se cumple.
+    - "olvida lo que estudio" borra solo esa nota. Antes guardaba todo en una sola nota y la borraba entera: ahora va un dato por nota.
+- **Enfoque:**
+    - Dos tareas en sus cuadrantes. "¿qué hago primero?" → el informe, y propone un pomodoro.
+    - "sí, empieza un pomodoro con esa" → pomodoro con la tarea.
+    - Al vencer: "¡Tiempo! Terminaste el pomodoro 1 de 4…", pasa a descanso y la tarea cuenta 1 pomodoro.
+- **Google (simulado):**
+    - Agenda de hoy, crear evento a las 16:00, resumen de 2 correos y leer el de Ana.
+    - Responder en el hilo, con `In-Reply-To`; corregirlo "más formal" sin enviar. "envíalo" envía.
+    - "archiva el de la tienda" archiva solo ese.
+    - Sin token pide "Conectar Google".
+- **Aparatos (ESP32 simulado):**
+    - "apaga la lámpara" → relé pin 16 a 0. "prende la tele" → infrarrojo NEC.
+    - "sube el volumen del aire" → pide aprender el botón. Aprender "encender" del aire desde la página y luego "enciende el aire" funciona.
+    - Sin puente lo dice.
+- **Errores encontrados y arreglados:**
+    - Gemini rechaza el rol `function` (400): las respuestas de función van con `user`.
+    - Con 30 peticiones en ~5 min, Gemini dio 429 y al minuto volvió: es el límite **por minuto** del plan gratis, no el del día. Ahora avisa, espera y reintenta una vez.
+    - El candado global de los botones de Dispositivos bloqueaba "Aprender" mientras otro esperaba respuesta.
+    - El filtro RX del RMT (`rmtSetRxMinThreshold` 100 µs) pasaba el máximo del hardware (~3 µs): el aprendizaje habría fallado siempre.
+- PC como puente: probado en seco (comandos apuntados, sin tocar el escritorio).
+    - pactl, playerctl, abrir, gdbus y xset correctos. Rechaza URLs públicas y errores "No encuentro el TV".
+    - No se probó por la nube con la cuenta real (habría que enlazar una cuenta de prueba y el PC diría el código en voz alta).
+
+## Pendientes
+
+1. **Cargar el firmware del puente** en el ESP32 (cambia Etb_boot por Pixel_portal + puente): pedir permiso y cerrar el Arduino IDE. Luego probar el enlace por Bluetooth desde el Android.
+2. Probar Google de verdad en su celular: Cuentas → "Conectar Calendar y Gmail". Google avisará de "app no verificada".
+3. Activar Obsidian en la app (Personalidad → "Obsidian en el PC" → Activar) y abrir Obsidian en el PC.
+4. Agregar el TV Android: su IP, y emparejarlo con el código que muestra el TV (puente del PC).
+5. Piezas: módulo IR emisor (KY-005) en IO16, receptor (VS1838B) en IO15, relé en IO18.
+6. App Check antes de publicar en el sitio principal (sigue pendiente de la Fase 12).
+
+## 9 de noviembre: cara nueva (pedido del usuario)
+
+"Quítale la boca y los ojitos deben ser dos esferas amarillas, pero con retroiluminación y que sean muy expresivas."
+
+- `cara3d.js` rehecho, con la misma API y el mismo estirado tipo Mario 64. Diseño en CLAUDE.md.
+- Decisión propia: un visor oscuro detrás de los ojos. Sobre la cara blanca la retroiluminación no se veía. Se puede quitar si no le gusta.
+- Error encontrado al probarla: el primer cuadro de `requestAnimationFrame` puede traer una hora anterior a la de `montar()`. Con el dt negativo, los muelles nuevos explotaban: brillo −13 y la cabeza girada 15 rad. Ahora el dt va de 0 a 1/30.
+- Probado en Chrome sin pantalla:
+    - Los 12 gestos, sin errores, y la app de punta a punta (cerebro).
+    - Con 12 caras WebGL en una misma página, Chrome sin pantalla pierde contextos. En la app hay una sola.
+- Publicado en el canal de prueba con todo lo de la Fase 13.
+
+## 9 de noviembre: la música suena en la app (no la tarjeta)
+
+El usuario, con una captura de la tarjeta "Abrir en YouTube": "no quiero que me deje el enlace en la pantalla, quiero que corra en YouTube la canción o el video".
+
+- `musica.js`: reproductor de YouTube embebido. Probado en Chrome sin pantalla con el video real `irp8CNj9qBI`:
+    - Suena solo y con volumen tras el toque a Escuchar.
+    - Baja a 12 al decir "Píxel…". Pausa, sigue, siguiente y quitar funcionan.
+- Error encontrado: si se pausaba en los primeros 3,5 s, la comprobación de "¿arrancó solo?" lo volvía a poner, sin volumen. Ahora solo actúa si nunca sonó.
+- Error encontrado: un título largo con `nowrap` dentro de un grid `auto` ensanchaba la página en el celular. Ahora `minmax(0, 1fr)` y `min-width: 0`.
+- **Pendiente:** la clave de la YouTube Data API.
+    - Activar `youtube.googleapis.com` y crear una clave de navegador restringida a `search.list` y a los dominios de la app. El sistema de permisos lo bloqueó porque crea una credencial: el usuario tiene que aprobarlo.
+    - Mientras tanto busca el PC (yt-dlp, 1,5 s), si está encendido y enlazado a la cuenta.
+    - Sin clave ni PC sale la tarjeta de antes.
+
+## 9 de noviembre: ojos LED, personalidad y la clave de YouTube
+
+- El usuario: "los ojitos están bien pero los quiero como un LED, que estén dentro de lo negro, no afuera".
+    - Ahora se dibujan en el shader de la cabeza: rejilla de puntos, formas de LED (corazón, X, espiral, "> <") y halo sobre el visor.
+    - Probados los 12 gestos en Chrome sin pantalla.
+- El usuario pidió que, si lo molestan, diga "jejeje, qué divertido" y, si es mucho, se moleste ("ya no me toques así"), además de eventos al azar. Luego añadió que a los 5 min sin actividad diga que se va a dormir.
+    - Todo en `humor.js`. Prueba de punta a punta (`prueba_app.js humor`):
+        - Tres zarandeos → mareado + "¿Quién apagó la gravedad?".
+        - 11 toques → "¡Jejeje, qué divertido!", después "Ya, ya… que me despeinas", "¡Basta! Déjame un ratito, porfa" y "Hmph. Me voy a hacer el dormido…".
+        - Eventos al azar: guiño, curioso, feliz, bostezo.
+        - 5 min → "Bueno, me echo una siestita…" y los ojos cerrados. Un toque → "¡Ah! Estaba soñando con ovejas eléctricas."
+        - "gracias" → corazones.
+    - Primer fallo: el "jejeje" iba al 75 % y con el límite de 2,5 s no salía. Ahora el primer toque tras 6 s siempre lo dice.
+- **Clave de YouTube:** el usuario la autorizó ("así de una"). Se activó `youtube.googleapis.com` y se creó la clave "Pixel: buscar en YouTube (app web)".
+    - Al principio daba 403 "Requests to this API youtube method … are blocked": en la restricción puse el método como `google.youtube.api.v3.V3DataSearchService.List`, y el nombre bueno es `youtube.api.v3.V3DataSearchService.List`. Corregido con un PATCH.
+    - Desde la app funciona en unos 20 s. Desde otro sitio: "Requests from referer … are blocked".
+    - La prueba de música ya usa la búsqueda real: Queen – Bohemian Rhapsody (Official Video Remastered) suena sola.
+
+## 9 de noviembre: la música en YouTube aparte, no dentro de la app
+
+El usuario: "lo de YouTube está genial, pero la gracia es que abra otra ventana y reproduzca el YouTube, no dentro de la app".
+
+- **PC:** se abre en una ventana aparte (`popup`). En una pestaña, la de Píxel quedaba oculta (`document.hidden`) y dejaba de oír.
+- **YouTube manda `Cross-Origin-Opener-Policy: same-origin-allow-popups`** (comprobado con curl). Cuando lo abre otra página, la referencia queda cerrada y el nombre de la ventana se borra, así que no se puede cambiar el video, pausarlo ni cerrarlo. "Siguiente" abre otra ventana.
+- **Android:** Chrome no abre otra app sin un toque. Hay pantalla entera "Toca para abrir en YouTube" con `intent://`.
+    - En la prueba, `navigator.userActivation.isActive` dio verdadero sin toque. Ahora solo se fía del toque de Enviar (`est.porEscrito`).
+- El reproductor de la app queda como opción ("Aquí en la app") y "En el PC" usa el puente.
+- Prueba completa: 59 comprobaciones bien y 40 peticiones a Gemini.
+
+## 9 de noviembre: la música, manejada por voz como un asistente de verdad
+
+El usuario: "si le digo que pare la canción, debe pararla; si le digo cambia de canción, la cambia; debe ser un asistente en toda norma".
+
+- Abrir youtube.com directamente no se puede manejar, por su COOP. La solución es `web/reproductor.html`, la ventana de música de Píxel: mismo origen, con el reproductor de YouTube dentro, manejada por `ventana.Pixel`.
+    - Probado en Chrome sin pantalla: se abre sin toque desde una orden de voz (con las ventanas emergentes permitidas) y suena con volumen.
+    - Funcionan "para", "pausa", "sigue", "cambia de canción" (en la misma ventana), otra canción por nombre (en la misma ventana), "súbele el volumen" (100) y "quita la música" (la cierra).
+    - En Android suena en la app y ofrece abrirla en la app de YouTube.
+- Error encontrado: con `videoId` en el constructor del reproductor, el primer video de la ventana no arrancaba solo. Con `loadVideoById` sí.
+- Música: prueba de punta a punta bien, 16 peticiones a Gemini.
+
+## 9 de noviembre: Píxel baila con la música
+
+El usuario: "cuando esté en modo música, que se ponga a bailar al ritmo de la canción".
+
+- El audio de YouTube no se puede analizar: va en un iframe de otro origen y Web Audio no lo alcanza. Usar el micrófono a la vez que el reconocimiento de voz es arriesgado en Android.
+- Por eso Gemini da el `bpm` en `poner_musica` (para "Acróstico" dio 70, de balada), y la cara baila contando con el tiempo del video. Va al tempo de la canción, aunque no a cada golpe exacto: no se sabe dónde cae el primero.
+- Probado: tira de cuadros a 120 BPM con los tres pasos (rebote y vaivén, asentir, giro completo). En la prueba de música baila mientras suena y para en la pausa.
+- **Se agotó el cupo diario de Gemini** (9 nov, ~12:00): `GenerateRequestsPerDayPerProjectPerModel-FreeTier` en `gemini-3.5-flash-lite`, por las muchas pruebas del día (unas 300 peticiones). `gemini-flash-lite-latest` comparte ese cupo; `gemini-3.1-flash-lite` tiene el suyo y respondió bien, con function calling incluido (sus llamadas traen `id`).
+    - Ahora `agente.js` pasa solo al 3.1 cuando el 3.5 agota el día.
+    - Además, los atajos de música resuelven "para", "pausa", "cambia de canción"… sin Gemini. La prueba de música bajó de 16 a 6 peticiones.
+
+## 9 de noviembre: firmware del puente cargado en el ESP32
+
+- El usuario lo autorizó ("sí, carga el firmware") y cerró el Arduino IDE.
+- La placa es un ESP32-S3 con 16 MB de flash y 8 MB de PSRAM. Antes de cargar se guardó la flash entera (Etb_boot) en `~/Arduino/respaldos/esp32_etb_boot_09nov_16MB.bin`. Se cargó Pixel_portal + puente con `huge_app` y `PSRAM=opi`.
+- Dos errores del puente, encontrados en la placa real (el simulador no los mostraba):
+    1. Google contesta a Identity Toolkit y securetoken con `Transfer-Encoding: chunked`. El lector no lo entendía: la cuenta se creaba, pero el ESP32 no leía la respuesta y a los 15 s creaba otra. Así quedaron unas 15 cuentas anónimas vacías entre las 14:38 y las 14:44; el sistema de permisos no me dejó borrarlas.
+    2. `setTimeout(10)` en Arduino ESP32 3.x son 10 **ms** (Stream), no segundos. El ESP32 no esperaba la respuesta y salía `HTTP -1`.
+- Tras arreglarlos, en el registro serie: WiFi OK, servidor OK, Bluetooth anunciándose, infrarrojo listo (IO16/IO15) y "Firebase: dentro como 3t0baibQJBdUr51eWATNEUQnvWp2".
+- Falta enlazarlo desde el celular (Dispositivos → Agregar ESP32 por Bluetooth). El micrófono sigue dando 0: es el hardware.
+
+## 9 de noviembre: notas dictadas con análisis
+
+El usuario: "cuando le diga «Píxel, toma nota», que tome las notas como un block de notas, con la fecha y el contexto, y un botón «Analizar con Píxel» que saque un resumen, las ideas generales y específicas y lo más destacado. Que diga «tomando notas para el día tal a la hora tal» y empiece a transcribir".
+
+- Hecho en `apuntes.js`. Prueba de punta a punta (`prueba_app.js notas`, 1 petición a Gemini):
+    - "toma nota de la clase de biología" → "Tomando notas para el lunes 9 de noviembre a las 2:49 de la tarde".
+    - Tres frases dictadas sin "Píxel", con párrafo tras una pausa.
+    - "termina la nota" → "guardé tu nota de 34 palabras. ¿Quieres que la analice?".
+    - "sí" → resumen, ideas y lo destacado; entre los pendientes, estudiar la mitosis.
+- Error mío, encontrado en la captura: la clase CSS `.hoja` de las notas también la llevan los `<dialog class="hoja">`. Mi `display: grid` mostraba "Agregar dispositivo" y "Buscar a Píxel" cerrados al final de la página. Renombrada a `.nota-hoja`, y la prueba lo comprueba.
+- Después, el usuario: "el formato visual me ocupa mucha pantalla". Pidió filtrar por fechas y asunto, que Píxel saque lo más importante y le asigne el asunto, y que borre las notas de más de 30 días.
+    - Hecho: lista compacta con una fila por nota, agrupada por día, con filtros de fecha, asunto y palabras. `clasificar()` pone el asunto y lo importante al guardar (una petición). El borrado a los 30 días va al abrir la app.
+    - Prueba de notas (3 peticiones a Gemini, todo bien):
+        - Asunto «Biología» y "El examen es el viernes 14 de noviembre y se debe estudiar mitosis".
+        - La nota de 31 días se borró. Los filtros por asunto, ayer y "telofase" funcionan. La hoja se abre al tocar la fila.
+
+## 9 de noviembre: baile según el género y figuras musicales en el fondo
+
+El usuario: "ponle más animaciones cuando esté escuchando música según el género, y en el fondo que salgan figuras musicales".
+
+- Gemini da `genero` junto con `bpm` en la misma petición. `cara3d.js` tiene 11 estilos con pasos, ojos, color de LED y figuras propios.
+- Probado: tiras de 6 géneros, con reguetón guiñando, rock "> <", electrónica en neón morado, balada con corazones, salsa con cadera y clásica.
+- En la prueba de música, "Acróstico" dio 110 BPM y pop, salen las figuras y en la pausa el fondo se calma.
+- El panel local (8080) sigue sin errores.
+
+## 9 de noviembre: modo música, voz infantil y escenarios por género
+
+El usuario: "toca diferenciar cuándo se queda en modo música y no… me gustaría que cambiemos la voz a una voz infantil, toca que descargue el paquete de voces, revisa en GitHub un repo". Después: "que el fondo cambie según el género: salsa, por allá Puerto Rico con playas; rock o metal, escenario negro con luces tenues; electrónica, luces y láseres".
+
+- **Modo música:** gancho `hero()` de los módulos. Mientras suena, Inicio dice "♪ Modo música" (título y píldora) con colores propios, y en pausa "Música en pausa". Al quitarla vuelve a "Te escucho".
+- **Voz infantil:** no hay ningún paquete de voz de niño en español:
+    - Piper: HirCoir/Piper-TTS-Spanish, Trelis piper-tts-onnx-models, AIHeaven/piper_unofficial_voices.
+    - En el navegador: vits-web y piper-tts-web usan las mismas voces de Piper.
+    - Así que no se descargó nada: la voz es la misma, más aguda.
+    - En el celular, `pitch` 1,55 y `rate` 1,08 ("Infantil", por defecto) o 1,9 ("Muy infantil").
+    - En el PC, `TTS.agudo`: tono medio de 216 Hz normal, 283 infantil (×1,32) y 327 muy infantil (×1,55), sin cambiar la duración.
+    - Se elige en Personalidad → "Tipo de voz".
+- **Escenarios** (`web/escenarios.js`): playa del Caribe con garita del Morro (salsa y cumbia), la misma al atardecer (reguetón), escenario negro con luces tenues (rock ámbar, metal rojo), láseres con bola de espejos y rejilla (electrónica), noche con luna (balada), ciudad (rap), teatro (clásica rojo, jazz azul) y bombillos con confeti (pop).
+    - Laten con el compás (`--golpe`). Con escena, el suelo de cuadros del WebGL queda solo como sombra.
+    - Primera captura: el suelo de cuadros tapaba la parte de abajo de todas las escenas. Y en la página de prueba con 11 escenas, los degradados compartían id (todas salían con el cielo de la playa); ahora cada escena lleva su nombre en los ids.
+    - Comprobado en la app de verdad, en tamaño de celular, con Gemini y YouTube simulados (0 cupo): salsa → playa, rock → escenario, electrónica → láser; pausa → "Música en pausa" sin escena; "quita la música" → "Te escucho".
+- **YouTube bloqueó al Chrome sin pantalla** tras las pruebas del día: "Accede para confirmar que no eres un bot" en la ventana y error 150 en todos los videos dentro de la app.
+    - Antes, Píxel saltaba los 5 resultados y se callaba: paraba la música y cerraba la ventana sin decir nada.
+    - Ahora `videoFallo()` lo dice, deja la tarjeta "Abrir en YouTube" y la ventana queda con un aviso abajo (enlace al video y el recuadro de YouTube a la vista, por si pide iniciar sesión).
+    - No se intentó esquivar el bloqueo (por ejemplo, cambiando el user agent). `prueba_app.js musica` lo detecta y marca lo que necesita sonido como `OMIT`.
+    - También se acabó el cupo diario de la YouTube Data API (429). Píxel respondió con la tarjeta de siempre.
+- Error mío en un script de prueba: si fallaba, buscaba `window.nube` para borrar la cuenta anónima, pero `nube` no está en `window`. Quedó una cuenta anónima más sin borrar (sin datos), que se suma a las ~15 del ESP32.

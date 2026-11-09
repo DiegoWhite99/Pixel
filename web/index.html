@@ -30,6 +30,8 @@
       <a href="#dispositivos" data-vista="dispositivos">Dispositivos</a>
       <a href="#agente" data-vista="agente">Personalidad</a>
       <a href="#agenda" data-vista="agenda">Agenda</a>
+      <a href="#enfoque" data-vista="enfoque" id="tab-enfoque" hidden>Enfoque</a>
+      <a href="#notas" data-vista="notas" id="tab-notas" hidden>Notas</a>
       <a href="#cuentas" data-vista="cuentas">Cuentas</a>
     </nav>
   </div>
@@ -45,11 +47,13 @@
         <canvas id="cara" tabindex="0" aria-label="Píxel en 3D. Arrástrale la cara para estirarla."></canvas>
         <svg class="cara-plana" id="cara-plana" viewBox="0 0 200 200" hidden aria-hidden="true">
           <defs><radialGradient id="g-cara" cx="38%" cy="32%" r="70%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#cfe6f7"/></radialGradient>
-          <linearGradient id="g-led" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4dabf7"/><stop offset="1" stop-color="#20c997"/></linearGradient></defs>
+          <radialGradient id="g-ojo" cx="42%" cy="40%" r="60%"><stop offset="0" stop-color="#fffbe0"/><stop offset="0.45" stop-color="#ffd43b"/><stop offset="1" stop-color="#ff8c0a"/></radialGradient>
+          <filter id="f-brillo" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="7"/></filter></defs>
           <circle cx="100" cy="100" r="92" fill="url(#g-cara)" stroke="#d3e8f7" stroke-width="2"/>
-          <rect x="52" y="54" width="34" height="48" rx="11" fill="#13305a"/><rect x="114" y="54" width="34" height="48" rx="11" fill="#13305a"/>
-          <rect x="58" y="60" width="22" height="36" rx="7" fill="url(#g-led)"/><rect x="120" y="60" width="22" height="36" rx="7" fill="url(#g-led)"/>
-          <path d="M80 128q20 16 40 0" fill="none" stroke="#1c3a66" stroke-width="7" stroke-linecap="round"/>
+          <rect x="34" y="60" width="132" height="62" rx="31" fill="#0e2343" stroke="#4dabf7" stroke-opacity="0.55" stroke-width="2"/>
+          <circle cx="72" cy="91" r="20" fill="#ffb02e" opacity="0.75" filter="url(#f-brillo)"/><circle cx="128" cy="91" r="20" fill="#ffb02e" opacity="0.75" filter="url(#f-brillo)"/>
+          <circle cx="72" cy="91" r="16" fill="url(#g-ojo)"/><circle cx="128" cy="91" r="16" fill="url(#g-ojo)"/>
+          <circle cx="66" cy="85" r="4" fill="#fff" opacity="0.85"/><circle cx="122" cy="85" r="4" fill="#fff" opacity="0.85"/>
         </svg>
         <div class="zzz" id="zzz" hidden aria-hidden="true"><span>z</span><span>z</span><span>Z</span></div>
         <p class="pista" id="pista">Arrástrale la cara</p>
@@ -59,6 +63,37 @@
           <div class="estado"><span class="latido" id="latido"></span><span id="hero-estado">Conectando…</span></div>
           <p id="hero-sub">Un momento, estoy buscando el servidor.</p>
           <div class="acciones" id="hero-acciones" style="margin-top:12px" hidden><button class="btn primario grande" type="button" data-buscar-pixel>Buscar a Píxel</button></div>
+          <!-- Fase 12: Pixel en este celular (agente.js, solo en la app de internet) -->
+          <div class="oido" id="ag" hidden>
+            <button class="btn primario grande" type="button" id="ag-btn" aria-pressed="false">Escuchar</button>
+            <span class="oido-texto" id="ag-interino" aria-live="polite"></span>
+          </div>
+          <form class="form-linea ag-escribir" id="ag-escribir" autocomplete="off" hidden>
+            <input type="text" id="ag-texto" maxlength="300" placeholder="Escribe a Píxel" aria-label="Escribe a Píxel" enterkeyhint="send">
+            <button class="btn" type="submit">Enviar</button>
+          </form>
+          <p class="aviso oido-aviso" id="ag-aviso" hidden></p>
+          <div class="video" id="ag-video" hidden></div>
+          <!-- Fase 13: la musica suena aqui mismo (musica.js) -->
+          <div class="musica" id="ag-musica" hidden>
+            <div class="pantalla"><div id="ag-yt"></div></div>
+            <div class="musica-barra">
+              <div class="txt"><b id="mu-titulo"></b><small id="mu-estado"></small></div>
+              <button class="mini-btn grande" type="button" id="mu-pausa" aria-label="Pausar o seguir">❚❚</button>
+              <button class="mini-btn grande" type="button" id="mu-siguiente" aria-label="Siguiente">⏭</button>
+              <button class="mini-btn grande" type="button" id="mu-parar" aria-label="Parar">■</button>
+            </div>
+            <button class="btn" type="button" id="mu-app-yt" hidden>Abrir en la app de YouTube (ahí ya no la manejo por voz)</button>
+            <button class="btn primario" type="button" id="mu-sonido" hidden>🔊 Toca para activar el sonido</button>
+          </div>
+          <!-- Fase 13: lo que espera un "sí" (enviar un correo, borrar un evento...) -->
+          <div class="pomodoro-linea" id="ag-pomodoro" hidden></div>
+          <div class="confirmar nota-viva" id="ag-nota" hidden></div>
+          <div class="confirmar" id="ag-confirmar" hidden></div>
+          <div class="confirmar" id="ag-google" hidden>
+            <div class="txt"><b>Píxel necesita permiso de Google</b><small>Para tu Calendar y tu Gmail. Dura una hora.</small></div>
+            <button class="btn primario" type="button" data-conectar-google>Conectar Google</button>
+          </div>
         </div>
         <div class="card">
           <h3>Lo último que oí</h3>
@@ -93,16 +128,51 @@
   <section class="vista" id="v-dispositivos" hidden>
     <div class="cabecera">
       <div><h1>Dispositivos</h1><p class="sub">Altavoces y audífonos por Bluetooth, aparatos de tu red WiFi y los Píxel conectados.</p></div>
-      <button class="btn primario grande" type="button" data-agregar>+ Agregar dispositivo</button>
+      <button class="btn primario grande solo-pc" type="button" data-agregar>+ Agregar dispositivo</button>
     </div>
-    <div class="card">
+    <!-- Fase 13: aparatos que Pixel maneja a traves de un puente (aparatos.js, solo en la app de internet) -->
+    <div class="card" id="card-aparatos" hidden>
+      <div class="head"><div class="titulo"><div class="ico verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></div><h2>Aparatos de la casa</h2></div></div>
+      <p class="sub">Píxel los maneja por voz a través de un puente: "Píxel, apaga la tele", "Píxel, sube el volumen del PC".</p>
+      <div class="lista" id="ap-lista"></div>
+      <details class="mas"><summary>+ Agregar aparato</summary>
+        <form class="grupo" id="f-aparato" autocomplete="off">
+          <div class="form-fila">
+            <label class="campo">Nombre<input type="text" id="ap-nombre" maxlength="60" placeholder="Tele de la sala" required></label>
+            <label class="campo">Tipo<select id="ap-tipo"></select></label>
+          </div>
+          <label class="campo">¿Cómo lo maneja Píxel?<select id="ap-metodo"></select></label>
+          <p class="sub" id="ap-metodo-sub"></p>
+          <label class="campo">Puente<select id="ap-puente"></select></label>
+          <label class="campo" id="ap-campo-ip" hidden>IP del TV en tu WiFi<input type="text" id="ap-ip" inputmode="decimal"></label>
+          <div class="grupo" id="ap-campo-pin" hidden>
+            <label class="campo">Pin del relé en el ESP32<input type="number" id="ap-pin" min="1" max="47" value="18"></label>
+            <label class="check"><input type="checkbox" id="ap-invertido"> Mi relé se activa con nivel bajo (si "encender" lo apaga, marca esto)</label>
+          </div>
+          <label class="campo" id="ap-campo-mac" hidden>MAC del PC<input type="text" id="ap-mac" placeholder="aa:bb:cc:dd:ee:ff"></label>
+          <div class="grupo" id="ap-campo-url" hidden>
+            <label class="campo">URL para encender<input type="text" id="ap-url-on" placeholder="http://192.168.1.60/relay/0?turn=on"></label>
+            <label class="campo">URL para apagar<input type="text" id="ap-url-off" placeholder="http://192.168.1.60/relay/0?turn=off"></label>
+          </div>
+          <div class="acciones"><button class="btn primario" type="submit">Agregar</button></div>
+        </form>
+      </details>
+    </div>
+    <div class="card" id="card-puentes" hidden>
+      <div class="head"><div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 18c0-6 4-10 8-10s8 4 8 10M2 18h20M8 18v-4M16 18v-4M12 18v-6"/></svg></div><h2>Puentes</h2></div>
+        <button class="btn primario" type="button" id="ap-ble-btn">Agregar ESP32 por Bluetooth</button></div>
+      <p class="sub">El puente está en tu casa y recibe las órdenes de Píxel por internet: el ESP32 (infrarrojo, relé, encender el PC por red) o el PC con el servidor (el propio PC y un TV Android).</p>
+      <div class="lista" id="ap-puentes"></div>
+      <div id="ap-ble" hidden></div>
+    </div>
+    <div class="card solo-pc">
       <div class="head"><div class="titulo"><div class="ico verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg></div><h2>Mis dispositivos</h2></div>
         <span class="chip" id="musica-chip" hidden></span></div>
       <div id="lista-mios" class="lista"></div>
     </div>
-    <div class="cabecera"><h2>Píxel conectados</h2><span class="sub" id="pixeles-sub"></span></div>
-    <div class="lista" id="lista-disp"></div>
-    <div class="card">
+    <div class="cabecera solo-pc"><h2>Píxel conectados</h2><span class="sub" id="pixeles-sub"></span></div>
+    <div class="lista solo-pc" id="lista-disp"></div>
+    <div class="card solo-pc">
       <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div><h2>Este servidor</h2></div>
       <dl class="kv" id="kv-servidor"></dl>
     </div>
@@ -115,14 +185,24 @@
       <div class="head"><h2>Palabra de activación</h2><span class="chip">Fija</span></div>
       <p class="sub">Se dice <b id="activacion">Píxel</b> antes de cada orden. Está ajustada al reconocimiento de voz y no se cambia desde aquí.</p>
 
-      <h2>Por dónde habla</h2>
-      <div class="voces">
-        <label class="voz"><input type="radio" name="salida_voz" value="esp32"><span><b>Por el ESP32</b><br><small class="sub">su propio altavoz</small></span></label>
-        <label class="voz"><input type="radio" name="salida_voz" value="pc"><span><b>Por el altavoz del PC</b><br><small class="sub" id="salida-pc-nota">el altavoz Bluetooth si está conectado</small></span></label>
+      <div class="grupo" id="salida-bloque">
+        <h2>Por dónde habla</h2>
+        <div class="voces">
+          <label class="voz"><input type="radio" name="salida_voz" value="esp32"><span><b>Por el ESP32</b><br><small class="sub">su propio altavoz</small></span></label>
+          <label class="voz"><input type="radio" name="salida_voz" value="pc"><span><b>Por el altavoz del PC</b><br><small class="sub" id="salida-pc-nota">el altavoz Bluetooth si está conectado</small></span></label>
+        </div>
       </div>
 
       <h2>Voz</h2>
+      <p class="sub" id="voces-nota" hidden></p>
       <div class="voces" id="voces"></div>
+      <h2>Tipo de voz</h2>
+      <div class="segmento" role="radiogroup" aria-label="Tipo de voz">
+        <label><input type="radio" name="tono" value="normal">Normal</label>
+        <label><input type="radio" name="tono" value="infantil">Infantil</label>
+        <label><input type="radio" name="tono" value="muy_infantil">Muy infantil</label>
+      </div>
+      <p class="sub">Infantil: la misma voz, más aguda, como en los dibujos animados (no existen voces de niño en español para descargar).</p>
       <div class="acciones"><button class="btn suave" type="button" id="guardar-probar">Guardar y probar</button></div>
 
       <h2>Personalidad</h2>
@@ -143,21 +223,151 @@
       </div>
       <div class="acciones"><button class="btn primario" type="submit">Guardar cambios</button></div>
     </form>
+
+    <!-- Fase 13: donde suena la musica (musica.js, solo en la app de internet) -->
+    <div class="card" id="card-musica" hidden>
+      <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div><h2>Dónde pongo la música</h2></div>
+      <div class="segmento" role="radiogroup" aria-label="Dónde suena la música">
+        <label><input type="radio" name="musica-donde" value="ventana">En otra ventana</label>
+        <label><input type="radio" name="musica-donde" value="app">Aquí en la app</label>
+        <label><input type="radio" name="musica-donde" value="pc">En el PC</label>
+      </div>
+      <p class="sub">En otra ventana: se abre la ventana de música de Píxel con YouTube y la manejas toda por voz ("para", "cambia de canción", "más alto"). La primera vez permite las ventanas emergentes de esta página (el icono de la barra de direcciones). En el celular suena aquí: una página web no puede manejar la app de YouTube. También por voz: "Píxel, pon Queen en el PC".</p>
+    </div>
+
+    <!-- Fase 13: el cerebro de Pixel (cerebro.js, solo en la app de internet) -->
+    <div class="card" id="card-cerebro" hidden>
+      <div class="head">
+        <div class="titulo"><div class="ico verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 2 5 3 3 0 0 0 6 1V5a2 2 0 0 0-3-1zM15 4a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-2 5 3 3 0 0 1-6 1"/></svg></div><h2>Lo que Píxel sabe de ti</h2></div>
+        <span class="chip" id="cb-chip">…</span>
+      </div>
+      <p class="sub">Su cerebro: notas que usa para responderte. Las guarda cuando le cuentas algo ("Píxel, recuerda que mi hermana se llama Laura") y las puedes cambiar aquí o en Obsidian, en el PC. Las <b>Reglas para Píxel</b> las cumple siempre.</p>
+      <label class="check"><input type="checkbox" id="cb-aprender"> Aprender solo de lo que hablamos (al acabar cada conversación)</label>
+      <div class="fila" id="cb-obsidian" hidden></div>
+      <div class="presets filtros" id="cb-filtros"></div>
+      <div class="lista" id="cb-lista"></div>
+      <form class="grupo" id="cb-form" autocomplete="off">
+        <h3 id="cb-form-titulo">Nueva nota</h3>
+        <div class="form-fila">
+          <label class="campo">Tema<input type="text" id="cb-titulo" maxlength="100" placeholder="Música favorita" required></label>
+          <label class="campo">Carpeta<select id="cb-tipo"></select></label>
+        </div>
+        <label class="campo">Qué debe saber Píxel<textarea id="cb-texto" maxlength="4000" placeholder="Le encanta el rock de los 80, sobre todo Queen." required></textarea></label>
+        <label class="check"><input type="checkbox" id="cb-fijo"> Tenerla siempre presente</label>
+        <div class="acciones"><button class="btn primario" type="submit">Guardar nota</button><button class="btn" type="button" id="cb-cancelar" hidden>Cancelar</button></div>
+      </form>
+    </div>
   </section>
 
   <!-- AGENDA -->
   <section class="vista" id="v-agenda" hidden>
-    <div><h1>Agenda</h1><p class="sub">Lo que se creó por voz. Los recordatorios suenan a su hora.</p></div>
+    <div><h1>Agenda</h1><p class="sub" id="agenda-sub">Lo que se creó por voz. Los recordatorios suenan a su hora.</p></div>
     <div class="grid">
       <div class="card"><h2>Recordatorios</h2><div class="lista" id="lista-recordatorios"></div><p class="sub">"Píxel, recuérdame comprar pan en 10 minutos"</p></div>
-      <div class="card"><h2>Eventos del calendario</h2><div class="lista" id="lista-eventos"></div><p class="sub">"Píxel, agenda la reunión mañana a las 3"</p></div>
+      <div class="card" id="card-eventos"><h2>Eventos del calendario</h2><div class="lista" id="lista-eventos"></div><p class="sub">"Píxel, agenda la reunión mañana a las 3"</p></div>
     </div>
+  </section>
+
+  <!-- ENFOQUE (Fase 13, tiempo.js: solo en la app de internet) -->
+  <section class="vista" id="v-enfoque" hidden>
+    <div><h1>Enfoque</h1><p class="sub">Elige cómo quieres organizar tu tiempo. Todo se maneja también por voz: "Píxel, empieza un pomodoro", "Píxel, ¿qué hago primero?".</p></div>
+    <form class="segmento" id="f-metodo" role="radiogroup" aria-label="Método de enfoque">
+      <label><input type="radio" name="metodo" value="pomodoro">Pomodoro</label>
+      <label><input type="radio" name="metodo" value="eisenhower">Eisenhower</label>
+      <label><input type="radio" name="metodo" value="ambos">Los dos</label>
+    </form>
+    <div class="grid enfoque">
+      <div class="card" id="card-pomodoro">
+        <div class="head"><div class="titulo"><div class="ico verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6M12 2v3"/></svg></div><h2>Pomodoro</h2></div></div>
+        <div class="anillo" id="pm-anillo"><div><b id="pm-reloj">25:00</b><small id="pm-fase">Listo para empezar</small></div></div>
+        <p class="sub centro" id="pm-tarea"></p>
+        <div class="ciclos" id="pm-ciclos"></div>
+        <label class="campo">¿En qué vas a trabajar?<input type="text" id="pm-que" maxlength="120" placeholder="La tarea de física (opcional)"></label>
+        <div class="acciones centro">
+          <button class="btn primario grande" type="button" id="pm-empezar">Empezar</button>
+          <button class="btn grande" type="button" id="pm-pausar" hidden>Pausar</button>
+          <button class="btn primario grande" type="button" id="pm-seguir" hidden>Seguir</button>
+          <button class="btn peligro" type="button" id="pm-parar" hidden>Parar</button>
+        </div>
+        <details class="mas"><summary>Minutos</summary>
+          <form class="form-fila cuatro" id="f-pomo-cfg">
+            <label class="campo">Trabajo<input type="number" id="pm-trabajo" min="1" max="120"></label>
+            <label class="campo">Descanso<input type="number" id="pm-descanso" min="1" max="60"></label>
+            <label class="campo">Largo<input type="number" id="pm-largo" min="1" max="90"></label>
+            <label class="campo">Ciclos<input type="number" id="pm-ciclos-n" min="1" max="12"></label>
+            <button class="btn primario" type="submit">Guardar</button>
+          </form>
+        </details>
+      </div>
+      <div class="card ancha" id="card-matriz">
+        <div class="head"><div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg></div><h2>Matriz de Eisenhower</h2></div></div>
+        <div class="matriz">
+          <div class="cuadro hacer"><h3>Hacer ya <small>urgente e importante</small></h3><div id="mx-hacer"></div></div>
+          <div class="cuadro planificar"><h3>Planificar <small>importante, no urgente</small></h3><div id="mx-planificar"></div></div>
+          <div class="cuadro delegar"><h3>Delegar <small>urgente, no importante</small></h3><div id="mx-delegar"></div></div>
+          <div class="cuadro eliminar"><h3>Eliminar <small>ni urgente ni importante</small></h3><div id="mx-eliminar"></div></div>
+        </div>
+        <form class="form-tarea" id="f-tarea" autocomplete="off">
+          <input type="text" id="mx-texto" maxlength="200" placeholder="Nueva tarea" aria-label="Nueva tarea" required>
+          <label class="check"><input type="checkbox" id="mx-urgente"> Urgente</label>
+          <label class="check"><input type="checkbox" id="mx-importante"> Importante</label>
+          <button class="btn primario" type="submit">Añadir</button>
+        </form>
+        <p class="sub" id="mx-hechas"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- NOTAS (Fase 13, apuntes.js: solo en la app de internet) -->
+  <section class="vista" id="v-notas" hidden>
+    <div class="cabecera">
+      <div><h1>Notas</h1><p class="sub">Di "Píxel, toma nota" (o "toma nota de la clase de física") y dicta sin decir "Píxel". Para acabar: "Píxel, termina la nota".</p></div>
+      <button class="btn primario grande" type="button" id="nt-dictar">Dictar una nota</button>
+    </div>
+    <div class="nt-filtros" id="nt-filtros" hidden>
+      <div class="presets filtros" role="group" aria-label="Por fecha">
+        <button type="button" data-nota-fecha="todas">Todas</button>
+        <button type="button" data-nota-fecha="hoy">Hoy</button>
+        <button type="button" data-nota-fecha="ayer">Ayer</button>
+        <button type="button" data-nota-fecha="semana">7 días</button>
+        <input type="date" id="nt-dia" aria-label="Un día concreto">
+      </div>
+      <div class="presets filtros" id="nt-asuntos" role="group" aria-label="Por asunto"></div>
+      <input type="search" id="nt-buscar" placeholder="Buscar en las notas" aria-label="Buscar en las notas" autocomplete="off">
+      <p class="sub" id="nt-cuenta"></p>
+    </div>
+    <div class="libreta" id="nt-lista"></div>
   </section>
 
   <!-- CUENTAS -->
   <section class="vista" id="v-cuentas" hidden>
     <div><h1>Cuentas</h1><p class="sub">Vincula servicios para que Píxel pueda usar tu calendario y enviar correos.</p></div>
-    <div class="card">
+    <!-- Fase 13: Calendar y Gmail desde el celular (google.js, solo en la app de internet) -->
+    <div class="card" id="card-google-app" hidden>
+      <div class="head">
+        <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></div><h2>Google Calendar y Gmail</h2></div>
+        <span class="chip" id="ga-chip">…</span>
+      </div>
+      <p class="sub" id="ga-info"></p>
+      <div class="acciones"><button class="btn primario" type="button" id="ga-conectar">Conectar Calendar y Gmail</button><button class="btn" type="button" id="ga-salir" hidden>Desconectar</button></div>
+      <p class="nota">Píxel nunca envía un correo sin que digas «envíalo» o toques Enviar.</p>
+    </div>
+    <div class="card" id="card-gemini">
+      <div class="head">
+        <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3c.6 4.6 3.4 7.4 8 8-4.6.6-7.4 3.4-8 8-.6-4.6-3.4-7.4-8-8 4.6-.6 7.4-3.4 8-8Z"/></svg></div><h2>Gemini</h2></div>
+        <span class="chip" id="gm-chip">Sin clave</span>
+      </div>
+      <p class="sub">Con una clave de Gemini, Píxel piensa con la IA de Google por internet. Sin clave, o si se cae internet, responde la IA local del PC.</p>
+      <form class="form-linea" id="f-gemini" autocomplete="off">
+        <input type="password" id="gm-clave" placeholder="Pega aquí la clave" autocomplete="off" spellcheck="false" aria-label="Clave de Gemini">
+        <button class="btn primario" type="submit">Guardar</button>
+        <button class="btn" type="button" id="gm-probar">Probar</button>
+        <button class="btn peligro" type="button" id="gm-quitar">Quitar clave</button>
+      </form>
+      <p class="sub" id="gm-info"></p>
+      <p class="aviso" id="gm-aviso" hidden></p>
+    </div>
+    <div class="card" id="card-google">
       <div class="head">
         <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 12h8M12 3v9"/></svg></div><h2>Google</h2></div>
         <span class="chip" id="g-chip">No vinculada</span>
@@ -173,7 +383,7 @@
       </div>
       <div class="grupo" id="nube-cuerpo"></div>
     </div>
-    <div class="card">
+    <div class="card" id="card-contactos">
       <div class="titulo"><div class="ico verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></div><h2>Contactos para el correo</h2></div>
       <p class="sub">Píxel solo puede escribir a estas personas. Di: "Píxel, manda un correo a Ana diciendo que llego tarde".</p>
       <div class="lista" id="lista-contactos"></div>
@@ -262,7 +472,9 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
+<script src="escenarios.js"></script>
 <script src="cara3d.js"></script>
+<script src="claves.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -26,7 +26,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import acciones
 import bluetooth_pc
+import gemini
 import nube
+import puente_pc
 import recordatorios
 import red_wifi
 
@@ -47,7 +49,9 @@ TIPOS_MIME = {".html": "text/html; charset=utf-8", ".js": "text/javascript; char
               ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
               ".json": "application/json; charset=utf-8", ".webmanifest": "application/manifest+json"}
 
-AJUSTES = {"voz": "sharvard-f", "personalidad": "", "respuesta": "normal", "salida_voz": "esp32"}
+# Fase 13: tipo de voz (tts.Tts.agudo): infantil = mas aguda sin hablar mas rapido (no hay voces de nino en espanol)
+TONOS = {"normal": 1.0, "infantil": 1.32, "muy_infantil": 1.55}
+AJUSTES = {"voz": "sharvard-f", "personalidad": "", "respuesta": "normal", "salida_voz": "esp32", "tono": "infantil"}
 SALIDAS_VOZ = ("esp32", "pc")
 ACEPTADOS = {}      # mac -> {"nombre", "aceptado"} (Bluetooth del ESP32) o + {"via": "wifi", "ip", "tipo", "fabricante"}
 _RE_MAC = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
@@ -106,11 +110,12 @@ def aplicar_ajustes():
         system += " Tu estilo: %s" % AJUSTES["personalidad"]
     S.LLM_SYSTEM = system
     with S._sesiones_lock:
-        for sesion in S.SESIONES:
+        for sesion in S.SESIONES + list(S.MOVILES.values()):
             sesion.llm.system = system
     S.SALIDA_VOZ = AJUSTES["salida_voz"]
-    S.log("panel: voz %s por %s, respuestas %s, personalidad %r"
-          % (voz[0], AJUSTES["salida_voz"], AJUSTES["respuesta"], AJUSTES["personalidad"]))
+    S.TTS.agudo = TONOS.get(AJUSTES.get("tono"), 1.0)
+    S.log("panel: voz %s (%s) por %s, respuestas %s, personalidad %r"
+          % (voz[0], AJUSTES.get("tono", "normal"), AJUSTES["salida_voz"], AJUSTES["respuesta"], AJUSTES["personalidad"]))
 
 
 def cargar_ajustes():
@@ -184,10 +189,13 @@ def estado():
                      "ollama": _ollama_ok(), "stt": S.STT_MODELO, "llm": S.LLM_MODELO},
         "dispositivos": dispositivos,
         "activos": len(activos),
+        "celulares": nube.celulares(),      # Fase 11: las apps enlazadas que hacen de Pixel, escuchen o no
         "mis_dispositivos": mios,
         "bt_pc": bluetooth_pc.estado(),
         "wifi": wifi,
         "nube": nube.estado_local(),
+        "puente": puente_pc.estado(),       # Fase 13: lo que este PC sabe hacer como puente de aparatos
+        "obsidian": _obsidian(),
         "portal": {"red": "Pixel asistente de voz", "clave": "pixel2026", "direccion": "192.168.4.1"},
         "agente": {"activacion": S.ACTIVACION, "ajustes": dict(AJUSTES),
                    "voces": [{"id": v[0], "nombre": v[1]} for v in VOCES],
@@ -198,9 +206,16 @@ def estado():
                        "credenciales": os.path.exists(_ruta(S.GOOGLE_CLIENTE)),
                        "estado": _google["estado"], "error": _google["error"]},
             "contactos": [{"nombre": n, "correo": c} for n, c in acciones.CONTACTOS.items()],
+            "gemini": gemini.estado(),          # sin la clave: solo si hay, el modelo y el ultimo error
         },
         "agenda": {"recordatorios": pendientes, "eventos": eventos},
     }
+
+
+def _obsidian():
+    import sys
+    m = sys.modules.get("obsidian")
+    return m.estado() if m else {"activa": False, "cuentas": 0, "error": "", "boveda": ""}
 
 
 def voz():
@@ -221,13 +236,14 @@ class ErrorPanel(Exception):
 def guardar_agente(d):
     voz, respuesta = d.get("voz"), d.get("respuesta")
     salida = d.get("salida_voz") or AJUSTES["salida_voz"]
+    tono = d.get("tono") or AJUSTES.get("tono", "normal")
     personalidad = (d.get("personalidad") or "").strip()
-    if voz not in [v[0] for v in VOCES] or respuesta not in RESPUESTAS or salida not in SALIDAS_VOZ:
-        raise ErrorPanel("Voz, salida o largo de respuesta desconocidos.")
+    if voz not in [v[0] for v in VOCES] or respuesta not in RESPUESTAS or salida not in SALIDAS_VOZ or tono not in TONOS:
+        raise ErrorPanel("Voz, tipo de voz, salida o largo de respuesta desconocidos.")
     if len(personalidad) > PERSONALIDAD_MAX:
         raise ErrorPanel("La personalidad admite hasta %d caracteres." % PERSONALIDAD_MAX)
     with _lock:
-        AJUSTES.update(voz=voz, respuesta=respuesta, personalidad=personalidad, salida_voz=salida)
+        AJUSTES.update(voz=voz, respuesta=respuesta, personalidad=personalidad, salida_voz=salida, tono=tono)
         _guardar_json(_ruta(S.AJUSTES_ARCHIVO), AJUSTES)
         aplicar_ajustes()
     return {"mensaje": "Guardado. Las próximas respuestas ya lo usan."}
@@ -241,14 +257,19 @@ def probar_voz(d):
             raise ErrorPanel("El PC no tiene salida de audio.")
         threading.Thread(target=lambda: S.SALIDA_PC.reproducir(S.TTS.sintetizar(PRUEBA_PC)), daemon=True).start()
         return {"mensaje": "Escucha: suena por %s." % bluetooth_pc.estado()["musica_en"]}
-    with S._sesiones_lock:
-        sesion = S.SESIONES[-1] if S.SESIONES else None
-    if sesion is None:
-        raise ErrorPanel("No hay ningún ESP32 conectado para oír la prueba.")
     if donde == "esp32":
+        with S._sesiones_lock:
+            sesion = S.SESIONES[-1] if S.SESIONES else None
+        if sesion is None:
+            raise ErrorPanel("No hay ningún ESP32 conectado para oír la prueba.")
         sesion.cola.put(("decir_esp32", PRUEBA_VOZ % S.ACTIVACION))
         return {"mensaje": "Escucha el altavoz de Píxel."}
+    sesion = S.sesion_que_habla()       # sin ESP32, el celular que escucha (Fase 11)
+    if sesion is None:
+        raise ErrorPanel("No hay ningún ESP32 conectado ni ningún celular escuchando para oír la prueba.")
     sesion.cola.put(("decir", PRUEBA_VOZ % S.ACTIVACION))
+    if isinstance(sesion, S.SesionMovil):
+        return {"mensaje": "Escucha el celular."}
     return {"mensaje": "Escucha: suena por el altavoz del PC." if AJUSTES["salida_voz"] == "pc" else "Escucha el ESP32."}
 
 
@@ -376,6 +397,31 @@ def vincular_google(d):
     return {"mensaje": "Se abrió Google en el navegador del PC. Entra con la cuenta y acepta."}
 
 
+def guardar_gemini(d):
+    """Guarda la clave de Gemini (vacia = quitarla) y la prueba. Se usa desde ya, sin reiniciar."""
+    clave = (d.get("clave") or "").strip()
+    if clave and (len(clave) < 20 or len(clave) > 200 or any(c.isspace() for c in clave)):
+        raise ErrorPanel("Esa clave no parece de Gemini: cópiala entera desde Google AI Studio.")
+    gemini.guardar(clave)
+    if not clave:
+        S.log("panel: clave de Gemini quitada; responde Ollama")
+        return {"mensaje": "Clave quitada. Píxel vuelve a usar la IA local."}
+    S.log("panel: clave de Gemini guardada")
+    ok, texto = gemini.probar()
+    S.log("panel: prueba de Gemini: %s" % texto)
+    if not ok:
+        raise ErrorPanel("Clave guardada, pero falla. " + texto)
+    return {"mensaje": "Clave guardada. " + texto}
+
+
+def probar_gemini(d):
+    ok, texto = gemini.probar()
+    S.log("panel: prueba de Gemini: %s" % texto)
+    if not ok:
+        raise ErrorPanel(texto)
+    return {"mensaje": texto}
+
+
 RUTAS_POST = {
     "/api/agente": guardar_agente,
     "/api/agente/probar": probar_voz,
@@ -396,6 +442,16 @@ RUTAS_POST = {
     "/api/bt/desconectar": _bt(bluetooth_pc.desconectar, "Desconectado."),
     "/api/bt/olvidar": _bt(bluetooth_pc.olvidar, "Olvidado."),
     "/api/bt/musica": _bt(bluetooth_pc.usar_para_musica, "Salida de la música cambiada."),
+}
+
+# Fase 13: el PC como puente de aparatos (el propio PC, TV Android, Wake-on-LAN, http)
+RUTAS_POST.update(puente_pc.rutas(ErrorPanel))
+
+# Solo desde el panel local: no van en RUTAS_POST porque nube.py ejecuta esas como ordenes
+# que llegan de internet, y la clave de Gemini solo se pone o se quita desde la red de casa.
+RUTAS_SOLO_LOCAL = {
+    "/api/gemini/clave": guardar_gemini,
+    "/api/gemini/probar": probar_gemini,
 }
 
 
@@ -435,7 +491,7 @@ class Manejador(BaseHTTPRequestHandler):
             self._responder(200, f.read(), tipo)
 
     def do_POST(self):
-        funcion = RUTAS_POST.get(self.path)
+        funcion = RUTAS_POST.get(self.path) or RUTAS_SOLO_LOCAL.get(self.path)
         largo = int(self.headers.get("Content-Length") or 0)
         if self._origen_ajeno():
             self._responder(403, {"error": "Origen no permitido."})
@@ -457,6 +513,7 @@ def iniciar(modulo_servidor):
     """Carga los ajustes guardados y abre el panel en un hilo."""
     global S
     S = modulo_servidor
+    puente_pc.S = modulo_servidor
     cargar_ajustes()
     ruta = _ruta(S.DISPOSITIVOS_ARCHIVO)
     if os.path.exists(ruta):
