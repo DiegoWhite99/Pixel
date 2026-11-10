@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Asistente de voz para una demo de feria, todo en el PC salvo la IA de Gemini, que es opcional (Fase 11). Un ESP32-S3 (micrófono INMP441; su firmware **no** está en este repo) manda audio por TCP; el servidor en Python lo transcribe (faster-whisper), decide qué hacer (acciones por regex, clasificador LLM o respuesta libre del LLM vía Ollama) y devuelve voz sintetizada (Piper). Palabra de activación: "Píxel" (antes "Nova", que Whisper oía como "No, no."; ver `memoria.md`).
 
-Git: https://github.com/DiegoWhite99/Pixel, **público**. Ahí no entran claves, grabaciones ni datos personales: ver `.gitignore`. El 9 nov se fusionó `vinculacion_movil` (Fases 11 a 13) en `main`; el trabajo nuevo sigue en `vinculacion_movil`. El repositorio tiene su propio `core.sshCommand` con `~/.ssh/id_ed25519_wikiia`: la llave por defecto, `id_ed25519`, es una deploy key del repo AGATA, y GitHub la rechaza aquí. No hay `requirements.txt` ni linter; las únicas pruebas son las de la Fase 13 (`tools/prueba_*`). Las dependencias viven en `.venv/` (Python 3.10: faster-whisper 1.2.1, piper-tts 1.8.0, numpy, yt-dlp y, desde la Fase 13, androidtvremote2 0.3.3); `venv/` es una copia con los mismos paquetes que no se usa. Ollama corre aparte en `127.0.0.1:11434` con el modelo `qwen2.5:3b`. Con clave de Gemini, Gemini responde y Ollama queda de respaldo (ver **Gemini**).
+Git: https://github.com/DiegoWhite99/Pixel, **público**. Ahí no entran claves, grabaciones ni datos personales: ver `.gitignore`. El 9 nov se fusionó `vinculacion_movil` (Fases 11 a 13) en `main`; el trabajo nuevo sigue en `vinculacion_movil`. Versiones: etiquetas `vX.Y.Z` (X cambio grande, Y funciones nuevas, Z arreglos), con su historia en `README.md` (tabla y una sección por versión: al publicar una, se escribe ahí). `v1.0.0`, `v1.2.1`, `v1.3.0` y `v1.3.1` son del 10 nov; `v1.3.1` está publicada y `main` apunta a ella. El repositorio tiene su propio `core.sshCommand` con `~/.ssh/id_ed25519_wikiia`: la llave por defecto, `id_ed25519`, es una deploy key del repo AGATA, y GitHub la rechaza aquí. No hay `requirements.txt` ni linter; las únicas pruebas son las de la Fase 13 (`tools/prueba_*`). Las dependencias viven en `.venv/` (Python 3.10: faster-whisper 1.2.1, piper-tts 1.8.0, numpy, yt-dlp y, desde la Fase 13, androidtvremote2 0.3.3); `venv/` es una copia con los mismos paquetes que no se usa. Ollama corre aparte en `127.0.0.1:11434` con el modelo `qwen2.5:3b`. Con clave de Gemini, Gemini responde y Ollama queda de respaldo (ver **Gemini**).
 
 ## Comandos
 
@@ -55,11 +55,12 @@ Probar la web en un Chrome sin pantalla (la cara usa WebGL): `puppeteer-core` in
 
 Buscar en la red WiFi sin el servidor: `.venv/bin/python red_wifi.py` (tarda unos 10 s).
 
-Pruebas de la Fase 13 (las únicas automáticas del proyecto):
+Pruebas de las Fases 13 y 14 (las únicas automáticas del proyecto):
 
 ```bash
 node tools/prueba_modulos.js                 # funciones puras de web/*.js en Node, sin página (segundos)
 .venv/bin/python tools/prueba_obsidian.py    # sincronización con Obsidian, con base de datos falsa
+.venv/bin/python tools/prueba_puente_pc.py    # WhatsApp en el PC (xdotool y xdg-open sustituidos: no envía nada)
 # de punta a punta: Chrome sin pantalla, Gemini y Firebase de verdad (cuenta anónima que se borra al final),
 # Google simulado y un ESP32 simulado (tools/puente_simulado.py). Gasta ~35 peticiones de Gemini.
 python3 -m http.server 8099 -d web &
@@ -327,6 +328,55 @@ La parte `musica` necesita que YouTube suene en Chrome sin pantalla. Tras muchas
     - Hay una carpeta por tipo, el nombre del archivo es el título y lleva un frontmatter con id, tipo y fijo. Gana el cambio más nuevo, y lo borrado en un lado se borra en el otro. `.pixel-sync.json` recuerda lo sincronizado.
     - Solo para las cuentas que lo activan en la app: el botón escribe `usuarios/<uid>/confio/<pid>`, y las reglas solo dejan leer el cerebro así.
     - Obsidian 1.15 está instalado como AppImage en `~/Aplicaciones/obsidian`, con un acceso en el menú y la bóveda registrada en `~/.config/obsidian/obsidian.json`.
+
+**Fase 14: segunda fase** (10 nov, rama `vinculacion_movil`, después de `v1.0.0`). El plan del usuario: aparatos y ESP32 listos para verificar, Google Calendar de verdad, la regla del correo, Pomodoro/Eisenhower en la pantalla principal y el mapa del cerebro como en Obsidian.
+- **Inicio cambia con el enfoque** (`tiempo.js`; pedido: "cuando invoque esta función, que cambie la pantalla principal"):
+    - Con un pomodoro en marcha, `hero()` pone "Enfoque · 24:57" (o "Descanso", "Pomodoro en pausa") y `agente.js` marca `.hero[data-modo]` (`pomodoro`, `descanso`, `matriz`; la música sigue con `.modo-musica`). Hay un anillo rojo con el tiempo alrededor de Pixel (`#escena-pomo`) y la tarjeta `#modo-enfoque` con Pausar/Seguir, "Ya terminé" (acaba la fase: `saltarFase`) y Parar. Al empezar un pomodoro o la guía se va a Inicio (`irAInicio`).
+    - Mientras se trabaja, `humor.js` no se duerme ni hace payasadas (`PixelTiempo.enfocado()`).
+    - **Guía de Eisenhower** sin Gemini: "Píxel, organiza mis tareas" (o "la matriz de Eisenhower", o el botón "Guíame" de Enfoque, o la herramienta `guiar_matriz`). Con el gancho `dictar` oye sin "Píxel": pide una tarea, pregunta si es urgente y si es importante (lo que ya dijo no lo pregunta: `leerTarea`), la guarda y al decir "listo" resume por cuadrante, dice por dónde empezar y ofrece un pomodoro con esa (una confirmación: basta "sí"). Se contesta también con botones o escribiendo. "Cancela" sale; 2 min sin contestar la cierra.
+    - Atajos sin Gemini: "empieza un pomodoro (de 50 minutos) (para X)", "pausa / sigue / para el pomodoro", "¿cuánto queda?" (solo con uno en marcha) y "¿qué hago primero?".
+    - **"Píxel, modo enfoque"** (atajo `pidoEnfoque`, o la herramienta `modo_enfoque`): Inicio muestra las dos herramientas (`htmlEnfoque`, guía en el paso `inicio`) y Píxel propone empezar por la matriz. "Sí" o "matriz" abre la guía; "pomodoro" va directo al plan. Una tira de pasos (`pasosEnfoque`: 1 ordenar → 2 pomodoro por tarea) marca dónde va.
+    - Ojo con los nombres de clase de la tarjeta `#modo-enfoque`: la primera versión usaba `.enfoque`, que es la rejilla de 2 columnas de la página Enfoque, y en el PC (más de 760 px) partía la tarjeta en dos. La del modo enfoque se llama `.elegir`, y la rejilla ahora es `.grid.enfoque`.
+    - **Plan: un pomodoro para cada tarea.** Al acabar la guía, con 2 o más tareas importantes, ofrece `empezarPlan()`: las de Hacer ya y Planificar en orden (`planDeTareas`, como mucho 12). El pomodoro guarda `plan` (texto JSON `[{id, texto}]`), `paso` y `seguir` (reglas publicadas el 10 nov).
+        - Al acabar cada pomodoro pregunta "¿La terminaste?" (`t.pregunta`, se contesta en el descanso sin "Píxel" o con los botones de la tarjeta). "Sí" la tacha. "Aún no" pone `seguir` y el siguiente pomodoro repite esa tarea (`total` + 1). Sin respuesta, sigue con la siguiente y la otra queda pendiente en la matriz.
+        - La transacción de `revisar()` elige la tarea del siguiente pomodoro (`avanzarPlan`, saltando las ya hechas). Sin más tareas, pasa al descanso largo: "¡Terminaste tu plan de enfoque!". "Con esa" es la tarea que Píxel acaba de proponer (`t.sugerida`). Una pregunta ("¿qué es un pomodoro?") va a Gemini.
+- **Mapa del cerebro** (`web/mapa.js` + `grafo()`/`enlaces()` de `cerebro.js`; pedido: "un visual de cómo se forman los nodos de conexión en Obsidian"): en Personalidad, un grafo de fuerzas en canvas como el de Obsidian. "Tú" en el centro, una burbuja por carpeta y sus notas; las notas que se nombran (su título con palabras completas, o `[[Título]]`) van unidas. Se arrastra y se toca (sale la nota y con qué se conecta). Las etiquetas que chocan se esconden. `MapaCerebro` es un `const` global (no está en `window`).
+    - `obsidian.py` dibuja lo mismo en Obsidian: al pie de cada nota un bloque desde `MARCA` (`<!-- pixel:enlaces`) con su carpeta y las notas que nombra; notas índice `Tú.md` y una por carpeta (con `pixel: indice` en la cabecera; no pisa un archivo del usuario con ese nombre); colores por tipo en `.obsidian/graph.json` si el usuario no puso los suyos (los mismos que `COLORES` de `cerebro.js`). El bloque se quita al leer y el hash de la nota se calcula sin él: rehacerlo no se sube a la app.
+    - `enlaces()` está en los dos lados (Python y JS): las pruebas usan las mismas notas de ejemplo y deben dar los mismos pares.
+- **Probar un puente** (Dispositivos → "Probar", o "Píxel, prueba el ESP32 / el PC", sin Gemini): `probarPuente()` en `aparatos.js`, sin piezas.
+    - ESP32: la orden `/api/eco` (no existe: si contesta "Esa orden no existe en el ESP32", recibe y contesta) y luego `http` al panel del PC (`/api/voz`) por el WiFi de casa, si el PC está en línea. "Esta app no es mi dueña" = hay que volver a enlazarlo.
+    - PC: `/api/pc {accion: "probar"}` (`puente_pc.diagnostico()`, solo lee): volumen, reproductor (playerctl) y TV. El TV cuenta como emparejado solo si está en `tv_emparejados.json` (se escribe al acertar el código; el certificado se crea antes).
+    - `tools/puente_simulado.py` hace el `http` de verdad, con el mismo filtro de red de casa que el firmware.
+- **Google con la cuenta real**: Cuentas → "Probar con mi cuenta" (`PixelGoogle.probar`, solo lee): Calendar (eventos de 7 días) y Gmail (`/profile`). Sigue sin probarse con la cuenta del usuario: hace falta su celular.
+- **WhatsApp** (`web/whatsapp.js` y `puente_pc.whatsapp`; pedido: "dile que entre a WhatsApp y le escriba a tal persona hola"). Con el enlace oficial "click to chat" (`wa.me`), sin bots ni programas no oficiales: con esos WhatsApp puede bloquear el número.
+    - La herramienta `escribir_whatsapp` no envía: arma el mensaje y pregunta "¿Se lo mando?" (`confirmar`, con `seguir`: una corrección va a Gemini). Solo "sí" o el botón llaman a `abrir()`.
+    - **Celular:** abre `wa.me/<número>?text=` (WhatsApp redirige a `api.whatsapp.com/send`) y el usuario toca enviar. Si el navegador no deja abrir sin un toque (el "sí" fue por voz), queda la tarjeta `#ag-whatsapp` con "Abrir WhatsApp". No usar `noopener` en `window.open`: con él siempre devuelve `null`.
+    - **PC:** cuando el usuario lo pide, o si la app está en un computador con el PC en línea, va la orden `/api/pc {accion: "whatsapp", numero, texto}`. `xdotool` lo instaló el usuario el 10 nov; el servicio tiene `DISPLAY` y `XAUTHORITY`. Sin `xdotool`, lo deja escrito.
+        - Si WhatsApp Web ya está abierto, usa **esa pestaña** (pedido del usuario: no abrir otra, que dejaría "WhatsApp está abierto en otra ventana"). La reconoce por el título de la ventana (`RE_TITULO_WA`, estricto: "(90) WhatsApp - Google Chrome", no "WhatsApp - Buscar con Google"). Si está de fondo, la trae con la búsqueda de pestañas de Chrome (Ctrl+Shift+A, "WhatsApp", Enter), y solo la usa si después el título lo confirma.
+        - En esa pestaña: Ctrl+L, escribe la dirección `web.whatsapp.com/send?...` y Enter (WhatsApp se recarga ahí). Si no está abierto en ninguna parte, abre una pestaña nueva con `xdg-open`.
+        - Después espera `WHATSAPP_ESPERA_S` y oprime Enter dos veces en la ventana de WhatsApp. El segundo cae en la caja vacía si el primero ya envió.
+        - Pruebas sin tocar el escritorio: `.venv/bin/python tools/prueba_puente_pc.py`.
+    - **Números:** van en la nota de la persona en el cerebro ("WhatsApp: +57 300 123 4567", `conNumero`). Si no lo tiene, Píxel lo pregunta; la respuesta termina en "?" para que el número se diga sin "Píxel", y lo guarda con `Cerebro.recordar`. El indicativo por defecto sale del idioma del navegador (`es-CO` → 57).
+    - No probar el camino del PC de verdad: enviaría un mensaje real. Se prueba con `_abrir` y `_correr` sustituidos.
+- **Ajustes** (`web/ajustes.js`, pestaña Ajustes; `v1.3.0`; pedido: "todos los modos de Píxel con un switch de on y off y una descripción: esto gasta la licencia de Gemini, esto no", "un visual del costo de Gemini" y "dejar el consumo en bajo").
+    - `MODOS` lista cada modo con lo que hace, si gasta Gemini (`si`, `aveces`, `no`, `ahorra`) y cuánto. Cada interruptor va en `usuarios/<uid>/preferencias/modos/<id>`, salvo "Aprender solo", que sigue en `preferencias/aprender`.
+    - `agente.js` (`nucleo.activo`, `usar(m)`) apaga los módulos en `false`: sin herramientas, atajos, `dictar`, `hero`, `alSegundo`, `alTurno` ni contexto. Sus pestañas (Enfoque, Notas) se esconden. Con `gemini` apagado, `orden()` contesta en local y no pregunta nada a Gemini.
+    - `MODOS_DEFECTO` deja el consumo bajo: `aprender` y `clasificar` (asunto de las notas con Gemini) apagados, `analizar` (ofrecerlo al acabar una nota) encendido, y `ahorro` encendido. `ahorro` = 2 turnos de historial en vez de 4, y el RAG del cerebro con 3 notas y la mitad de caracteres.
+    - Una prueba de `prueba_modulos.js` exige que cada módulo de `MODULOS` tenga su entrada en `MODOS`.
+- **Consumo de Gemini**: `contarUso()` (`agente.js`) apunta cada petición que contesta en `usuarios/<uid>/uso/<día del cupo>` (`diaDelCupo`: el día de Google, que empieza a medianoche del Pacífico). Guarda `{peticiones, entrada, salida, por: {charla, herramienta, aprender, clasificar, analizar}, m: {<modelo con "_">: {n, e, s}}}`.
+    - La salida incluye los tokens de "pensar" (Google los cobra así).
+    - Con streaming, el resumen final del SDK (`aggregateResponses`) no trae `usageMetadata`: se lee de los trozos de `r.stream`. `generarJSON(prompt, instrucciones, motivo)` lo lee de `r.response`.
+    - Ajustes dibuja: cifras de hoy, columnas de 7 días (una serie, un color, con globo y "Ver en tabla"), en qué se gasta y lo que costaría con el plan de pago (`PRECIOS`).
+    - `PRECIOS` = precios oficiales del 10 nov 2026 (ai.google.dev/gemini-api/docs/pricing): 3.5 Flash-Lite US$ 0,30 entrada y 2,50 salida por millón de tokens, y 3.1 Flash-Lite 0,25 y 1,50. El plan gratis no cobra; Google no publica un número fijo de peticiones gratis por día.
+    - Los días de más de 30 se borran al abrir.
+- **Sonidos** (`agente.js`, pedido del 10 nov: "sonidos de entrada cuando llamo a Píxel, de pensar y de salida"). Con Web Audio, sin archivos: notas con un armónico que suenan a campanita.
+    - `sonido("entrada")`: mi-si-mi subiendo, al empezar cada orden y antes del "Dime".
+    - `sonido("salida")`: la misma bajando, al acabar. Se espera a que termine antes de volver a escuchar.
+    - `sonido("aviso")`: lo que dice por su cuenta (recordatorios, `anunciar`).
+    - `sonarPensando()`: do-mi-sol-mi muy bajito mientras el estado es "pensando". Empieza a los 600 ms, así que un atajo instantáneo no lo hace sonar.
+    - Reemplazan los `beep()` de antes. Se apagan con el modo `sonidos` de Ajustes.
+    - En las pruebas, un `AudioContext` falso apunta las frecuencias.
+- **La regla del correo** (el usuario: "que no envíe sin aprobación, mantener esa regla"): una prueba de `prueba_modulos.js` falla si alguna herramienta se llama como enviar, si `drafts/send` aparece más de una vez o si `enviarBorrador` se usa fuera de una confirmación.
 
 **TTS** (`tts.py`): Piper sale a 22050 Hz y se remuestrea a 16000 Hz con numpy (FIR paso bajo + interpolación lineal, sin scipy).
 - **Voz infantil** (9 nov): no existe una voz de niño en español para Piper. Se revisaron HirCoir/Piper-TTS-Spanish, la colección piper-tts-onnx-models de Trelis y AIHeaven/piper_unofficial_voices (Hugging Face), y para el navegador vits-web y piper-tts-web: solo hay voces adultas.

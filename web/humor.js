@@ -159,6 +159,7 @@
     }
     if (h.enCola && !N.ocupado() && !N.est.pendiente) { const f = h.enCola; h.enCola = ""; hablar(f, true); }
     if (window.PixelApuntes && window.PixelApuntes.dictando()) { h.ultimaT = Date.now(); return; }   // dictando: ni sueno ni eventos
+    if (window.PixelTiempo && window.PixelTiempo.enfocado()) { h.ultimaT = Date.now(); return; }     // en un pomodoro o en la guia: no interrumpe
     const ahora = Date.now(), inactivo = ahora - h.ultimaT;
     if (document.hidden || N.ocupado() || N.est.pendiente || N.oye.pendiente || N.oye.interino || c.ocupada()) return;
     const musica = !!(window.PixelMusica && window.PixelMusica.estado().cola.length);

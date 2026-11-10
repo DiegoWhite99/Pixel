@@ -12,6 +12,11 @@ notas de la app (usuarios/<uid>/cerebro en Firebase), en los dos sentidos.
 - Solo para las cuentas que lo activaron en la app (usuarios/<uid>/confio/<pid> = true: el usuario
   confia en este PC para leer su cerebro; las reglas solo dejan leerlo asi). Con una sola cuenta
   la boveda es la de esa cuenta; con varias, una subcarpeta por cuenta.
+- Fase 14 (10 nov): el grafo de Obsidian muestra lo mismo que el mapa de la app (cerebro.js). Al pie de
+  cada nota va un bloque de enlaces que Pixel rehace solo (desde MARCA hasta el final): su carpeta y las
+  notas que nombra. Hay una nota indice por carpeta y una central, "Tú", que las une. Los colores por
+  tipo van en .obsidian/graph.json (si el usuario no puso los suyos). El bloque no cuenta como cambio:
+  se quita al leer y el hash de cada nota se calcula sin el.
 Usa nube._db (la cuenta anonima de este Pixel). Solo libreria estandar.
 """
 
@@ -21,12 +26,19 @@ import os
 import re
 import threading
 import time
+import unicodedata
 
 CADA_S = 5
 TIPOS = {"yo": "Sobre mí", "gusto": "Gustos", "persona": "Personas", "proyecto": "Proyectos",
          "regla": "Reglas para Píxel", "nota": "Notas"}
 CARPETAS = {v: k for k, v in TIPOS.items()}
 ESTADO = ".pixel-sync.json"
+MARCA = "<!-- pixel:enlaces"            # desde aqui hasta el final, el bloque de enlaces que rehace Pixel
+CENTRO = "Tú"                           # la nota central del grafo
+INDICE = "pixel: indice"                # en la cabecera de las notas indice (asi se sabe que son de Pixel)
+# Los mismos colores que el mapa de la app (COLORES en web/cerebro.js)
+COLORES = {"yo": 0x4dabf7, "gusto": 0xf783ac, "persona": 0xfcc419, "proyecto": 0x20c997, "regla": 0xff6b6b, "nota": 0x9775fa}
+COLOR_CENTRO = 0x1864ab
 LEEME = """# El cerebro de Píxel
 
 Estas notas son lo que Píxel sabe de ti. Se sincronizan con la app (Personalidad → «Lo que Píxel sabe de ti») cada pocos segundos.
@@ -35,6 +47,8 @@ Estas notas son lo que Píxel sabe de ti. Se sincronizan con la app (Personalida
 - El nombre del archivo es el tema de la nota. Moverla de carpeta le cambia el tipo.
 - `fijo: true` en la cabecera hace que Píxel la tenga siempre presente.
 - Si borras una nota aquí, también se borra en la app (y al revés).
+- Abre la **vista de grafo** (Ctrl+G) para ver tu cerebro como una red: «Tú» en el centro, cada carpeta y sus notas, y las notas que se nombran entre sí, unidas. Es el mismo mapa que sale en la app.
+- Para unir dos notas, nombra una en la otra o escribe `[[Título de la otra]]`. El bloque de enlaces al pie de cada nota lo rehace Píxel: no lo edites.
 
 Este archivo no se sincroniza.
 """
@@ -74,7 +88,40 @@ def leer(texto):
                 k, v = linea.split(":", 1)
                 fm[k.strip()] = v.strip()
         texto = texto[m.end():]
-    return fm, texto.strip()
+    return fm, sin_pie(texto).strip()
+
+
+def sin_pie(texto):
+    """El texto sin el bloque de enlaces que pone Pixel al pie"""
+    i = texto.find(MARCA)
+    return texto if i < 0 else texto[:i].rstrip() + "\n"
+
+
+def plano(t):
+    """Minusculas, sin tildes y sin signos (como sinSignos de cerebro.js)"""
+    s = unicodedata.normalize("NFD", str(t or "").lower())
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]+", " ", s).strip()
+
+
+def enlaces(notas):
+    """Pares (i, j): la nota i nombra a la j, con [[titulo]] o con su titulo en palabras completas.
+    La misma regla que enlaces() de web/cerebro.js (el mapa de la app)."""
+    titulos = [plano(n["titulo"]) for n in notas]
+    pares = []
+    for i, a in enumerate(notas):
+        texto = " %s " % plano(a["texto"])
+        explicitos = {plano(m) for m in re.findall(r"\[\[([^\]|#]+)", str(a["texto"]))}
+        for j, t in enumerate(titulos):
+            if i != j and len(t) >= 3 and (" %s " % t in texto or t in explicitos):
+                pares.append((i, j))
+    return pares
+
+
+def pie(tipo, nombradas):
+    """El bloque de enlaces de una nota: su carpeta y las notas que nombra"""
+    partes = ["[[%s]]" % TIPOS.get(tipo, TIPOS["nota"])] + ["[[%s]]" % t for t in nombradas]
+    return "%s: Píxel rehace estos enlaces solo; no los edites -->\n%s\n" % (MARCA, " · ".join(partes))
 
 
 def _hash(datos):
@@ -94,10 +141,11 @@ def escanear(base):
             ruta = os.path.join(d, f)
             with open(ruta, "rb") as g:
                 datos = g.read()
-            fm, cuerpo = leer(datos.decode("utf-8", "replace"))
+            texto = datos.decode("utf-8", "replace")
+            fm, cuerpo = leer(texto)
             notas.append({"ruta": os.path.relpath(ruta, base), "id": fm.get("id", ""), "titulo": f[:-3], "tipo": tipo,
                           "fijo": fm.get("fijo", "").lower() == "true", "origen": fm.get("origen", ""), "texto": cuerpo,
-                          "hash": _hash(datos), "mtime": os.path.getmtime(ruta)})
+                          "hash": _hash(sin_pie(texto).encode("utf-8")), "mtime": os.path.getmtime(ruta)})   # sin el pie: rehacerlo no es un cambio
     return notas
 
 
@@ -205,7 +253,82 @@ def sincronizar(base, uid, db, ahora_ms=None):
 
     with open(ruta_estado, "w", encoding="utf-8") as g:
         json.dump(nuevo_estado, g, ensure_ascii=False, indent=1)
+    enlazar(base)
     return res
+
+
+# ------------------------------------------------------------------ el grafo (Fase 14)
+def _escribir_si_cambia(ruta, texto):
+    try:
+        with open(ruta, encoding="utf-8") as g:
+            if g.read() == texto:
+                return False
+    except OSError:
+        pass
+    with open(ruta, "w", encoding="utf-8") as g:
+        g.write(texto)
+    return True
+
+
+def _es_indice(ruta):
+    try:
+        with open(ruta, encoding="utf-8", errors="replace") as g:
+            return INDICE in g.read(200)
+    except OSError:
+        return False
+
+
+def enlazar(base):
+    """El pie de enlaces de cada nota y las notas indice (Tu y una por carpeta). Solo escribe lo que
+    cambia. Una nota del usuario que se llame como un indice no se toca."""
+    notas = escanear(base)
+    nombradas = {}
+    for i, j in enlaces(notas):
+        nombradas.setdefault(i, set()).add(notas[j]["titulo"])
+    for i, n in enumerate(notas):
+        ruta = os.path.join(base, n["ruta"])
+        with open(ruta, encoding="utf-8", errors="replace") as g:
+            actual = g.read()
+        _escribir_si_cambia(ruta, sin_pie(actual).rstrip() + "\n\n" + pie(n["tipo"], sorted(nombradas.get(i, ()))))
+    por_tipo = {}
+    for n in notas:
+        por_tipo.setdefault(n["tipo"], []).append(n["titulo"])
+    cab = "---\n%s\n---\n" % INDICE
+    centro = os.path.join(base, CENTRO + ".md")
+    if not os.path.exists(centro) or _es_indice(centro):
+        lineas = ["- [[%s]] (%d)" % (TIPOS[t], len(por_tipo[t])) for t in TIPOS if por_tipo.get(t)]
+        _escribir_si_cambia(centro, cab + "# %s\n\nEl centro de tu cerebro en Píxel: de aquí salen las carpetas y de cada carpeta sus notas. "
+                            "Abre la vista de grafo (Ctrl+G) para verlo como red.\n\n%s\n" % (CENTRO, "\n".join(lineas) or "Todavía no hay notas."))
+    for tipo, carpeta in TIPOS.items():
+        ruta = os.path.join(base, carpeta + ".md")
+        if os.path.exists(ruta) and not _es_indice(ruta):
+            continue
+        if por_tipo.get(tipo):
+            _escribir_si_cambia(ruta, cab + "# %s\n\nLas notas de esta carpeta. Píxel rehace este índice solo.\n\n[[%s]]\n\n%s\n"
+                                % (carpeta, CENTRO, "\n".join("- [[%s]]" % t for t in sorted(por_tipo[tipo]))))
+        elif os.path.exists(ruta):
+            os.remove(ruta)
+
+
+def colores(raiz):
+    """Los colores por tipo en el grafo de Obsidian (.obsidian/graph.json), si el usuario no puso los suyos"""
+    ruta = os.path.join(raiz, ".obsidian", "graph.json")
+    try:
+        with open(ruta, encoding="utf-8") as g:
+            cfg = json.load(g)
+    except (OSError, ValueError):
+        cfg = {}
+    if cfg.get("colorGroups"):
+        return False
+    cfg["colorGroups"] = [{"query": 'path:"%s"' % carpeta, "color": {"a": 1, "rgb": COLORES[tipo]}} for tipo, carpeta in TIPOS.items()]
+    cfg["colorGroups"].append({"query": 'file:"%s"' % CENTRO, "color": {"a": 1, "rgb": COLOR_CENTRO}})
+    cfg.setdefault("showArrow", False)
+    cfg.setdefault("nodeSizeMultiplier", 1.3)
+    cfg.setdefault("linkDistance", 180)
+    os.makedirs(os.path.dirname(ruta), exist_ok=True)
+    with open(ruta, "w", encoding="utf-8") as g:
+        json.dump(cfg, g, ensure_ascii=False, indent=2)
+    return True
 
 
 # ------------------------------------------------------------------ hilo
@@ -223,6 +346,11 @@ def _cuentas():
 
 def _bucle():
     base = os.path.expanduser(S.OBSIDIAN_BOVEDA)
+    os.makedirs(base, exist_ok=True)
+    try:
+        colores(base)                       # el grafo de Obsidian, con los colores del mapa de la app
+    except OSError as e:
+        _log("obsidian: no pude poner los colores del grafo: %s" % e)
     revisado = 0.0
     while True:
         try:

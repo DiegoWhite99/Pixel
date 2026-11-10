@@ -556,6 +556,30 @@
     pintar();
   }
 
+  // Fase 14: "Probar con mi cuenta" (Cuentas). Con tu Google de verdad, comprueba que Pixel puede leer el
+  // calendario y el correo. Solo lee: no crea eventos, no marca ni envia nada. Devuelve [{ok, texto}].
+  async function probarGoogle() {
+    if (!conectado()) return [{ok: false, texto: "Primero toca «Conectar Calendar y Gmail»."}];
+    const min = Math.max(0, Math.round((g.vence - Date.now()) / 60000));
+    const pasos = [{ok: true, texto: `Conectado como ${g.email || nube.usuario.email} · el permiso dura ${min} min más`}];
+    const mal = (que, e) => ({ok: false, texto: `${que}: ${e && e.tipo === "sin-permiso" ? "falta el permiso (toca Reconectar y márcalo)" : e && e.tipo === "api" ? "el servicio está apagado en el proyecto" : String((e && e.message) || e).slice(0, 120)}`});
+    if (tiene("calendar")) {
+      try {
+        const desde = new Date(), hasta = new Date(Date.now() + 7 * 86400000);
+        const r = await api(`${CAL}?singleEvents=true&maxResults=100&fields=items(id)&timeMin=${encodeURIComponent(desde.toISOString())}&timeMax=${encodeURIComponent(hasta.toISOString())}`);
+        const n = (r.items || []).length;
+        pasos.push({ok: true, texto: `Calendar: lo leo (${n} evento${n === 1 ? "" : "s"} en los próximos 7 días) y puedo crear, mover y borrar eventos cuando me lo pidas`});
+      } catch (e) { pasos.push(mal("Calendar", e)); }
+    } else pasos.push({ok: false, texto: "Calendar: falta el permiso. Toca Reconectar y marca Calendar."});
+    if (tiene("gmail")) {
+      try {
+        const p = await api(`${GMAIL}/profile`);
+        pasos.push({ok: true, texto: `Gmail: ${p.emailAddress} · ${Number(p.messagesTotal || 0).toLocaleString("es")} correos. Leo, ordeno y redacto borradores; solo envío si dices «envíalo»`});
+      } catch (e) { pasos.push(mal("Gmail", e)); }
+    } else pasos.push({ok: false, texto: "Gmail: falta el permiso. Toca Reconectar y marca Gmail."});
+    return pasos;
+  }
+
   function pintar() {
     if (!document.getElementById("card-google-app")) return;
     const u = nube.usuario, ok = conectado();
@@ -574,6 +598,8 @@
       $("#ga-info").textContent = info;
       $("#ga-conectar").textContent = ok ? "Reconectar" : "Conectar Calendar y Gmail";
       $("#ga-salir").hidden = !ok;
+      $("#ga-probar").hidden = !ok;
+      if (!ok) $("#ga-prueba").hidden = true;
       g.pintado = h;
     }
     const ce = $("#card-eventos");
@@ -598,6 +624,16 @@
       if (repetir && !N.ocupado()) N.orden(repetir);   // lo que se le pidio antes de tener permiso
     };
     $("#ga-conectar").addEventListener("click", alConectar);
+    $("#ga-probar").addEventListener("click", async (e) => {
+      const b = e.currentTarget, caja = $("#ga-prueba");
+      b.disabled = true;
+      caja.hidden = false;
+      caja.innerHTML = '<div class="buscando"><span class="giro"></span>Probando con tu cuenta de Google…</div>';
+      try {
+        const pasos = await probarGoogle();
+        caja.innerHTML = `<b>Prueba con tu cuenta</b><ul>${pasos.map((x) => `<li class="${x.ok ? "ok" : "mal"}">${esc(x.texto)}</li>`).join("")}</ul>`;
+      } finally { b.disabled = false; }
+    });
     $("#ag-google").addEventListener("click", (e) => { if (e.target.closest("[data-conectar-google]")) alConectar(); });
     $("#ga-salir").addEventListener("click", () => { olvidarToken(); g.borrador = null; g.eventos = null; pintar(); toast("Google desconectado de este celular."); });
     const ce = $("#card-eventos h2");
@@ -628,5 +664,5 @@
     contexto: () => (g.borrador && N.est.pendiente ? `## Borrador abierto\nPara: ${g.borrador.nombre || ""} <${g.borrador.para}>\nAsunto: ${g.borrador.asunto}\n${g.borrador.cuerpo}` : ""),
   });
 
-  window.PixelGoogle = {conectar, conectado, tiene, texto: {armarMime, textoCorreo, sinCitas, direccion, rangoDia, leerFecha, eventoDicho, sinHtml}};
+  window.PixelGoogle = {conectar, conectado, tiene, probar: probarGoogle, texto: {armarMime, textoCorreo, sinCitas, direccion, rangoDia, leerFecha, eventoDicho, sinHtml}};
 })();

@@ -32,6 +32,7 @@
       <a href="#agenda" data-vista="agenda">Agenda</a>
       <a href="#enfoque" data-vista="enfoque" id="tab-enfoque" hidden>Enfoque</a>
       <a href="#notas" data-vista="notas" id="tab-notas" hidden>Notas</a>
+      <a href="#ajustes" data-vista="ajustes" id="tab-ajustes" hidden>Ajustes</a>
       <a href="#cuentas" data-vista="cuentas">Cuentas</a>
     </nav>
   </div>
@@ -56,6 +57,11 @@
           <circle cx="66" cy="85" r="4" fill="#fff" opacity="0.85"/><circle cx="122" cy="85" r="4" fill="#fff" opacity="0.85"/>
         </svg>
         <div class="zzz" id="zzz" hidden aria-hidden="true"><span>z</span><span>z</span><span>Z</span></div>
+        <!-- Fase 14: modo Pomodoro (tiempo.js): el tiempo que queda, en un anillo alrededor de Pixel -->
+        <div class="escena-pomo" id="escena-pomo" hidden aria-hidden="true">
+          <svg viewBox="0 0 100 100"><circle class="pista-anillo" cx="50" cy="50" r="47"/><circle class="avance" cx="50" cy="50" r="47" pathLength="100"/></svg>
+          <span class="ep-reloj" id="ep-reloj"></span>
+        </div>
         <p class="pista" id="pista">Arrástrale la cara</p>
       </div>
       <div class="charla">
@@ -87,14 +93,17 @@
             <button class="btn primario" type="button" id="mu-sonido" hidden>🔊 Toca para activar el sonido</button>
           </div>
           <!-- Fase 13: lo que espera un "sí" (enviar un correo, borrar un evento...) -->
-          <div class="pomodoro-linea" id="ag-pomodoro" hidden></div>
           <div class="confirmar nota-viva" id="ag-nota" hidden></div>
           <div class="confirmar" id="ag-confirmar" hidden></div>
+          <!-- Fase 14: WhatsApp en el celular, cuando el navegador pide un toque para abrirlo (whatsapp.js) -->
+          <div class="confirmar" id="ag-whatsapp" hidden></div>
           <div class="confirmar" id="ag-google" hidden>
             <div class="txt"><b>Píxel necesita permiso de Google</b><small>Para tu Calendar y tu Gmail. Dura una hora.</small></div>
             <button class="btn primario" type="button" data-conectar-google>Conectar Google</button>
           </div>
         </div>
+        <!-- Fase 14: Inicio cambia con el enfoque: el pomodoro en marcha o la guia de Eisenhower (tiempo.js) -->
+        <div class="card modo-enfoque" id="modo-enfoque" hidden aria-live="polite"></div>
         <div class="card">
           <h3>Lo último que oí</h3>
           <div class="cita" id="ultimo">Todavía nada.</div>
@@ -163,6 +172,7 @@
         <button class="btn primario" type="button" id="ap-ble-btn">Agregar ESP32 por Bluetooth</button></div>
       <p class="sub">El puente está en tu casa y recibe las órdenes de Píxel por internet: el ESP32 (infrarrojo, relé, encender el PC por red) o el PC con el servidor (el propio PC y un TV Android).</p>
       <div class="lista" id="ap-puentes"></div>
+      <div class="prueba-puente" id="ap-prueba" hidden aria-live="polite"></div>
       <div id="ap-ble" hidden></div>
     </div>
     <div class="card solo-pc">
@@ -243,6 +253,12 @@
       </div>
       <p class="sub">Su cerebro: notas que usa para responderte. Las guarda cuando le cuentas algo ("Píxel, recuerda que mi hermana se llama Laura") y las puedes cambiar aquí o en Obsidian, en el PC. Las <b>Reglas para Píxel</b> las cumple siempre.</p>
       <label class="check"><input type="checkbox" id="cb-aprender"> Aprender solo de lo que hablamos (al acabar cada conversación)</label>
+      <!-- Fase 14: el mapa del cerebro (mapa.js), como la vista de grafo de Obsidian -->
+      <div class="mapa-cerebro" id="cb-mapa">
+        <div class="mapa-cabeza"><h3>Mapa de tu cerebro</h3><div class="mapa-leyenda" id="cb-leyenda"></div></div>
+        <canvas id="cb-mapa-lienzo" role="img" aria-label="Mapa de tu cerebro: Tú en el centro, tus carpetas y cada nota; las líneas son sus conexiones."></canvas>
+        <div class="mapa-info" id="cb-mapa-info" aria-live="polite"></div>
+      </div>
       <div class="fila" id="cb-obsidian" hidden></div>
       <div class="presets filtros" id="cb-filtros"></div>
       <div class="lista" id="cb-lista"></div>
@@ -300,7 +316,8 @@
         </details>
       </div>
       <div class="card ancha" id="card-matriz">
-        <div class="head"><div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg></div><h2>Matriz de Eisenhower</h2></div></div>
+        <div class="head"><div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg></div><h2>Matriz de Eisenhower</h2></div>
+          <button class="btn suave" type="button" id="mx-guia">Guíame</button></div>
         <div class="matriz">
           <div class="cuadro hacer"><h3>Hacer ya <small>urgente e importante</small></h3><div id="mx-hacer"></div></div>
           <div class="cuadro planificar"><h3>Planificar <small>importante, no urgente</small></h3><div id="mx-planificar"></div></div>
@@ -340,6 +357,21 @@
   </section>
 
   <!-- CUENTAS -->
+  <!-- Fase 14: Ajustes (ajustes.js): los modos de Pixel con su interruptor y lo que se gasta de Gemini -->
+  <section class="vista" id="v-ajustes" hidden>
+    <div><h1>Ajustes</h1><p class="sub">Enciende o apaga cada modo de Píxel. Al lado de cada uno ves si gasta Gemini (el cupo gratis de cada día) o no.</p></div>
+    <div class="grid ajustes">
+      <div class="card" id="card-uso">
+        <div class="head"><div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></div><h2>Consumo de Gemini</h2></div></div>
+        <div id="aj-uso"></div>
+      </div>
+      <div class="card" id="card-modos">
+        <div class="head"><div class="titulo"><div class="ico verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="16" cy="12" r="3"/></svg></div><h2>Modos de Píxel</h2></div></div>
+        <div class="modos" id="aj-modos"></div>
+      </div>
+    </div>
+  </section>
+
   <section class="vista" id="v-cuentas" hidden>
     <div><h1>Cuentas</h1><p class="sub">Vincula servicios para que Píxel pueda usar tu calendario y enviar correos.</p></div>
     <!-- Fase 13: Calendar y Gmail desde el celular (google.js, solo en la app de internet) -->
@@ -349,7 +381,8 @@
         <span class="chip" id="ga-chip">…</span>
       </div>
       <p class="sub" id="ga-info"></p>
-      <div class="acciones"><button class="btn primario" type="button" id="ga-conectar">Conectar Calendar y Gmail</button><button class="btn" type="button" id="ga-salir" hidden>Desconectar</button></div>
+      <div class="acciones"><button class="btn primario" type="button" id="ga-conectar">Conectar Calendar y Gmail</button><button class="btn" type="button" id="ga-probar" hidden>Probar con mi cuenta</button><button class="btn" type="button" id="ga-salir" hidden>Desconectar</button></div>
+      <div class="prueba-puente" id="ga-prueba" hidden aria-live="polite"></div>
       <p class="nota">Píxel nunca envía un correo sin que digas «envíalo» o toques Enviar.</p>
     </div>
     <div class="card" id="card-gemini">
@@ -473,6 +506,7 @@
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script src="escenarios.js"></script>
+<script src="mapa.js"></script>
 <script src="cara3d.js"></script>
 <script src="claves.js"></script>
 <script src="app.js"></script>

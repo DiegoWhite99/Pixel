@@ -17,13 +17,22 @@
   // El cupo gratis de Gemini es por modelo y por dia: si uno lo agota (429 PerDay), se sigue con el
   // siguiente hasta que se renueve (medianoche del Pacifico). gemini-flash-lite-latest es el mismo 3.5.
   const MODELOS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
-  const MODULOS = ["cerebro.js", "google.js", "tiempo.js", "aparatos.js", "musica.js", "humor.js", "apuntes.js"];
+  const MODULOS = ["cerebro.js", "google.js", "tiempo.js", "aparatos.js", "musica.js", "humor.js", "apuntes.js", "whatsapp.js", "ajustes.js"];
   const MAX_RONDAS = 4;                         // vueltas herramienta -> Gemini en un mismo turno
   const CONFIRMAR_MS = 15000;                   // tras preguntar "¿lo envío?", se contesta sin decir "Píxel"
   // Firebase App Check (consola > App Check > app web Pixel > reCAPTCHA v3): su clave de sitio. Si en la
   // consola se "aplica" App Check a Firebase AI Logic, sin esto Gemini contesta 401. Vacia = sin App Check.
   const APP_CHECK_CLAVE = "";
   const MAX_TURNOS = 4;                         // pares usuario/Pixel que se recuerdan
+  const TURNOS_AHORRO = 2;                      // con "Consumo bajo" (Ajustes): cada pregunta lleva menos historial
+  // Fase 14 - Ajustes: un interruptor por modo (usuarios/<uid>/preferencias/modos/<id>, lo escribe ajustes.js).
+  // Los modulos apagados no dan herramientas, atajos ni contexto. Sin valor guardado vale lo de aqui
+  // (el usuario pidio "dejar el consumo en bajo": lo que gasta Gemini en segundo plano viene apagado).
+  const MODOS_DEFECTO = {aprender: false, clasificar: false, analizar: true, ahorro: true};
+  let modos = {};
+  const activo = (id) => (id in modos ? modos[id] !== false : MODOS_DEFECTO[id] !== false);
+  const usar = (m) => activo(m.nombre);
+  const turnos = () => (activo("ahorro") ? TURNOS_AHORRO : MAX_TURNOS);
   const OLVIDO_MS = 120000;                     // sin hablar este rato se olvida la conversacion (el reposo del servidor)
   const VENTANA_MS = 8000;                      // tras "Dime", la siguiente frase no necesita "Píxel"
   // Android da la frase por terminada en cada pausa corta: se juntan los trozos y solo se responde tras
@@ -218,7 +227,9 @@
   }
 
   function ponerEstado(e) {
+    const antes = est.estado;
     est.estado = e;
+    if ((e === "pensando") !== (antes === "pensando")) sonarPensando(e === "pensando");
     pintar();
   }
 
@@ -259,19 +270,55 @@
     }
   }
 
-  function beep(f0, f1) {                      // como los del ESP32: sube al oir la orden, baja al terminar
-    if (!audio || audio.state !== "running") return;
-    const t = audio.currentTime + 0.01, o = audio.createOscillator(), g = audio.createGain();
-    o.frequency.setValueAtTime(f0, t);
-    o.frequency.linearRampToValueAtTime(f1, t + 0.12);
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(0.15, t + 0.01);
-    g.gain.setValueAtTime(0.15, t + 0.11);
-    g.gain.linearRampToValueAtTime(0, t + 0.12);
-    o.connect(g);
-    g.connect(audio.destination);
-    o.start(t);
-    o.stop(t + 0.13);
+  // ------------------------------------------------------------------ sonidos (Fase 14)
+  // Pedido del usuario (10 nov): un sonido al llamar a Pixel, otro mientras piensa y otro al terminar.
+  // Con Web Audio, sin archivos: notas cortas con un armonico (suenan a campanita) que se apagan solas.
+  // Se quitan en Ajustes ("Sonidos"). Mientras suenan el reconocimiento esta parado: no se oye a si mismo.
+  const SONIDOS = {
+    entrada: [[659.25, 0], [987.77, 0.08], [1318.51, 0.16]],    // mi, si, mi agudo: sube ("te escucho")
+    salida: [[1318.51, 0], [987.77, 0.08], [659.25, 0.16]],      // al reves: baja ("ya termine")
+    aviso: [[880, 0], [1174.66, 0.12]],                          // lo que dice por su cuenta (recordatorio, pomodoro)
+  };
+  const PENSAR = [523.25, 659.25, 783.99, 659.25];               // do, mi, sol, mi: muy bajito mientras piensa
+  const PENSAR_DESDE_MS = 600, PENSAR_CADA_MS = 420;            // si contesta antes (un atajo), no suena
+  const sonidosListos = () => !!audio && audio.state === "running" && activo("sonidos");
+
+  function nota(f, t, dura, vol) {
+    const o = audio.createOscillator(), o2 = audio.createOscillator(), g = audio.createGain(), g2 = audio.createGain();
+    o.type = "sine";
+    o2.type = "sine";
+    o.frequency.setValueAtTime(f, t);
+    o2.frequency.setValueAtTime(f * 2.01, t);                    // el armonico, un poco desafinado: campanita
+    g2.gain.setValueAtTime(0.22, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dura);
+    o.connect(g); o2.connect(g2); g2.connect(g); g.connect(audio.destination);
+    o.start(t); o2.start(t);
+    o.stop(t + dura + 0.02); o2.stop(t + dura + 0.02);
+  }
+
+  // Devuelve los ms que dura (para no volver a escuchar mientras suena)
+  function sonido(cual) {
+    const notas = SONIDOS[cual];
+    if (!notas || !sonidosListos()) return 0;
+    const t = audio.currentTime + 0.01;
+    for (const [f, d] of notas) nota(f, t + d, 0.34, 0.12);
+    return Math.round((notas[notas.length - 1][1] + 0.34) * 1000);
+  }
+
+  // Mientras piensa (esperando a Gemini): una nota suave cada PENSAR_CADA_MS
+  const piensa = {reloj: 0, i: 0};
+  function sonarPensando(si) {
+    clearTimeout(piensa.reloj);
+    if (!si) return;
+    piensa.i = 0;
+    const tic = () => {
+      if (est.estado !== "pensando") return;
+      if (sonidosListos()) nota(PENSAR[piensa.i++ % PENSAR.length], audio.currentTime + 0.01, 0.28, 0.035);
+      piensa.reloj = setTimeout(tic, PENSAR_CADA_MS);
+    };
+    piensa.reloj = setTimeout(tic, PENSAR_DESDE_MS);
   }
 
   function decirFrase(texto) {
@@ -360,7 +407,7 @@
         if (e.results[i].isFinal) fin += t; else inter += t;
       }
       oye.interino = inter.trim();
-      for (const m of modulos) { try { if (m.alOirParcial) m.alOirParcial(oye.pendiente + " " + oye.interino + " " + fin); } catch (er) { /* nada */ } }
+      for (const m of modulos) { try { if (m.alOirParcial && usar(m)) m.alOirParcial(oye.pendiente + " " + oye.interino + " " + fin); } catch (er) { /* nada */ } }
       if (fin.trim()) oye.pendiente = (oye.pendiente + " " + fin.trim()).trim().slice(-400);
       if (fin.trim() || oye.interino) {
         if (!oye.inicio) oye.inicio = Date.now();
@@ -480,7 +527,7 @@
   function alOir(texto, inicio) {
     if (est.estado !== "escuchando") return;
     // dictado (apuntes.js con una nota abierta): todo lo que se oye va a la nota, sin "Píxel" ni Gemini
-    for (const m of modulos) { try { if (m.dictar && m.dictar(texto)) return; } catch (e) { console.warn("agente:", m.nombre, e); } }
+    for (const m of modulos) { try { if (m.dictar && usar(m) && m.dictar(texto)) return; } catch (e) { console.warn("agente:", m.nombre, e); } }
     const [ok, resto] = activacion(texto);
     if (!ok) {                                  // vale si empezo a hablar dentro de la ventana
       if ((inicio || Date.now()) < oye.ventanaHasta) { oye.ventanaHasta = 0; orden(texto); }
@@ -495,6 +542,7 @@
     const id = ++est.turnoId;
     if (cara) cara.emocion("curioso", 1600);   // "¿si?": un ojo grande y la cabeza ladeada
     pararRec();
+    sonido("entrada");
     decirFrase("Dime");
     await finHablar();
     if (id !== est.turnoId) return;
@@ -519,7 +567,7 @@
   function herramientas() {
     const todas = BASICAS.slice();
     for (const m of modulos) {
-      try { if (m.herramientas) todas.push(...(m.herramientas() || [])); } catch (e) { console.warn("agente:", m.nombre, e); }
+      try { if (m.herramientas && usar(m)) todas.push(...(m.herramientas() || [])); } catch (e) { console.warn("agente:", m.nombre, e); }
     }
     return [{functionDeclarations: todas}];
   }
@@ -536,6 +584,7 @@
     const capacidades = ["- Crear, ver y borrar recordatorios que suenan a su hora."];   // la musica: musica.js
     const extra = [];
     for (const m of modulos) {
+      if (!usar(m)) continue;
       try {
         if (m.capacidad) { const c = m.capacidad(); if (c) capacidades.push(c); }
         if (m.contexto) { const c = m.contexto(texto || ""); if (c) extra.push(c); }
@@ -637,7 +686,9 @@
               r = await modelo.generateContentStream({contents});
             }
           }
+          let gasto = null;                     // los tokens vienen en los trozos (el resumen final del SDK no los trae)
           for await (const trozo of r.stream) {
+            if (trozo && trozo.usageMetadata) gasto = trozo.usageMetadata;
             if (id !== est.turnoId) return;
             const c = trozo.candidates && trozo.candidates[0];
             for (const p of (c && c.content && c.content.parts) || []) {
@@ -652,6 +703,7 @@
             }
           }
           if (buf.trim()) decir(buf.trim());
+          contarUso(ronda ? "herramienta" : "charla", modeloDeHoy(), gasto);
           if (!llamadas.length) break;
           const resultados = [];
           let hayDatos = false;
@@ -692,8 +744,8 @@
     const respuesta = dicho.join(" ");
     conversar("px", respuesta);
     est.historial.push({role: "user", parts: [{text: texto}]}, {role: "model", parts: [{text: respuesta}]});
-    est.historial = est.historial.slice(-MAX_TURNOS * 2);
-    for (const m of modulos) { try { if (m.alTurno) m.alTurno(texto, respuesta); } catch (e) { console.warn("agente:", m.nombre, e); } }
+    est.historial = est.historial.slice(-turnos() * 2);
+    for (const m of modulos) { try { if (m.alTurno && usar(m)) m.alTurno(texto, respuesta); } catch (e) { console.warn("agente:", m.nombre, e); } }
     return respuesta;
   }
 
@@ -746,8 +798,8 @@
     if (Date.now() - est.ultimaT > OLVIDO_MS) est.historial = [];
     est.ultimaT = Date.now();
     conversar("tu", texto);
+    sonido("entrada");
     ponerEstado("pensando");
-    beep(800, 1200);
     let respuesta;
     const r = respuestaPendiente(texto);
     if (r !== null) {
@@ -758,18 +810,22 @@
       if (est.pendiente && !est.pendiente.seguir) { const p = est.pendiente; est.pendiente = null; if (p.cancelar) p.cancelar(); }
       // atajos: ordenes que un modulo entiende solo ("pausa" con musica sonando), sin esperar a Gemini
       let atajo;
-      for (const m of modulos) { if (m.atajo) { try { atajo = m.atajo(texto); } catch (e) { atajo = undefined; } if (atajo !== undefined) break; } }
+      for (const m of modulos) { if (m.atajo && usar(m)) { try { atajo = m.atajo(texto); } catch (e) { atajo = undefined; } if (atajo !== undefined) break; } }
       if (atajo !== undefined) {
         respuesta = await atajo;
         if (id !== est.turnoId) return;
         if (respuesta) { decirFrase(respuesta); conversar("px", respuesta); }
         est.historial.push({role: "user", parts: [{text: texto}]}, {role: "model", parts: [{text: respuesta || "Hecho."}]});
-        est.historial = est.historial.slice(-MAX_TURNOS * 2);
+        est.historial = est.historial.slice(-turnos() * 2);
+      } else if (!activo("gemini")) {           // Gemini apagado en Ajustes: solo lo que no lo necesita
+        respuesta = "Tengo Gemini apagado en Ajustes, así que solo hago lo que no lo necesita: el modo enfoque, los pomodoros, tomar notas y manejar la música que ya suena. Si quieres que conteste todo, enciéndelo en Ajustes.";
+        decirFrase(respuesta);
+        conversar("px", respuesta);
       } else respuesta = await pensar(texto, id);
     }
     await finHablar();
     if (id !== est.turnoId) return;
-    beep(1200, 800);
+    const sale = sonido("salida");
     est.ultimaT = Date.now();
     // si Pixel pregunto algo ("¿Qué quieres que ponga?", "¿Lo envío?"), se le contesta sin decir "Píxel"
     if (est.pendiente) {
@@ -778,7 +834,7 @@
       oye.ventanaHasta = est.pendiente.hasta;
     }
     else if (/\?["'»)]*\s*$/.test(respuesta || "")) oye.ventanaHasta = Date.now() + VENTANA_MS;
-    await esperar(200);
+    await esperar(Math.max(200, sale));          // que no se oiga a si mismo al volver a escuchar
     if (id === est.turnoId) volverAEscuchar();
   }
 
@@ -794,7 +850,7 @@
     if (opciones.toast !== false) toast(frase);
     if (cara && opciones.gesto !== false) cara.emocion(opciones.gesto || "sorpresa", 1100);
     if (opciones.registro !== false) conversar("px", frase);
-    if (opciones.beep !== false) beep(800, 1200);
+    if (opciones.beep !== false) sonido("aviso");
     decirFrase(frase);
     await finHablar();
     if (id === est.turnoId) volverAEscuchar();
@@ -918,7 +974,7 @@
       const frase = tarde ? `Se me pasó un recordatorio de ${cuandoDicho(r.cuando, ahora)}: ${r.texto}.` : `Recordatorio: ${r.texto}.`;
       toast(frase);
       conversar("px", frase);
-      beep(800, 1200);
+      sonido("aviso");
       decirFrase(frase);
       await finHablar();
       if (id === est.turnoId) volverAEscuchar();
@@ -1009,9 +1065,10 @@
     for (const m of modulos) { try { if (m.pintar) m.pintar(); } catch (e) { console.warn("agente:", m.nombre, e); } }
     if (!conSesion) return;                   // sin sesion, Inicio lo pinta app.js ("Entrar con Google")
 
-    // un modulo puede poner su propio estado en Inicio (la musica: "Modo música" / "Música en pausa")
+    // un modulo puede poner su propio estado en Inicio (la musica: "Modo música"; tiempo.js: el pomodoro
+    // o la guia de Eisenhower). Manda el primero de MODULOS que conteste.
     let propio = null;
-    for (const m of modulos) { try { if (m.hero) { propio = m.hero(); if (propio) break; } } catch (er) { propio = null; } }
+    for (const m of modulos) { try { if (m.hero && usar(m)) { propio = m.hero(); if (propio) break; } } catch (er) { propio = null; } }
     pill("#pill-esp", oye.quiere ? "ok" : SR ? "" : "warn", propio && propio.pill ? propio.pill : oye.quiere ? "Escuchando" : SR ? "Micrófono apagado" : "Sin reconocimiento de voz");
     pill("#pill-ollama", !est.ai ? "" : est.iaError ? "warn" : "ok",
       !est.ai ? "IA cargando…" : est.iaError === "cupo" ? "Gemini sin cupo hoy" : est.iaError === "red" ? "Sin internet"
@@ -1030,7 +1087,9 @@
       const enMusica = propio && (e === "escuchando" || e === "listo") && !ventana && !oido;
       $("#hero-estado").textContent = enMusica ? propio.titulo : titulo;
       $("#hero-sub").textContent = enMusica ? propio.sub : sub;
-      $(".hero").classList.toggle("modo-musica", !!(propio && propio.modo));
+      // cada modo tiene sus colores (estilos.css): musica, pausa, pomodoro, descanso, matriz
+      $(".hero").classList.toggle("modo-musica", !!(propio && (propio.modo === "musica" || propio.modo === "pausa")));
+      $(".hero").dataset.modo = (propio && propio.modo) || "";
     }
     const conv = est.conversacion.length
       ? `<div class="conv">${est.conversacion.map((c) => `<p class="${c.quien}"><b>${c.quien === "tu" ? "Tú" : "Píxel"}</b> ${esc(c.texto)}</p>`).join("")}</div>`
@@ -1089,7 +1148,7 @@
     setInterval(() => {
       revisarRecordatorios();
       caducarPendiente();
-      for (const m of modulos) { try { if (m.alSegundo) m.alSegundo(); } catch (e) { console.warn("agente:", m.nombre, e); } }
+      for (const m of modulos) { try { if (m.alSegundo && usar(m)) m.alSegundo(); } catch (e) { console.warn("agente:", m.nombre, e); } }
     }, 1000);
     setInterval(() => { if (est.estado === "escuchando" && oye.ventanaHasta) pintar(); }, 500);
   }
@@ -1127,18 +1186,42 @@
 
   // Una pregunta suelta a Gemini que devuelve JSON (el cerebro la usa para aprender del usuario).
   // No pasa por la voz ni por el historial.
-  async function generarJSON(prompt, instrucciones) {
+  //   motivo: para la cuenta del uso (Ajustes): "aprender", "clasificar", "analizar"...
+  async function generarJSON(prompt, instrucciones, motivo) {
     if (!est.ai) throw new Error("IA sin cargar");
     for (;;) {
       const modelo = est.ia.getGenerativeModel(est.ai, {model: modeloDeHoy(), systemInstruction: instrucciones || undefined,
         generationConfig: {maxOutputTokens: 1200, responseMimeType: "application/json", thinkingConfig: {thinkingLevel: "LOW"}}}, {timeout: 30000});
       try {
         const r = await modelo.generateContent(prompt);
+        contarUso(motivo || "otro", modeloDeHoy(), r.response && r.response.usageMetadata);
         return JSON.parse(r.response.text());
       } catch (e) {
         if (!(esCupo(e) && cupoDelDia(e) && siguienteModelo())) throw e;
       }
     }
+  }
+
+  // ------------------------------------------------------------------ cuanto se gasta de Gemini (Fase 14)
+  // Cada peticion que contesta Gemini se apunta en usuarios/<uid>/uso/<dia del cupo> (el dia de Google:
+  // empieza a medianoche del Pacifico): peticiones y tokens de entrada y de salida (los de "pensar" van
+  // con la salida: Google los cobra asi), por motivo y por modelo. ajustes.js lo dibuja.
+  function contarUso(motivo, modelo, u) {
+    if (!nube.uid || !nube.d) return;
+    const e = (u && u.promptTokenCount) || 0, sal = ((u && u.candidatesTokenCount) || 0) + ((u && u.thoughtsTokenCount) || 0);
+    const mk = String(modelo || "otro").replace(/[.#$/[\]]/g, "_");
+    nube.d.runTransaction(nube.d.ref(nube.db, `usuarios/${nube.uid}/uso/${diaDelCupo()}`), (v) => {
+      v = v || {};
+      v.peticiones = (v.peticiones || 0) + 1;
+      v.entrada = (v.entrada || 0) + e;
+      v.salida = (v.salida || 0) + sal;
+      v.por = v.por || {};
+      v.por[motivo] = (v.por[motivo] || 0) + 1;
+      v.m = v.m || {};
+      const x = v.m[mk] || {n: 0, e: 0, s: 0};
+      v.m[mk] = {n: x.n + 1, e: x.e + e, s: x.s + sal};
+      return v;
+    }).catch((er) => console.warn("agente: no pude apuntar el uso de Gemini", er));
   }
 
   // ------------------------------------------------------------------ que modelo usar hoy
@@ -1201,9 +1284,11 @@
 
   // Lo que usan los modulos (cerebro.js, google.js, tiempo.js, aparatos.js)
   const nucleo = {
-    est, oye, decir: decirFrase, finHablar, pararRec, volverAEscuchar, ponerEstado, conversar, pintar, aviso, beep, ocupado,
+    est, oye, decir: decirFrase, finHablar, pararRec, volverAEscuchar, ponerEstado, conversar, pintar, aviso, sonido, beep: () => sonido("aviso"), ocupado,
     conTiempo, esperar, confirmar, anunciar, generarJSON, desbloquear, orden, mostrarVideo, escuchar: empezar,
     hayIA: () => !!est.ai, ajustes: () => est.ajustes, sistema, herramientas,
+    // Ajustes (ajustes.js): los interruptores, el modelo de hoy y el dia del cupo de Google
+    activo, modos: (o) => { modos = Object.assign({}, o || {}); pintar(); }, MODOS_DEFECTO, modeloDeHoy, diaDelCupo, MODELOS,
   };
 
   window.Agente = {iniciar, usuario, nivelBoca, guardarAjustes, probar, pintar, modulo, nucleo,

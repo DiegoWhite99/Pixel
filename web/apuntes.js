@@ -203,27 +203,33 @@
     }
     try { await N.conTiempo(nube.d.update(ref("apuntes/" + a.id), {texto: a.texto, actualizado: Date.now()}), 8000); } catch (e) { /* ya se guardo frase a frase */ }
     clasificar(a.id, a);                                       // asunto y lo mas importante, sin esperar
+    const guardada = `${porSilencio ? "Cerré la nota porque no oí nada en un rato. " : "Listo, "}guardé tu nota de ${palabras} palabra${palabras === 1 ? "" : "s"}.`;
+    if (!N.activo("analizar")) {                               // Ajustes: sin ofrecer el analisis (gasta Gemini)
+      await N.anunciar(guardada, {toast: false, gesto: "feliz"});
+      return "";
+    }
     N.confirmar({pregunta: "¿Quieres que la analice?", titulo: `Analizar «${a.titulo}»`, boton: "Analizar con Píxel",
       si: /^(si|sip|dale|claro|hazlo|analizala|analiza|ok|okay|por favor|de una|bueno)\b/, dura: 120000,
       hacer: () => analizar(a.id, true), cancelar: () => "Vale, queda guardada en Notas."});
-    await N.anunciar(`${porSilencio ? "Cerré la nota porque no oí nada en un rato. " : "Listo, "}guardé tu nota de ${palabras} palabra${palabras === 1 ? "" : "s"}. ¿Quieres que la analice?`,
-      {toast: false, gesto: "feliz"});
+    await N.anunciar(`${guardada} ¿Quieres que la analice?`, {toast: false, gesto: "feliz"});
     N.oye.ventanaHasta = Date.now() + 15000;                 // el "sí" sin decir "Píxel"
     return "";
   }
 
   // ------------------------------------------------------------------ asunto, lo importante y analisis
-  // Una peticion corta a Gemini: el asunto (reusando los que ya hay) y lo mas importante en una frase
+  // Una peticion corta a Gemini: el asunto (reusando los que ya hay) y lo mas importante en una frase.
+  // Con "Asunto automático" apagado en Ajustes (lo normal: consumo bajo), salen del titulo y de la
+  // primera frase, sin Gemini.
   async function clasificar(id, a) {
     const n = Object.assign({titulo: a.titulo, contexto: a.contexto, texto: a.texto}, lista().find((x) => x.id === id) || {});
-    let r;
-    try {
+    let r = null;
+    if (N.activo("clasificar")) try {
       const ya = asuntos(lista()).map(([s]) => s).slice(0, 30);
       const prompt = `Notas dictadas (transcripción automática). Título: ${n.titulo}. Contexto: ${n.contexto || "(ninguno)"}.\n\n${String(n.texto).slice(0, 8000)}\n\n`
         + "Devuelve JSON {\"asunto\": \"…\", \"importante\": \"…\"}. asunto: 1 a 3 palabras para agrupar la nota (materia, proyecto, tema: «Biología», «Trabajo», «Feria»)"
         + (ya.length ? `; si encaja, usa exactamente uno de estos que ya existen: ${ya.join(", ")}` : "")
         + ". importante: lo más importante de la nota en una sola frase corta (máximo 20 palabras), sin inventar.";
-      r = await N.generarJSON(prompt, "Clasificas apuntes. Solo devuelves el JSON pedido, en español.");
+      r = await N.generarJSON(prompt, "Clasificas apuntes. Solo devuelves el JSON pedido, en español.", "clasificar");
     } catch (e) { console.warn("apuntes: no pude clasificar", e); r = null; }
     const local = clasificacionLocal(n);
     const asunto = limpiarAsunto(r && r.asunto) || local.asunto;
@@ -247,7 +253,7 @@
         + "\"destacado\": 2 a 5 cosas más importantes o para recordar;\n\"pendientes\": tareas o acciones que se mencionan (puede ser una lista vacía);\n"
         + `"asunto": 1 a 3 palabras para agrupar la nota${ya.length ? ` (si encaja, uno de estos: ${ya.join(", ")})` : ""};\n`
         + "\"importante\": lo más importante en una sola frase corta.\nSolo lo que está en las notas: no inventes.";
-      const r = limpiarAnalisis(await N.generarJSON(prompt, "Eres Píxel, un asistente que ordena y resume apuntes. Solo devuelves el JSON pedido."));
+      const r = limpiarAnalisis(await N.generarJSON(prompt, "Eres Píxel, un asistente que ordena y resume apuntes. Solo devuelves el JSON pedido.", "analizar"));
       if (!r.resumen) throw new Error("análisis vacío");
       const cambio = {analisis: JSON.stringify(r), analizado: Date.now()};
       if (r.asunto) cambio.asunto = r.asunto;
@@ -342,7 +348,7 @@
 
   function pintar() {
     if (!document.getElementById("v-notas")) return;
-    $("#tab-notas").hidden = !nube.usuario;
+    $("#tab-notas").hidden = !nube.usuario || !N.activo("apuntes");
     // en Inicio, mientras se dicta: la nota en vivo
     const a = ap.activa, vivo = $("#ag-nota");
     const hv = a ? `<div class="txt"><b><span class="grabando"></span>Tomando notas · ${esc(a.titulo)}</b><small>${esc(a.texto ? "…" + a.texto.slice(-220) : "Te escucho. Cuando termines, di «Píxel, termina la nota».")}</small></div>

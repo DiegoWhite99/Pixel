@@ -154,6 +154,11 @@
               ".validate": false
             }
           },
+          "modos": {
+            "$modo": {
+              ".validate": "$modo.matches(/^[a-z]{2,20}$/) && newData.isBoolean()"
+            }
+          },
           "$otro": {
             ".validate": false
           }
@@ -190,6 +195,15 @@
           },
           "tareaId": {
             ".validate": "newData.isString() && newData.val().length <= 40"
+          },
+          "plan": {
+            ".validate": "newData.isString() && newData.val().length <= 4000"
+          },
+          "paso": {
+            ".validate": "newData.isNumber()"
+          },
+          "seguir": {
+            ".validate": "newData.isBoolean()"
           },
           "$otro": {
             ".validate": false
@@ -294,6 +308,45 @@
             },
             "importante": {
               ".validate": "newData.isString() && newData.val().length <= 300"
+            }
+          }
+        },
+        "uso": {
+          ".write": "auth != null && auth.uid === $uid",
+          "$dia": {
+            ".validate": "$dia.matches(/^\\d{4}-\\d{2}-\\d{2}$/)",
+            "peticiones": {
+              ".validate": "newData.isNumber()"
+            },
+            "entrada": {
+              ".validate": "newData.isNumber()"
+            },
+            "salida": {
+              ".validate": "newData.isNumber()"
+            },
+            "por": {
+              "$motivo": {
+                ".validate": "$motivo.matches(/^[a-z]{2,20}$/) && newData.isNumber()"
+              }
+            },
+            "m": {
+              "$modelo": {
+                "n": {
+                  ".validate": "newData.isNumber()"
+                },
+                "e": {
+                  ".validate": "newData.isNumber()"
+                },
+                "s": {
+                  ".validate": "newData.isNumber()"
+                },
+                "$otro": {
+                  ".validate": false
+                }
+              }
+            },
+            "$otro": {
+              ".validate": false
             }
           }
         }

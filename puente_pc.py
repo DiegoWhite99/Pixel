@@ -22,10 +22,12 @@ import re
 import socket
 import subprocess
 import threading
+import time
 import urllib.parse
 import urllib.request
 
 TV_CERT = "tv_cert.pem"
+TV_EMPAREJADOS = "tv_emparejados.json"     # las IP de los TV emparejados de verdad (el certificado se crea antes)
 TV_CLAVE = "tv_clave.pem"
 TV_NOMBRE = "Pixel asistente de voz"
 TV_TIMEOUT_S = 12
@@ -168,10 +170,104 @@ def control(d):
         return {"mensaje": "suspendiendo", "decir": "Listo, suspendo el PC."}
     elif accion == "encender":
         return {"mensaje": "ya encendido", "decir": "El PC ya está encendido."}
+    elif accion == "whatsapp":                  # Fase 14: la app ya pregunto "¿Se lo mando?" y el usuario dijo que si
+        return whatsapp(d.get("numero"), d.get("texto"))
+    elif accion == "probar":                    # Fase 14: "Probar" en Dispositivos de la app; no cambia nada
+        return {"mensaje": "listo", "resultados": json.dumps(diagnostico(), ensure_ascii=False)}
     else:
         raise ErrorPuente("No sé hacer eso con el PC.")
     _log("puente: PC %s%s" % (accion, " (%s)" % valor if valor not in (None, "") else ""))
     return {"mensaje": accion}
+
+
+# ------------------------------------------------------------------ WhatsApp (Fase 14)
+WHATSAPP_ESPERA_S = 12      # lo que tarda WhatsApp Web en abrir el chat con el mensaje ya escrito
+WHATSAPP_MAX_S = 30
+
+
+# Titulo de la ventana del navegador cuando su pestaña activa es WhatsApp Web: "(90) WhatsApp - Google Chrome".
+# Estricto a proposito: "WhatsApp - Buscar con Google" no vale (no se debe escribir en otra pestaña).
+RE_TITULO_WA = re.compile(r"^(\(\d+\)\s*)?WhatsApp\s+[-–—]\s+(Google Chrome|Chromium)\s*$", re.I)
+
+
+def _ventana_whatsapp():
+    """El id de la ventana del navegador cuya pestaña activa es WhatsApp Web, o "" """
+    rc, out = _correr(["xdotool", "search", "--onlyvisible", "--name", "WhatsApp"])
+    for w in (out.split() if rc == 0 else []):
+        if w.isdigit():
+            rc2, nombre = _correr(["xdotool", "getwindowname", w])
+            if rc2 == 0 and RE_TITULO_WA.match(nombre.strip()):
+                return w
+    return ""
+
+
+def _traer_pestana_whatsapp():
+    """Si WhatsApp Web esta en una pestaña de fondo de Chrome, la trae al frente con la busqueda de
+    pestañas (Ctrl+Shift+A, "WhatsApp", Enter). Solo cuenta si despues la pestaña activa es WhatsApp Web
+    (titulo estricto); si no, cierra el buscador y devuelve "" (no se toca ninguna otra pestaña)."""
+    rc, out = _correr(["xdotool", "search", "--onlyvisible", "--class", "google-chrome"])
+    ventanas = [w for w in out.split() if w.isdigit()] if rc == 0 else []
+    if not ventanas:
+        return ""
+    _correr(["xdotool", "windowactivate", "--sync", ventanas[-1], "key", "--clearmodifiers", "ctrl+shift+a"])
+    time.sleep(0.8)
+    _correr(["xdotool", "type", "--delay", "25", "WhatsApp"])
+    time.sleep(0.6)
+    _correr(["xdotool", "key", "--clearmodifiers", "Return"])
+    time.sleep(1.0)
+    w = _ventana_whatsapp()
+    if not w:
+        _correr(["xdotool", "key", "--clearmodifiers", "Escape"])
+    return w
+
+
+def _ir_en_pestana(ventana, url):
+    """Carga url en esa misma pestaña (sin abrir otra): Ctrl+L en su barra, la direccion y Enter."""
+    _correr(["xdotool", "windowactivate", "--sync", ventana, "key", "--clearmodifiers", "ctrl+l"])
+    time.sleep(0.3)
+    _correr(["xdotool", "type", "--delay", "6", url], timeout=30)
+    time.sleep(0.2)
+    _correr(["xdotool", "key", "--clearmodifiers", "Return"])
+
+
+def whatsapp(numero, texto):
+    """WhatsApp Web en el PC con el chat y el mensaje ya escritos (el enlace oficial "click to chat") y,
+    con xdotool, Enter para enviarlo. La app solo manda esta orden despues de que el usuario confirma.
+    - Si WhatsApp Web ya esta abierto (o en una pestaña de fondo), el chat se carga en ESA pestaña: abrir
+      otra la dejaria en "WhatsApp está abierto en otra ventana" (pedido del usuario el 10 nov).
+    - Si no esta abierto, se abre con xdg-open (una pestaña nueva).
+    - Dos Enter separados: si el primero llega antes de que cargue el chat no hace nada, y si ya lo envio
+      el segundo cae en la caja vacia (no manda nada)."""
+    num = re.sub(r"\D", "", str(numero or ""))
+    if not 8 <= len(num) <= 15:
+        raise ErrorPuente("Ese número no parece válido.")
+    texto = str(texto or "").strip()[:1000]
+    if not texto:
+        raise ErrorPuente("El mensaje está vacío.")
+    url = "https://web.whatsapp.com/send?phone=%s&text=%s" % (num, urllib.parse.quote(texto))
+    xdotool = _correr(["xdotool", "version"])[0] == 0
+    ventana = (_ventana_whatsapp() or _traer_pestana_whatsapp()) if xdotool else ""
+    if ventana:
+        _ir_en_pestana(ventana, url)
+        _log("puente: WhatsApp a +%s...%s en la pestaña que ya estaba abierta" % (num[:2], num[-2:]))
+    else:
+        _abrir(url)
+        _log("puente: WhatsApp a +%s...%s abierto en una pestaña nueva" % (num[:2], num[-2:]))
+    if not xdotool:
+        return {"mensaje": "abierto", "decir": "Te lo dejé escrito en WhatsApp del PC: oprime Enter para enviarlo."}
+    t0 = time.time()
+    time.sleep(WHATSAPP_ESPERA_S)
+    ventana = _ventana_whatsapp()
+    while not ventana and time.time() - t0 < WHATSAPP_MAX_S:
+        time.sleep(2)
+        ventana = _ventana_whatsapp()
+    if not ventana:
+        return {"mensaje": "abierto", "decir": "Abrí WhatsApp en el PC, pero no encontré su ventana para enviarlo. Míralo y oprime Enter."}
+    for i in range(2):
+        _correr(["xdotool", "windowactivate", "--sync", ventana, "key", "--clearmodifiers", "Return"])
+        if i == 0:
+            time.sleep(4)
+    return {"mensaje": "enviado", "decir": "Listo: lo escribí en WhatsApp del PC y oprimí enviar."}
 
 
 # ------------------------------------------------------------------ Wake-on-LAN y http
@@ -378,7 +474,21 @@ def tv_codigo(d):
             raise ErrorPuente("Ese código no es. Vuelve a tocar «Emparejar con el TV».")
         raise _error_tv(e)
     _log("puente: TV %s emparejado" % ip)
+    try:
+        ips = sorted(set(_tvs_emparejados()) | {ip})
+        with open(_ruta(TV_EMPAREJADOS), "w", encoding="utf-8") as f:
+            json.dump(ips, f)
+    except OSError:
+        pass
     return {"mensaje": "¡Emparejado! Ya puedo manejar el TV."}
+
+
+def _tvs_emparejados():
+    try:
+        with open(_ruta(TV_EMPAREJADOS), encoding="utf-8") as f:
+            return [str(x) for x in json.load(f)]
+    except (OSError, ValueError):
+        return []
 
 
 # ------------------------------------------------------------------ YouTube para la app del celular
@@ -422,8 +532,26 @@ def _mac_pc():
     return ""
 
 
+def diagnostico():
+    """Lo que el PC puede manejar ahora mismo (la prueba de la app). Solo lee: no cambia nada."""
+    d = {"volumen": None, "musica": None, "tv": "sin la librería" if not _tv_ok() else "sin emparejar", "mac": _mac_pc()}
+    rc, out = _correr(["pactl", "get-sink-volume", "@DEFAULT_SINK@"])
+    m = re.search(r"(\d+)%", out) if rc == 0 else None
+    d["volumen"] = int(m.group(1)) if m else None
+    rc, out = _correr(["playerctl", "--list-all"])
+    jugadores = [x for x in out.splitlines() if x.strip()] if rc == 0 else []
+    if jugadores:
+        rc, st = _correr(["playerctl", "status"])
+        d["musica"] = "%s (%s)" % (st if rc == 0 else "?", jugadores[0].split(".")[0])
+    else:
+        d["musica"] = "nada abierto" if rc in (0, 1) else "sin playerctl"
+    if _tv_ok() and _tvs_emparejados():
+        d["tv"] = "emparejado (%s)" % ", ".join(_tvs_emparejados())
+    return d
+
+
 def estado():
-    caps = ["pc", "wol", "http", "youtube"] + (["atv"] if _tv_ok() else [])
+    caps = ["pc", "wol", "http", "youtube", "whatsapp"] + (["atv"] if _tv_ok() else [])
     return {"capacidades": caps, "mac": _mac_pc()}
 
 
