@@ -32,6 +32,7 @@
       <a href="#agenda" data-vista="agenda">Agenda</a>
       <a href="#enfoque" data-vista="enfoque" id="tab-enfoque" hidden>Enfoque</a>
       <a href="#notas" data-vista="notas" id="tab-notas" hidden>Notas</a>
+      <a href="#ajustes" data-vista="ajustes" id="tab-ajustes" hidden>Ajustes</a>
       <a href="#cuentas" data-vista="cuentas">Cuentas</a>
     </nav>
   </div>
@@ -356,6 +357,21 @@
   </section>
 
   <!-- CUENTAS -->
+  <!-- Fase 14: Ajustes (ajustes.js): los modos de Pixel con su interruptor y lo que se gasta de Gemini -->
+  <section class="vista" id="v-ajustes" hidden>
+    <div><h1>Ajustes</h1><p class="sub">Enciende o apaga cada modo de Píxel. Al lado de cada uno ves si gasta Gemini (el cupo gratis de cada día) o no.</p></div>
+    <div class="grid ajustes">
+      <div class="card" id="card-uso">
+        <div class="head"><div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></div><h2>Consumo de Gemini</h2></div></div>
+        <div id="aj-uso"></div>
+      </div>
+      <div class="card" id="card-modos">
+        <div class="head"><div class="titulo"><div class="ico verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="16" cy="12" r="3"/></svg></div><h2>Modos de Píxel</h2></div></div>
+        <div class="modos" id="aj-modos"></div>
+      </div>
+    </div>
+  </section>
+
   <section class="vista" id="v-cuentas" hidden>
     <div><h1>Cuentas</h1><p class="sub">Vincula servicios para que Píxel pueda usar tu calendario y enviar correos.</p></div>
     <!-- Fase 13: Calendar y Gmail desde el celular (google.js, solo en la app de internet) -->

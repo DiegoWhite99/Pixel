@@ -949,3 +949,14 @@ El usuario: "cuando te diga modo enfoque, el agente me muestra las dos opciones 
     - La pregunta del número no terminaba en "?" y el número sin "Píxel" se ignoraba.
     - `window.open(…, "noopener")` siempre devuelve `null`, y Píxel decía "toca Abrir WhatsApp" aunque ya lo había abierto.
 - El camino del PC (WhatsApp Web + `xdotool`) se probó solo con sustitutos: probarlo de verdad mandaría un mensaje real.
+
+### Ajustes y consumo de Gemini (v1.3.0)
+
+- Pedido: una pestaña Ajustes con todos los modos, interruptor y si gastan Gemini; un visual del costo; consumo bajo.
+- Precios buscados en la página oficial (10 nov 2026): 3.5 Flash-Lite US$ 0,30 / 2,50 por millón (entrada / salida, pensar incluido) y 3.1 Flash-Lite 0,25 / 1,50. El plan gratis no cobra. Google no da un número fijo de peticiones gratis por día ("depende del modelo"), así que la pantalla no inventa un límite.
+- Por defecto, consumo bajo: aprender solo y asunto automático de notas apagados (cada uno costaba una petición en segundo plano), 2 turnos de historial y RAG más corto.
+- Error encontrado al probar: con streaming, el resumen final del SDK de Firebase AI no trae `usageMetadata` (`aggregateResponses` solo junta los candidatos) y los tokens salían en 0. Ahora se leen de los trozos.
+- Probado en la app con un Gemini simulado que devuelve tokens:
+    - 1 petición, 1.300 tokens (1.200 de entrada y 100 de salida) y "pagando serían US$ 0,0006".
+    - Apagar «Modo enfoque» esconde su pestaña y su atajo. Con Gemini apagado contesta en local sin pedir nada, y el modo enfoque sigue.
+    - "salir" no sacaba del modo enfoque (la tarjeta lo dice): arreglado.

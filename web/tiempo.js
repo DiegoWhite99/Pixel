@@ -135,7 +135,7 @@
   }
 
   const RE_LISTO = /^(?:listo|lista|ya|ya esta|ya estan|eso es todo|es todo|eso seria todo|nada mas|ninguna|ninguna mas|no tengo mas|no hay mas|no mas|termine|terminamos|ya termine|ya no|ya no hay|son todas|esas son todas|por ahora no|no,? (?:ya|eso es todo|nada mas|ninguna|gracias))\b/;
-  const RE_SALIR = /\b(?:cancela|cancelar|cancelalo|sal de la guia|salir de la guia|salte|sal de aqui|olvidalo|deja la guia|para la guia|termina la guia|cierra la guia|ya no quiero|no quiero seguir)\b/;
+  const RE_SALIR = /\b(?:cancela|cancelar|cancelalo|sal de la guia|salir de la guia|salir del modo enfoque|sal del modo enfoque|salte|sal de aqui|olvidalo|deja la guia|para la guia|termina la guia|cierra la guia|ya no quiero|no quiero seguir)\b|^(?:salir|sal|salgamos|ninguna de las dos)$/;
   const esListo = (p) => RE_LISTO.test(p) || /^(?:no|nop|nel)[\s,.!]*$/.test(p);
   const esSalir = (p) => RE_SALIR.test(p);
 
@@ -833,7 +833,7 @@
   function pintar() {
     pintarPomo();
     if (!document.getElementById("v-enfoque")) return;
-    $("#tab-enfoque").hidden = !nube.usuario;
+    $("#tab-enfoque").hidden = !nube.usuario || !N.activo("tiempo");
     const firma = JSON.stringify([t.tareas, t.cfg.metodo, !!t.pomo]);
     if (firma === t.pintado) return;
     t.pintado = firma;

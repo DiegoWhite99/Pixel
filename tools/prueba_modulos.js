@@ -13,7 +13,7 @@ ctx.self = ctx;
 vm.createContext(ctx);
 // lo que pone app.js: aqui solo lo justo para que los modulos carguen sin pagina
 vm.runInContext("var nube = {uid: '', usuario: null, d: null}; var $ = () => null; var esc = (t) => String(t); var toast = () => {};", ctx);
-for (const f of ["agente.js", "cerebro.js", "google.js", "tiempo.js", "aparatos.js", "musica.js", "humor.js", "apuntes.js", "whatsapp.js"]) {
+for (const f of ["agente.js", "cerebro.js", "google.js", "tiempo.js", "aparatos.js", "musica.js", "humor.js", "apuntes.js", "whatsapp.js", "ajustes.js"]) {
   const ruta = path.join(WEB, f);
   if (fs.existsSync(ruta)) vm.runInContext(fs.readFileSync(ruta, "utf8"), ctx, {filename: f});
 }
@@ -176,7 +176,7 @@ if (ctx.PixelTiempo) {
     igual(P.respuestaPaso("qué", "importante"), {});
     const pl = ctx.Agente.texto.plano;
     assert.ok(P.esListo(pl("listo")) && P.esListo(pl("no, eso es todo")) && P.esListo(pl("no")) && !P.esListo(pl("noviembre")));
-    assert.ok(P.esSalir(pl("sal de la guía")) && !P.esSalir(pl("listo")));
+    assert.ok(P.esSalir(pl("sal de la guía")) && P.esSalir(pl("salir")) && P.esSalir(pl("salir del modo enfoque")) && !P.esSalir(pl("listo")) && !P.esSalir(pl("salir a correr el sábado")));
   });
   prueba("guia: cuándo se abre", () => {
     for (const f of ["organiza mis tareas", "ayúdame a organizar mis pendientes", "usa la matriz de Eisenhower", "matriz de Aisenhauer"]) assert.ok(P.pedidoGuia(f), f);
@@ -442,6 +442,28 @@ prueba("whatsapp: nunca se envía sin confirmar", () => {
   assert.strictEqual((w.match(/window\.open\(/g) || []).length, 1);
   assert.ok(/WhatsApp: igual/.test(fs.readFileSync(path.join(WEB, "agente.md"), "utf8")), "agente.md lo dice");
 });
+
+// ------------------------------------------------------------------ Ajustes (Fase 14)
+if (ctx.PixelAjustes) {
+  const J = ctx.PixelAjustes.texto;
+  prueba("ajustes: lo que costaría con el plan de pago", () => {
+    // precios oficiales: 3.5 Flash-Lite 0,30 / 2,50 y 3.1 Flash-Lite 0,25 / 1,50 US$ por millón (entrada / salida)
+    const dia = {m: {"gemini-3_5-flash-lite": {n: 2, e: 1000000, s: 100000}, "gemini-3_1-flash-lite": {n: 1, e: 2000000, s: 1000000}}};
+    assert.ok(Math.abs(J.costoDia(dia) - (0.30 + 0.25 + 0.50 + 1.50)) < 1e-9, J.costoDia(dia));
+    assert.strictEqual(J.costoDia({}), 0);
+    assert.strictEqual(J.dolares(0.0031), "US$ 0,0031");
+    assert.strictEqual(J.compacto(12900), "12,9 mil");
+    igual(J.ultimosDias("2026-11-01", 3), ["2026-10-30", "2026-10-31", "2026-11-01"]);
+    igual(J.porMotivo({"2026-11-01": {por: {charla: 3, aprender: 1}}, "2026-10-31": {por: {charla: 2}}}, ["2026-10-31", "2026-11-01"]), [["charla", 5], ["aprender", 1]]);
+  });
+  prueba("ajustes: todos los modos de Píxel tienen su interruptor", () => {
+    const ids = new Set(ctx.PixelAjustes.MODOS.map((m) => m.id));
+    const ag = fs.readFileSync(path.join(WEB, "agente.js"), "utf8");
+    const modulos = JSON.parse(/const MODULOS = (\[[^\]]*\])/.exec(ag)[1]).map((f) => f.replace(".js", "")).filter((m) => m !== "ajustes");
+    for (const m of modulos) assert.ok(ids.has(m), "falta en Ajustes: " + m);
+    for (const m of ctx.PixelAjustes.MODOS) assert.ok(["si", "aveces", "no", "ahorra"].includes(m.gasto) && m.que && m.cuanto, m.id);
+  });
+}
 
 // ------------------------------------------------------------------ cerebro: el mapa (Fase 14)
 if (ctx.Cerebro && ctx.Cerebro.texto.enlaces) {

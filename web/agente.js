@@ -17,13 +17,22 @@
   // El cupo gratis de Gemini es por modelo y por dia: si uno lo agota (429 PerDay), se sigue con el
   // siguiente hasta que se renueve (medianoche del Pacifico). gemini-flash-lite-latest es el mismo 3.5.
   const MODELOS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
-  const MODULOS = ["cerebro.js", "google.js", "tiempo.js", "aparatos.js", "musica.js", "humor.js", "apuntes.js", "whatsapp.js"];
+  const MODULOS = ["cerebro.js", "google.js", "tiempo.js", "aparatos.js", "musica.js", "humor.js", "apuntes.js", "whatsapp.js", "ajustes.js"];
   const MAX_RONDAS = 4;                         // vueltas herramienta -> Gemini en un mismo turno
   const CONFIRMAR_MS = 15000;                   // tras preguntar "¿lo envío?", se contesta sin decir "Píxel"
   // Firebase App Check (consola > App Check > app web Pixel > reCAPTCHA v3): su clave de sitio. Si en la
   // consola se "aplica" App Check a Firebase AI Logic, sin esto Gemini contesta 401. Vacia = sin App Check.
   const APP_CHECK_CLAVE = "";
   const MAX_TURNOS = 4;                         // pares usuario/Pixel que se recuerdan
+  const TURNOS_AHORRO = 2;                      // con "Consumo bajo" (Ajustes): cada pregunta lleva menos historial
+  // Fase 14 - Ajustes: un interruptor por modo (usuarios/<uid>/preferencias/modos/<id>, lo escribe ajustes.js).
+  // Los modulos apagados no dan herramientas, atajos ni contexto. Sin valor guardado vale lo de aqui
+  // (el usuario pidio "dejar el consumo en bajo": lo que gasta Gemini en segundo plano viene apagado).
+  const MODOS_DEFECTO = {aprender: false, clasificar: false, analizar: true, ahorro: true};
+  let modos = {};
+  const activo = (id) => (id in modos ? modos[id] !== false : MODOS_DEFECTO[id] !== false);
+  const usar = (m) => activo(m.nombre);
+  const turnos = () => (activo("ahorro") ? TURNOS_AHORRO : MAX_TURNOS);
   const OLVIDO_MS = 120000;                     // sin hablar este rato se olvida la conversacion (el reposo del servidor)
   const VENTANA_MS = 8000;                      // tras "Dime", la siguiente frase no necesita "Píxel"
   // Android da la frase por terminada en cada pausa corta: se juntan los trozos y solo se responde tras
@@ -360,7 +369,7 @@
         if (e.results[i].isFinal) fin += t; else inter += t;
       }
       oye.interino = inter.trim();
-      for (const m of modulos) { try { if (m.alOirParcial) m.alOirParcial(oye.pendiente + " " + oye.interino + " " + fin); } catch (er) { /* nada */ } }
+      for (const m of modulos) { try { if (m.alOirParcial && usar(m)) m.alOirParcial(oye.pendiente + " " + oye.interino + " " + fin); } catch (er) { /* nada */ } }
       if (fin.trim()) oye.pendiente = (oye.pendiente + " " + fin.trim()).trim().slice(-400);
       if (fin.trim() || oye.interino) {
         if (!oye.inicio) oye.inicio = Date.now();
@@ -480,7 +489,7 @@
   function alOir(texto, inicio) {
     if (est.estado !== "escuchando") return;
     // dictado (apuntes.js con una nota abierta): todo lo que se oye va a la nota, sin "Píxel" ni Gemini
-    for (const m of modulos) { try { if (m.dictar && m.dictar(texto)) return; } catch (e) { console.warn("agente:", m.nombre, e); } }
+    for (const m of modulos) { try { if (m.dictar && usar(m) && m.dictar(texto)) return; } catch (e) { console.warn("agente:", m.nombre, e); } }
     const [ok, resto] = activacion(texto);
     if (!ok) {                                  // vale si empezo a hablar dentro de la ventana
       if ((inicio || Date.now()) < oye.ventanaHasta) { oye.ventanaHasta = 0; orden(texto); }
@@ -519,7 +528,7 @@
   function herramientas() {
     const todas = BASICAS.slice();
     for (const m of modulos) {
-      try { if (m.herramientas) todas.push(...(m.herramientas() || [])); } catch (e) { console.warn("agente:", m.nombre, e); }
+      try { if (m.herramientas && usar(m)) todas.push(...(m.herramientas() || [])); } catch (e) { console.warn("agente:", m.nombre, e); }
     }
     return [{functionDeclarations: todas}];
   }
@@ -536,6 +545,7 @@
     const capacidades = ["- Crear, ver y borrar recordatorios que suenan a su hora."];   // la musica: musica.js
     const extra = [];
     for (const m of modulos) {
+      if (!usar(m)) continue;
       try {
         if (m.capacidad) { const c = m.capacidad(); if (c) capacidades.push(c); }
         if (m.contexto) { const c = m.contexto(texto || ""); if (c) extra.push(c); }
@@ -637,7 +647,9 @@
               r = await modelo.generateContentStream({contents});
             }
           }
+          let gasto = null;                     // los tokens vienen en los trozos (el resumen final del SDK no los trae)
           for await (const trozo of r.stream) {
+            if (trozo && trozo.usageMetadata) gasto = trozo.usageMetadata;
             if (id !== est.turnoId) return;
             const c = trozo.candidates && trozo.candidates[0];
             for (const p of (c && c.content && c.content.parts) || []) {
@@ -652,6 +664,7 @@
             }
           }
           if (buf.trim()) decir(buf.trim());
+          contarUso(ronda ? "herramienta" : "charla", modeloDeHoy(), gasto);
           if (!llamadas.length) break;
           const resultados = [];
           let hayDatos = false;
@@ -692,8 +705,8 @@
     const respuesta = dicho.join(" ");
     conversar("px", respuesta);
     est.historial.push({role: "user", parts: [{text: texto}]}, {role: "model", parts: [{text: respuesta}]});
-    est.historial = est.historial.slice(-MAX_TURNOS * 2);
-    for (const m of modulos) { try { if (m.alTurno) m.alTurno(texto, respuesta); } catch (e) { console.warn("agente:", m.nombre, e); } }
+    est.historial = est.historial.slice(-turnos() * 2);
+    for (const m of modulos) { try { if (m.alTurno && usar(m)) m.alTurno(texto, respuesta); } catch (e) { console.warn("agente:", m.nombre, e); } }
     return respuesta;
   }
 
@@ -758,13 +771,17 @@
       if (est.pendiente && !est.pendiente.seguir) { const p = est.pendiente; est.pendiente = null; if (p.cancelar) p.cancelar(); }
       // atajos: ordenes que un modulo entiende solo ("pausa" con musica sonando), sin esperar a Gemini
       let atajo;
-      for (const m of modulos) { if (m.atajo) { try { atajo = m.atajo(texto); } catch (e) { atajo = undefined; } if (atajo !== undefined) break; } }
+      for (const m of modulos) { if (m.atajo && usar(m)) { try { atajo = m.atajo(texto); } catch (e) { atajo = undefined; } if (atajo !== undefined) break; } }
       if (atajo !== undefined) {
         respuesta = await atajo;
         if (id !== est.turnoId) return;
         if (respuesta) { decirFrase(respuesta); conversar("px", respuesta); }
         est.historial.push({role: "user", parts: [{text: texto}]}, {role: "model", parts: [{text: respuesta || "Hecho."}]});
-        est.historial = est.historial.slice(-MAX_TURNOS * 2);
+        est.historial = est.historial.slice(-turnos() * 2);
+      } else if (!activo("gemini")) {           // Gemini apagado en Ajustes: solo lo que no lo necesita
+        respuesta = "Tengo Gemini apagado en Ajustes, así que solo hago lo que no lo necesita: el modo enfoque, los pomodoros, tomar notas y manejar la música que ya suena. Si quieres que conteste todo, enciéndelo en Ajustes.";
+        decirFrase(respuesta);
+        conversar("px", respuesta);
       } else respuesta = await pensar(texto, id);
     }
     await finHablar();
@@ -1012,7 +1029,7 @@
     // un modulo puede poner su propio estado en Inicio (la musica: "Modo música"; tiempo.js: el pomodoro
     // o la guia de Eisenhower). Manda el primero de MODULOS que conteste.
     let propio = null;
-    for (const m of modulos) { try { if (m.hero) { propio = m.hero(); if (propio) break; } } catch (er) { propio = null; } }
+    for (const m of modulos) { try { if (m.hero && usar(m)) { propio = m.hero(); if (propio) break; } } catch (er) { propio = null; } }
     pill("#pill-esp", oye.quiere ? "ok" : SR ? "" : "warn", propio && propio.pill ? propio.pill : oye.quiere ? "Escuchando" : SR ? "Micrófono apagado" : "Sin reconocimiento de voz");
     pill("#pill-ollama", !est.ai ? "" : est.iaError ? "warn" : "ok",
       !est.ai ? "IA cargando…" : est.iaError === "cupo" ? "Gemini sin cupo hoy" : est.iaError === "red" ? "Sin internet"
@@ -1092,7 +1109,7 @@
     setInterval(() => {
       revisarRecordatorios();
       caducarPendiente();
-      for (const m of modulos) { try { if (m.alSegundo) m.alSegundo(); } catch (e) { console.warn("agente:", m.nombre, e); } }
+      for (const m of modulos) { try { if (m.alSegundo && usar(m)) m.alSegundo(); } catch (e) { console.warn("agente:", m.nombre, e); } }
     }, 1000);
     setInterval(() => { if (est.estado === "escuchando" && oye.ventanaHasta) pintar(); }, 500);
   }
@@ -1130,18 +1147,42 @@
 
   // Una pregunta suelta a Gemini que devuelve JSON (el cerebro la usa para aprender del usuario).
   // No pasa por la voz ni por el historial.
-  async function generarJSON(prompt, instrucciones) {
+  //   motivo: para la cuenta del uso (Ajustes): "aprender", "clasificar", "analizar"...
+  async function generarJSON(prompt, instrucciones, motivo) {
     if (!est.ai) throw new Error("IA sin cargar");
     for (;;) {
       const modelo = est.ia.getGenerativeModel(est.ai, {model: modeloDeHoy(), systemInstruction: instrucciones || undefined,
         generationConfig: {maxOutputTokens: 1200, responseMimeType: "application/json", thinkingConfig: {thinkingLevel: "LOW"}}}, {timeout: 30000});
       try {
         const r = await modelo.generateContent(prompt);
+        contarUso(motivo || "otro", modeloDeHoy(), r.response && r.response.usageMetadata);
         return JSON.parse(r.response.text());
       } catch (e) {
         if (!(esCupo(e) && cupoDelDia(e) && siguienteModelo())) throw e;
       }
     }
+  }
+
+  // ------------------------------------------------------------------ cuanto se gasta de Gemini (Fase 14)
+  // Cada peticion que contesta Gemini se apunta en usuarios/<uid>/uso/<dia del cupo> (el dia de Google:
+  // empieza a medianoche del Pacifico): peticiones y tokens de entrada y de salida (los de "pensar" van
+  // con la salida: Google los cobra asi), por motivo y por modelo. ajustes.js lo dibuja.
+  function contarUso(motivo, modelo, u) {
+    if (!nube.uid || !nube.d) return;
+    const e = (u && u.promptTokenCount) || 0, sal = ((u && u.candidatesTokenCount) || 0) + ((u && u.thoughtsTokenCount) || 0);
+    const mk = String(modelo || "otro").replace(/[.#$/[\]]/g, "_");
+    nube.d.runTransaction(nube.d.ref(nube.db, `usuarios/${nube.uid}/uso/${diaDelCupo()}`), (v) => {
+      v = v || {};
+      v.peticiones = (v.peticiones || 0) + 1;
+      v.entrada = (v.entrada || 0) + e;
+      v.salida = (v.salida || 0) + sal;
+      v.por = v.por || {};
+      v.por[motivo] = (v.por[motivo] || 0) + 1;
+      v.m = v.m || {};
+      const x = v.m[mk] || {n: 0, e: 0, s: 0};
+      v.m[mk] = {n: x.n + 1, e: x.e + e, s: x.s + sal};
+      return v;
+    }).catch((er) => console.warn("agente: no pude apuntar el uso de Gemini", er));
   }
 
   // ------------------------------------------------------------------ que modelo usar hoy
@@ -1207,6 +1248,8 @@
     est, oye, decir: decirFrase, finHablar, pararRec, volverAEscuchar, ponerEstado, conversar, pintar, aviso, beep, ocupado,
     conTiempo, esperar, confirmar, anunciar, generarJSON, desbloquear, orden, mostrarVideo, escuchar: empezar,
     hayIA: () => !!est.ai, ajustes: () => est.ajustes, sistema, herramientas,
+    // Ajustes (ajustes.js): los interruptores, el modelo de hoy y el dia del cupo de Google
+    activo, modos: (o) => { modos = Object.assign({}, o || {}); pintar(); }, MODOS_DEFECTO, modeloDeHoy, diaDelCupo, MODELOS,
   };
 
   window.Agente = {iniciar, usuario, nivelBoca, guardarAjustes, probar, pintar, modulo, nucleo,
