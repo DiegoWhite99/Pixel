@@ -82,6 +82,66 @@
             }
           }
         },
+        "contactos": {
+          ".write": "auth != null && auth.uid === $uid",
+          "$id": {
+            ".validate": "newData.hasChildren(['nombre']) && (newData.child('telefono').exists() || newData.child('correo').exists())",
+            "nombre": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60"
+            },
+            "telefono": {
+              ".validate": "newData.isString() && newData.val().matches(/^[0-9]{0,15}$/)"
+            },
+            "correo": {
+              ".validate": "newData.isString() && newData.val().length <= 120"
+            },
+            "actualizado": {
+              ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+            },
+            "$otro": {
+              ".validate": false
+            }
+          }
+        },
+        "perfil": {
+          ".write": "auth != null && auth.uid === $uid",
+          "nombre": {
+            ".validate": "newData.isString() && newData.val().length <= 60"
+          },
+          "apodo": {
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
+          "trato": {
+            ".validate": "newData.val() === 'tu' || newData.val() === 'usted'"
+          },
+          "foto": {
+            ".validate": "newData.isString() && newData.val().length <= 120000 && newData.val().beginsWith('data:image/jpeg;base64,')"
+          },
+          "sobre": {
+            ".validate": "newData.isString() && newData.val().length <= 600"
+          },
+          "gustos": {
+            ".validate": "newData.isString() && newData.val().length <= 600"
+          },
+          "ayuda": {
+            ".validate": "newData.isString() && newData.val().length <= 600"
+          },
+          "reglas": {
+            ".validate": "newData.isString() && newData.val().length <= 600"
+          },
+          "creado": {
+            ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+          },
+          "actualizado": {
+            ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+          },
+          "bienvenida": {
+            ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+          },
+          "$otro": {
+            ".validate": false
+          }
+        },
         "ajustes": {
           ".write": "auth != null && auth.uid === $uid",
           ".validate": "newData.hasChildren(['personalidad', 'respuesta'])",
@@ -165,6 +225,9 @@
             "$modo": {
               ".validate": "$modo.matches(/^[a-z]{2,20}$/) && newData.isBoolean()"
             }
+          },
+          "contactos_importados": {
+            ".validate": "newData.isBoolean()"
           },
           "$otro": {
             ".validate": false

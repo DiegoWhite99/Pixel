@@ -40,38 +40,57 @@ def escritorio(ventanas, fondo=False):
             estado["ventanas"]["200"] = "(3) WhatsApp - Google Chrome"   # la busqueda de pestañas la trajo al frente
         return 0, ""
     P._correr = correr
-    P._abrir = lambda url: abiertos.append(url) or 0
+    def abrir(url):                     # la pestaña nueva de WhatsApp aparece al rato
+        abiertos.append(url)
+        estado["ventanas"]["300"] = "WhatsApp - Google Chrome"
+        return 0
+    P._abrir = abrir
+    P._al_portapapeles = lambda texto: llamadas.append("portapapeles: " + texto) or "lo de antes"
     return llamadas, abiertos
 
 
 URL = "https://web.whatsapp.com/send?phone=573001234567&text=hola"
 
-# 1. WhatsApp Web ya abierto: se usa ESA pestaña (Ctrl+L, la direccion, Enter), sin abrir otra
+# 1. WhatsApp Web ya abierto: se escribe en ESA pestaña sin recargarla (nada de Ctrl+L ni de la direccion):
+#    cierra el chat abierto, "Nuevo chat", busca el numero, abre el primero y pega el mensaje (sin enviarlo)
 llamadas, abiertos = escritorio({"100": "Píxel - Google Chrome", "200": "(90) WhatsApp - Google Chrome"})
-r = P.whatsapp("+57 300 123 4567", "hola")
-comprobar(not abiertos, "ya abierto: no abre otra pestaña", abiertos)
-comprobar("xdotool windowactivate --sync 200 key --clearmodifiers ctrl+l" in llamadas and ("xdotool type --delay 6 " + URL) in llamadas,
-          "carga el chat en la misma pestaña", llamadas)
-comprobar(llamadas.count("xdotool windowactivate --sync 200 key --clearmodifiers Return") == 2 and r["mensaje"] == "enviado",
-          "y oprime Enter dos veces en esa ventana", r)
+r = P.whatsapp("+57 300 123 4567", "Por favor revisé el proyecto: está en GitHub ñandú 😀")
+comprobar(not abiertos and not any("ctrl+l" in x for x in llamadas), "ya abierto: no abre otra pestaña ni la recarga", llamadas)
+orden = ["xdotool windowactivate --sync 200", "xdotool key --clearmodifiers Escape", "xdotool key --clearmodifiers Escape",
+         "xdotool key --clearmodifiers ctrl+alt+n", "portapapeles: 3001234567", "xdotool key --clearmodifiers ctrl+v",
+         "xdotool key --clearmodifiers Down", "xdotool key --clearmodifiers Return",
+         "portapapeles: Por favor revisé el proyecto: está en GitHub ñandú 😀", "xdotool key --clearmodifiers ctrl+v"]
+pos, i = [], 0
+for x in orden:
+    try:
+        i = llamadas.index(x, i) + 1
+        pos.append(i)
+    except ValueError:
+        pos.append(None)
+comprobar(None not in pos, "busca el chat con «Nuevo chat» y pega el mensaje, en ese orden", llamadas)
+comprobar(not any(x.startswith("xdotool type") and ":" in x for x in llamadas), "no teclea nada con signos (el teclado latam cambiaba «:» por «ñ»)", llamadas)
+comprobar(r["mensaje"] == "escrito" and llamadas.count("xdotool key --clearmodifiers Return") == 1 and "Intro" in r["decir"],
+          "lo deja escrito sin enviarlo (no se ve qué chat quedó abierto)", r)
+comprobar(llamadas.count("portapapeles: lo de antes") == 2, "deja el portapapeles como estaba", llamadas)
 
 # 2. En una pestaña de fondo: la busca con Ctrl+Shift+A y la usa
 llamadas, abiertos = escritorio({"100": "Píxel - Google Chrome"}, fondo=True)
 r = P.whatsapp("573001234567", "hola")     # la app ya manda el numero con su indicativo
-comprobar(any("ctrl+shift+a" in x for x in llamadas) and not abiertos and any(x.startswith("xdotool type --delay 6 https://web.whatsapp.com") for x in llamadas),
+comprobar(any("ctrl+shift+a" in x for x in llamadas) and not abiertos and "xdotool key --clearmodifiers ctrl+alt+n" in llamadas,
           "pestaña de fondo: la trae con la búsqueda de pestañas y la usa", llamadas)
 
 # 3. No esta abierto: pestaña nueva con xdg-open; la busqueda se cierra con Escape
 llamadas, abiertos = escritorio({"100": "Píxel - Google Chrome"})
 r = P.whatsapp("573001234567", "hola")     # la app ya manda el numero con su indicativo
 comprobar(abiertos == [URL], "no abierto: abre una pestaña nueva", abiertos)
-comprobar("xdotool key --clearmodifiers Escape" in llamadas and not any(x.startswith("xdotool type --delay 6") for x in llamadas),
+comprobar("xdotool key --clearmodifiers Escape" in llamadas and not any(x.startswith("portapapeles:") for x in llamadas),
           "y no escribe en ninguna otra pestaña", llamadas)
+comprobar(r["mensaje"] == "enviado", "en la pestaña nueva el enlace ya trae el chat correcto: lo envía", r)
 
 # 4. Una pestaña que solo habla de WhatsApp no vale
 llamadas, abiertos = escritorio({"100": "WhatsApp - Buscar con Google - Google Chrome"})
 r = P.whatsapp("573001234567", "hola")     # la app ya manda el numero con su indicativo
-comprobar(abiertos == [URL] and not any("ctrl+l" in x for x in llamadas), "«WhatsApp - Buscar con Google» no se toca", llamadas)
+comprobar(abiertos == [URL] and not any("ctrl+alt+n" in x for x in llamadas), "«WhatsApp - Buscar con Google» no se toca", llamadas)
 
 # 5. El numero y el mensaje (la app normaliza; aqui solo se comprueba el largo)
 for malo in ("123", "", "abc"):

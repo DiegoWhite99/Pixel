@@ -58,7 +58,7 @@ class Tts:
         texto = texto.strip()
         if not texto:
             return b""
-        agudo = max(1.0, float(self.agudo or 1.0))
+        agudo = max(0.8, float(self.agudo or 1.0))   # < 1: mas grave (la voz de hombre, panel.BASE_VOZ)
         cfg = self.cfg if agudo == 1.0 else SynthesisConfig(speaker_id=self.speaker_id,
                                                             length_scale=(getattr(self.voice.config, "length_scale", None) or 1.0) * agudo)
         with self._lock:

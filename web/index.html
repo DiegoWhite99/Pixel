@@ -23,6 +23,11 @@
       <span class="pill" id="pill-esp"><i></i>ESP32</span>
       <span class="pill" id="pill-ollama"><i></i>IA local</span>
     </div>
+    <!-- 2.0.0: la cuenta (perfil.js): foto y nombre; abre Mi perfil -->
+    <button class="cuenta" id="cuenta" type="button" hidden aria-label="Mi perfil">
+      <span class="avatar"><img id="cuenta-foto" alt="" hidden referrerpolicy="no-referrer"><span id="cuenta-letras"></span></span>
+      <span class="nombre" id="cuenta-nombre">Mi perfil</span>
+    </button>
   </div>
   <div class="wrap">
     <nav class="tabs" aria-label="Secciones">
@@ -30,6 +35,7 @@
       <a href="#dispositivos" data-vista="dispositivos">Dispositivos</a>
       <a href="#agente" data-vista="agente">Personalidad</a>
       <a href="#agenda" data-vista="agenda">Agenda</a>
+      <a href="#contactos" data-vista="contactos" id="tab-contactos" hidden>Contactos</a>
       <a href="#enfoque" data-vista="enfoque" id="tab-enfoque" hidden>Enfoque</a>
       <a href="#notas" data-vista="notas" id="tab-notas" hidden>Notas</a>
       <a href="#ajustes" data-vista="ajustes" id="tab-ajustes" hidden>Ajustes</a>
@@ -101,6 +107,13 @@
             <div class="txt"><b>Píxel necesita permiso de Google</b><small>Para tu Calendar y tu Gmail. Dura una hora.</small></div>
             <button class="btn primario" type="button" data-conectar-google>Conectar Google</button>
           </div>
+        </div>
+        <!-- 2.0.0: el primer contacto (perfil.js): Pixel se presenta e invita a llenar el perfil. Debajo de la
+             cara, para que se vea a Pixel mientras habla -->
+        <div class="card bienvenida" id="bienvenida" hidden aria-live="polite">
+          <div class="titulo"><img src="icono.svg" alt="" class="bv-icono"><h2>Hola, soy Píxel</h2></div>
+          <p id="bv-texto"></p>
+          <div class="acciones"><button class="btn primario" type="button" id="bv-perfil">Ir a mi perfil</button><button class="btn" type="button" id="bv-luego">Después</button></div>
         </div>
         <!-- Fase 14: Inicio cambia con el enfoque: el pomodoro en marcha o la guia de Eisenhower (tiempo.js) -->
         <div class="card modo-enfoque" id="modo-enfoque" hidden aria-live="polite"></div>
@@ -203,6 +216,8 @@
         </div>
       </div>
 
+      <p class="sub" id="voz-en-ajustes" hidden>La voz de Píxel se elige en <a href="#ajustes">Ajustes</a>.</p>
+      <div id="voz-bloque">
       <h2>Voz</h2>
       <p class="sub" id="voces-nota" hidden></p>
       <div class="voces" id="voces"></div>
@@ -214,6 +229,7 @@
       </div>
       <p class="sub">Infantil: la misma voz, más aguda, como en los dibujos animados (no existen voces de niño en español para descargar).</p>
       <div class="acciones"><button class="btn suave" type="button" id="guardar-probar">Guardar y probar</button></div>
+      </div>
 
       <h2>Personalidad</h2>
       <div class="presets" id="presets">
@@ -359,7 +375,21 @@
   <!-- CUENTAS -->
   <!-- Fase 14: Ajustes (ajustes.js): los modos de Pixel con su interruptor y lo que se gasta de Gemini -->
   <section class="vista" id="v-ajustes" hidden>
-    <div><h1>Ajustes</h1><p class="sub">Elige con qué IA piensa Píxel y enciende o apaga cada modo. Al lado de cada uno ves si gasta la IA o no.</p></div>
+    <div><h1>Ajustes</h1><p class="sub">Elige la voz de Píxel, con qué IA piensa y enciende o apaga cada modo. Al lado de cada uno ves si gasta la IA o no.</p></div>
+    <!-- 2.0.0: la voz de Pixel (voz.js): la de alta calidad (Supertonic 3, 10 voces) o la del celular -->
+    <div class="card" id="card-voz">
+      <div class="head"><div class="titulo"><div class="ico verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg></div><h2>Voz de Píxel</h2></div>
+        <span class="chip" id="voz-chip">…</span></div>
+      <p class="sub">La voz de alta calidad se baja una sola vez a este aparato (unos 400 MB, mejor con WiFi) y después habla sin internet. Mientras se baja, o si el aparato es muy lento para ella, Píxel usa la voz del celular.</p>
+      <div class="voces-px" id="aj-voces" role="radiogroup" aria-label="Voz de Píxel"></div>
+      <h3>Tipo de voz</h3>
+      <div class="segmento" role="radiogroup" aria-label="Tipo de voz" id="aj-tono">
+        <label><input type="radio" name="aj-tono" value="normal">Normal</label>
+        <label><input type="radio" name="aj-tono" value="infantil">Infantil</label>
+        <label><input type="radio" name="aj-tono" value="muy_infantil">Muy infantil</label>
+      </div>
+      <p class="sub">Infantil: la misma voz, más aguda, como en los dibujos animados.</p>
+    </div>
     <!-- Fase 14: el proveedor de IA (proveedores.js): Gemini gratis o el modelo que el usuario quiera con su clave -->
     <div class="card" id="card-ia">
       <div class="head"><div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="3"/><path d="M9 9h6v6H9zM9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg></div><h2>Proveedor de IA</h2></div>
@@ -392,6 +422,76 @@
       <div class="card" id="card-modos">
         <div class="head"><div class="titulo"><div class="ico verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="16" cy="12" r="3"/></svg></div><h2>Modos de Píxel</h2></div></div>
         <div class="modos" id="aj-modos"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2.0.0: Contactos (contactos.js): nombre, celular y correo; los usan WhatsApp y Gmail -->
+  <section class="vista" id="v-contactos" hidden>
+    <div class="head"><div><h1>Contactos</h1><p class="sub">Las personas a las que Píxel les escribe por WhatsApp o por correo. Se guardan solas cuando le dices a Píxel un número o un correo, y aquí las puedes agregar, cambiar o borrar.</p></div>
+      <span class="chip" id="ct-cuantos">…</span></div>
+    <div class="grid contactos">
+      <form class="card" id="f-contacto-app" autocomplete="off">
+        <h2 id="ct-titulo">Agregar contacto</h2>
+        <label class="campo">Nombre<input type="text" id="ct-nombre" maxlength="60" required placeholder="Por ejemplo: Ana Gómez"></label>
+        <label class="campo">Celular (WhatsApp)<input type="tel" id="ct-telefono" maxlength="25" inputmode="tel" placeholder="+57 300 123 4567"></label>
+        <label class="campo">Correo<input type="email" id="ct-correo" maxlength="120" placeholder="ana@gmail.com"></label>
+        <div class="acciones"><button class="btn primario" type="submit" id="ct-guardar">Guardar contacto</button><button class="btn" type="button" id="ct-cancelar" hidden>Cancelar</button></div>
+        <p class="nota" id="ct-estado" aria-live="polite"></p>
+      </form>
+      <div class="card">
+        <input type="search" id="ct-buscar" placeholder="Buscar por nombre, número o correo" aria-label="Buscar contactos">
+        <div class="lista-contactos" id="ct-lista"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2.0.0: Mi perfil (perfil.js). Se abre tocando la foto de arriba -->
+  <section class="vista" id="v-perfil" hidden>
+    <div class="head"><div><h1>Mi perfil</h1><p class="sub">Cuéntale a Píxel quién eres, cómo tratarte, qué te gusta y en qué te ayuda. Lo usa en cada respuesta. Solo tú lo ves.</p></div>
+      <span class="chip" id="pf-estado">…</span></div>
+    <div class="grid perfil">
+      <form class="card" id="f-perfil" autocomplete="off">
+        <div class="pf-cabeza">
+          <span class="avatar grande"><img id="pf-foto-img" alt="Tu foto" hidden referrerpolicy="no-referrer"><span id="pf-foto-letras"></span></span>
+          <div class="acciones"><button class="btn" type="button" id="pf-foto-btn">Cambiar foto</button><button class="btn suave" type="button" id="pf-foto-quitar" hidden>Usar la de Google</button></div>
+          <input type="file" id="pf-foto" accept="image/*" hidden>
+        </div>
+        <div class="form-fila">
+          <label class="campo">Tu nombre<input type="text" id="pf-nombre" maxlength="60" autocomplete="name"></label>
+          <label class="campo">Cómo quieres que te llame<input type="text" id="pf-apodo" maxlength="40" placeholder="Por ejemplo: Diego"></label>
+        </div>
+        <div class="campo"><span>Cómo te habla</span>
+          <div class="segmento" role="radiogroup" aria-label="Cómo te habla Píxel">
+            <label><input type="radio" name="pf-trato" value="tu" checked>De tú</label>
+            <label><input type="radio" name="pf-trato" value="usted">De usted</label>
+          </div>
+        </div>
+        <label class="campo">Sobre ti<textarea id="pf-sobre" maxlength="600" placeholder="A qué te dedicas, qué estudias, de dónde eres…"></textarea></label>
+        <div class="contador" data-max="pf-sobre"></div>
+        <label class="campo">Lo que te gusta<textarea id="pf-gustos" maxlength="600" placeholder="Música, deportes, series, comida…"></textarea></label>
+        <div class="contador" data-max="pf-gustos"></div>
+        <label class="campo">En qué te puede ayudar Píxel<textarea id="pf-ayuda" maxlength="600" placeholder="Organizar mi semana, estudiar para los parciales, recordarme tomar agua…"></textarea></label>
+        <div class="contador" data-max="pf-ayuda"></div>
+        <label class="campo">Reglas para Píxel<textarea id="pf-reglas" maxlength="600" placeholder="Por ejemplo: explícame con ejemplos; dime los precios en pesos colombianos."></textarea></label>
+        <div class="contador" data-max="pf-reglas"></div>
+        <div class="acciones pf-guardar"><button class="btn primario" type="submit" id="pf-guardar">Guardar perfil</button><span class="pf-guardado" id="pf-guardado" aria-live="polite"></span></div>
+      </form>
+      <div class="pf-lado">
+        <div class="card" id="card-md">
+          <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></div><h2>Con un archivo Markdown</h2></div>
+          <p class="sub">¿Prefieres escribirlo con calma? Descarga la plantilla, llénala y súbela. Si usa los títulos de la plantilla, se lee aquí mismo <b>sin gastar la IA</b>; si está escrita a tu manera, Píxel la lee con 1 petición. Siempre revisas antes de guardar.</p>
+          <div class="acciones"><button class="btn primario" type="button" id="pf-md-subir">Subir archivo .md</button><button class="btn" type="button" id="pf-md-plantilla">Descargar plantilla</button><button class="btn suave" type="button" id="pf-md-bajar">Descargar mi perfil</button></div>
+          <input type="file" id="pf-md" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden>
+          <p class="nota" id="pf-md-estado" aria-live="polite"></p>
+        </div>
+        <div class="card" id="card-cuenta">
+          <div class="titulo"><div class="ico verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></div><h2>Tu cuenta</h2></div>
+          <div class="fila"><div class="txt"><small>Cuenta de Google</small><b id="pf-correo">—</b><small id="pf-desde">—</small></div></div>
+          <div class="acciones"><button class="btn" type="button" id="pf-presentar">Que Píxel se presente otra vez</button>
+            <button class="btn" type="button" data-cambiar-cuenta>Cambiar de cuenta</button><button class="btn" type="button" data-salir>Cerrar sesión</button>
+            <button class="btn peligro" type="button" id="pf-borrar">Borrar mi perfil</button></div>
+        </div>
       </div>
     </div>
   </section>
@@ -532,6 +632,7 @@
 <script src="escenarios.js"></script>
 <script src="mapa.js"></script>
 <script src="proveedores.js"></script>
+<script src="voz.js"></script>
 <script src="proveedor_claude.js"></script>
 <script src="cara3d.js"></script>
 <script src="claves.js"></script>

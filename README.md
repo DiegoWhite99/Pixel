@@ -1,9 +1,9 @@
 # Píxel, asistente de voz
 
-Píxel es un asistente de voz con cara de robot hecho para una feria de tecnología. Vive en una aplicación web que se instala en el celular: oye la palabra **«Píxel»**, piensa con Gemini, contesta con una voz infantil y mueve su cara en 3D. Un computador y un ESP32 son opcionales: le dan micrófono y altavoz propios y le dejan manejar los aparatos de la casa.
+Píxel es un agente de inteligencia artificial creado por Divergencia IA, con cara de robot, hecho para una feria de tecnología. Vive en una aplicación web que se instala en el celular: oye la palabra **«Píxel»**, piensa con Gemini (o con el modelo que elijas), contesta con una voz natural de alta calidad y mueve su cara en 3D. Se entra con la cuenta de Google y cada persona tiene su perfil. Un computador y un ESP32 son opcionales: le dan micrófono y altavoz propios y le dejan manejar los aparatos de la casa.
 
 - **Aplicación:** https://pixelassitance.web.app (en el celular, con Chrome).
-- **Versión actual:** 1.3.1, del 10 de noviembre de 2026.
+- **Versión actual:** 2.0.0, del 10 de noviembre de 2026.
 - **Cómo está hecho por dentro:** `CLAUDE.md`. **Mediciones y decisiones:** `memoria.md`.
 
 ## Qué puede hacer
@@ -20,8 +20,10 @@ Píxel es un asistente de voz con cara de robot hecho para una feria de tecnolog
 | Música | «Píxel, pon salsa» · «pausa» · «cambia de canción». Baila y cambia el fondo según el género. |
 | Aparatos | «Píxel, súbele al volumen del PC» · «Píxel, prueba el ESP32» |
 | Su memoria | «Píxel, recuerda que mi hermana se llama Laura». Se ve como un mapa en Personalidad y, en el computador, en Obsidian. |
+| Contactos | «Píxel, guarda el número de Ana: 300 123 4567». Están en la pestaña Contactos, con su celular y su correo. |
+| Tu perfil | Toca tu foto arriba: cómo te llama, si te trata de tú o de usted, tus gustos y en qué te ayuda. También con un archivo Markdown. |
 
-En **Ajustes** cada modo tiene su interruptor y dice si gasta el cupo gratis de Gemini o no. Ahí también se ve cuánto se ha gastado.
+En **Ajustes** se elige la voz de Píxel y la IA con la que piensa, y cada modo tiene su interruptor, que dice si gasta el cupo gratis de Gemini o no. Ahí también se ve cuánto se ha gastado.
 
 ## Versiones
 
@@ -33,12 +35,35 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 
 | Versión | Fecha | Qué trae |
 |---|---|---|
+| **2.0.0** | 10 nov 2026 | Entrada con Google, perfil con foto y archivo Markdown, Píxel se presenta, voz de alta calidad (Supertonic 3), Contactos, la IA con tu propia clave y WhatsApp sin recargar la pestaña. |
 | **1.3.1** | 10 nov 2026 | Sonidos al llamarlo, al pensar y al terminar. WhatsApp en el computador usa la pestaña que ya está abierta. |
 | **1.3.0** | 10 nov 2026 | Pestaña Ajustes: un interruptor por modo y el consumo de Gemini. Consumo bajo por defecto. |
 | **1.2.1** | 10 nov 2026 | WhatsApp, modo enfoque con un pomodoro por tarea, mapa del cerebro, y probar el ESP32, el computador y Google. |
 | **1.0.0** | 10 nov 2026 | Píxel entero en el celular: Gemini, Calendar, Gmail, Pomodoro, Eisenhower, cerebro, aparatos, música, notas y voz infantil. |
 
 No hay 1.1.0: la segunda fase salió directamente como 1.2.1.
+
+### 2.0.0 · 10 de noviembre de 2026
+
+Cambia cómo se empieza a usar Píxel: ahora cada persona entra con su cuenta y Píxel la conoce.
+
+- **Pantalla de entrada:** sin sesión solo se ve a Píxel con «Entrar con Google». La primera vez quedas registrado.
+- **Mi perfil** (tocando tu foto, arriba):
+  - foto, nombre, cómo quieres que te llame, si te trata de tú o de usted, sobre ti, tus gustos, en qué te ayuda y reglas para Píxel;
+  - o un **archivo Markdown**: con la plantilla se lee sin gastar la IA; escrito a tu manera, lo lee la IA con una petición;
+  - al guardar se ve «✓ Guardado»;
+  - Píxel lo usa en cada respuesta.
+- **Primer contacto:** la primera vez, Píxel se presenta en voz alta («un agente de inteligencia artificial creado por Divergencia IA…») y te invita a llenar tu perfil.
+- **Voz de alta calidad:** Supertonic 3, de Supertone, con la voz Mujer 4 por defecto y 10 para elegir en Ajustes.
+  - En el celular se baja una vez (unos 400 MB) y después habla sin internet. Si el aparato es muy lento para ella, usa la voz del celular.
+  - Lee bien las cifras, las horas, los porcentajes y los precios.
+  - El computador y el ESP32 también hablan con ella.
+- **Contactos:** nombre, celular y correo, en su propia pestaña. WhatsApp y Gmail los buscan ahí.
+- **La IA con tu clave** (Ajustes → Proveedor de IA): Gemini, Claude, GPT, OpenRouter (para Kimi), DeepSeek u otro compatible. La clave se queda en tu aparato, y el consumo se ve por modelo.
+- **WhatsApp en el computador:** si WhatsApp Web ya está abierto, escribe en esa pestaña sin recargarla y deja el mensaje para que tú lo envíes. Se arregló una dirección rota que salía con el teclado latinoamericano.
+- **Cuenta de Google:** al entrar siempre se elige la cuenta, y hay «Cambiar de cuenta».
+- **Seguridad:** reglas nuevas para el perfil y los contactos (cada quien ve solo lo suyo), y se cerró un hueco por el que un Píxel podía meterse en la lista de otro usuario.
+- **Pruebas nuevas:** `tools/prueba_voz.py` y más casos en `tools/prueba_modulos.js` (64).
 
 ### 1.3.1 · 10 de noviembre de 2026
 
@@ -121,14 +146,16 @@ Para volver a publicar una versión vieja: `git checkout vX.Y.Z` y luego `npx fi
 | La aplicación | `web/` (Firebase Hosting) | Píxel en el celular: oír, Gemini, voz, cara, módulos (`agente.js` y los demás `.js`). |
 | La nube | Firebase (`database.rules.json`) | Cuentas, datos de cada usuario y las órdenes a los puentes. |
 | El computador | `servidor.py` y compañía | Opcional: Píxel con el ESP32 (voz), el panel local (`http://<IP>:8080`) y el puente del PC (volumen, música, TV, WhatsApp, Obsidian). |
+| La voz | `web/voz.js` (celular) y `tts_supertonic.py` (computador) | Supertonic 3. En el celular se baja de Hugging Face; en el computador va en `voces/supertonic3/`. |
 | El ESP32 | `~/Arduino/Pixel_portal/` (fuera de este repositorio) | Micrófono y altavoz, y puente de infrarrojo, relé y encendido por red. |
 
 ## Puesta en marcha del computador
 
 - Python 3.10 en `.venv/` con faster-whisper 1.2.1, piper-tts 1.8.0, numpy, yt-dlp y androidtvremote2.
 - Ollama en `127.0.0.1:11434` con `qwen2.5:3b`, de respaldo de Gemini.
-- La voz `es_ES-sharvard-medium` (`.onnx` y `.onnx.json`) en `voces/`. Se descarga de https://huggingface.co/rhasspy/piper-voices, carpeta `es/es_ES/sharvard/medium`.
-- Para que el computador envíe por WhatsApp: `sudo apt install xdotool`, y WhatsApp Web abierto en Chrome.
+- La voz **Supertonic 3** en `voces/supertonic3/` (no va en git: pesa 398 MB). Se descarga de https://huggingface.co/Supertone/supertonic-3: las carpetas `onnx/` y `voice_styles/` tal cual. Su licencia (OpenRAIL-M) va en `voces/supertonic3/LICENSE`.
+- Las voces de Piper de respaldo (`es_ES-sharvard-medium` y compañía) en `voces/`, de https://huggingface.co/rhasspy/piper-voices.
+- Para que el computador envíe por WhatsApp: `sudo apt install xdotool xclip`, y WhatsApp Web abierto en Chrome.
 
 ```bash
 systemctl --user restart pixel      # el servidor arranca solo con la sesión
@@ -148,6 +175,7 @@ Este repositorio es público: aquí no entran claves, grabaciones ni datos perso
 node tools/prueba_modulos.js                  # las funciones de la aplicación (segundos)
 .venv/bin/python tools/prueba_obsidian.py     # la sincronización con Obsidian
 .venv/bin/python tools/prueba_puente_pc.py    # WhatsApp en el computador (no envía nada)
+.venv/bin/python tools/prueba_voz.py          # los números de la voz, iguales en el computador y en la app
 ```
 
 La prueba de punta a punta (`tools/prueba_app.js`) usa Gemini y YouTube de verdad, así que gasta cupo. Cómo se corre: `CLAUDE.md`.

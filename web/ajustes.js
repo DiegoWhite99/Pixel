@@ -17,7 +17,7 @@
   const PRECIOS = {"gemini-3.5-flash-lite": {e: 0.30, s: 2.50}, "gemini-3.1-flash-lite": {e: 0.25, s: 1.50}};
   const NOMBRE_MODELO = {"gemini-3.5-flash-lite": "Gemini 3.5 Flash-Lite", "gemini-3.1-flash-lite": "Gemini 3.1 Flash-Lite"};
   const MOTIVOS = {charla: "Conversación", herramienta: "Consultas (segunda vuelta)", aprender: "Aprender solo",
-    clasificar: "Asunto de las notas", analizar: "Analizar notas", prueba: "Pruebas de clave", otro: "Otras"};
+    clasificar: "Asunto de las notas", analizar: "Analizar notas", prueba: "Pruebas de clave", perfil: "Leer tu perfil (.md)", otro: "Otras"};
   const DIAS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
   const RETENER_DIAS = 30;
 
@@ -85,7 +85,7 @@
   }
 
   // ------------------------------------------------------------------ estado y nube
-  const aj = {uso: {}, aprender: false, quitar: [], pintadoM: "", pintadoU: "", limpiado: false};
+  const aj = {uso: {}, aprender: false, quitar: [], pintadoM: "", pintadoU: "", pintadoV: "", guardada: false, eligiendo: false, limpiado: false};
   const ref = (sub) => nube.d.ref(nube.db, `usuarios/${nube.uid}/${sub}`);
   const valor = (id) => (id === "aprender" ? aj.aprender : N.activo(id));
 
@@ -180,10 +180,84 @@
     if (h !== aj.pintadoU) { $("#aj-uso").innerHTML = h; aj.pintadoU = h; }
   }
 
+  // ------------------------------------------------------------------ la voz (voz.js, 2.0.0)
+  // Dos caminos: la voz de alta calidad (Supertonic, 10 voces con el mismo modelo) o la del celular
+  const VP = typeof VozPixel !== "undefined" ? VozPixel : null;
+  function estadoVoz() {
+    const e = VP.info();
+    if (!VP.soportada()) return {t: "Este navegador no puede usarla", c: "mal"};
+    if (e.lista) return {t: "Lista en este aparato" + (e.ep === "webgpu" ? " · con la tarjeta gráfica" : ""), c: "ok"};
+    if (e.bajando) return {t: e.progreso ? `Bajando… ${Math.round(e.progreso * 100)} % de ${VP.MB} MB` : "Preparando…", c: "info", p: e.progreso || 0};
+    if (e.error) return {t: "No se pudo bajar: " + e.error, c: "mal", bajar: true};
+    return {t: aj.guardada ? "Bajada; se prepara al usarla" : `Sin bajar · ${VP.MB} MB, una sola vez (mejor con WiFi)`, c: "", bajar: !aj.guardada};
+  }
+  function pintarVoz() {
+    if (!VP || !document.getElementById("aj-voces")) return;
+    const a = N.ajustes(), actual = N.voz.actual(), alta = !!VP.de(actual) || (VP.de(VP.normal(a.voz || VP.DEFECTO)) && VP.lenta());
+    const elegida = VP.de(VP.normal(a.voz || VP.DEFECTO)) || VP.de(VP.DEFECTO), celular = N.voz.celular(), e = estadoVoz();
+    const opciones = ["mujer", "hombre"].map((tipo) => `<optgroup label="${tipo === "mujer" ? "Mujer" : "Hombre"}">${VP.VOCES.filter((v) => v.tipo === tipo)
+      .map((v) => `<option value="${v.id}"${v.id === elegida.id ? " selected" : ""}>${esc(v.nombre)}</option>`).join("")}</optgroup>`).join("");
+    const lenta = VP.lenta() ? `<small class="estado mal">Este aparato es lento para esta voz: por ahora hablo con la del celular.</small>
+        <button class="btn" type="button" data-voz-reintentar>Intentar otra vez</button>` : "";
+    let h = `<label class="voz-px${alta ? " elegida" : ""}">
+        <input type="radio" name="aj-voz" value="alta"${alta ? " checked" : ""}${VP.soportada() ? "" : " disabled"}>
+        <span class="txt"><b>Voz de alta calidad</b><small>Supertonic 3: natural y clara. Funciona sin internet una vez bajada.</small>
+          <select id="aj-voz-alta" aria-label="Voz de alta calidad">${opciones}</select>
+          <small class="estado ${e.c}">${esc(e.t)}</small>${e.p !== undefined ? `<span class="barra"><i style="width:${Math.round(e.p * 100)}%"></i></span>` : ""}
+          ${e.bajar && VP.soportada() ? '<button class="btn suave" type="button" data-voz-bajar>Bajar ahora</button>' : ""}${lenta}</span>
+        <button class="btn" type="button" data-escuchar="alta">Escuchar</button></label>`;
+    const sel = celular.length ? `<select id="aj-voz-celular" aria-label="Voz del celular"><option value="celular">La mejor que tenga</option>${celular.map((v) =>
+      `<option value="${esc(v.id)}"${a.voz === v.id ? " selected" : ""}>${esc(v.nombre)} · ${esc(v.lang)}</option>`).join("")}</select>` : "";
+    h += `<label class="voz-px${!alta ? " elegida" : ""}">
+        <input type="radio" name="aj-voz" value="celular"${!alta ? " checked" : ""}>
+        <span class="txt"><b>La voz del celular</b><small>${celular.length ? "Sin bajar nada. Suena distinto en cada celular." : "Este navegador no tiene voces en español."}</small>${sel}</span>
+        <button class="btn" type="button" data-escuchar="celular">Escuchar</button></label>`;
+    if (h !== aj.pintadoV && !aj.eligiendo) { $("#aj-voces").innerHTML = h; aj.pintadoV = h; }
+    document.querySelectorAll("input[name=aj-tono]").forEach((r) => { r.checked = r.value === (a.tono || "normal"); });
+    const chip = $("#voz-chip"), t = alta && !VP.lenta() ? `${elegida.nombre.replace(/ \(.*\)| · .*/, "")} · alta calidad` + (VP.info().lista ? "" : " · bajando") : "Voz del celular";
+    if (chip.textContent !== t) { chip.textContent = t; chip.className = "chip" + (alta && VP.info().lista ? " ok" : " info"); }
+  }
+  async function revisarGuardada() {
+    if (!VP) return;
+    aj.guardada = await VP.guardada();
+    pintarVoz();
+  }
+  function elegirVoz(voz) {
+    const a = N.ajustes(), deCelular = !VP || !VP.de(VP.normal(a.voz || VP.DEFECTO));
+    // la voz de alta calidad se pidio "suave y elocuente": al pasar a ella desde la del celular, tono normal
+    A.guardarAjustes({voz, tono: VP && VP.de(voz) && deCelular ? "normal" : a.tono});
+  }
+  function montarVoz() {
+    if (!VP || !document.getElementById("aj-voces")) return;
+    VP.alCambiar(pintarVoz);
+    revisarGuardada();
+    const caja = $("#aj-voces");
+    caja.addEventListener("focusin", (e) => { if (e.target.tagName === "SELECT") aj.eligiendo = true; });   // que no se repinte mientras elige
+    caja.addEventListener("focusout", () => { aj.eligiendo = false; });
+    caja.addEventListener("change", (e) => {
+      const alta = document.getElementById("aj-voz-alta"), cel = document.getElementById("aj-voz-celular");
+      if (e.target.name === "aj-voz") elegirVoz(e.target.value === "alta" ? alta.value : (cel ? cel.value : "celular"));
+      else if (e.target.id === "aj-voz-alta") elegirVoz(e.target.value);
+      else if (e.target.id === "aj-voz-celular") elegirVoz(e.target.value);
+      aj.eligiendo = false;
+    });
+    caja.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-escuchar], [data-voz-bajar], [data-voz-reintentar]");
+      if (!b) return;
+      e.preventDefault();
+      if (b.dataset.vozBajar !== undefined) { N.voz.preparar(true); return; }
+      if (b.dataset.vozReintentar !== undefined) { VP.reintentar(); return; }
+      const alta = document.getElementById("aj-voz-alta"), cel = document.getElementById("aj-voz-celular");
+      N.voz.escuchar(b.dataset.escuchar === "alta" ? alta.value : (cel ? cel.value : "celular"), N.ajustes().tono);
+    });
+    $("#aj-tono").addEventListener("change", (e) => { if (e.target.name === "aj-tono") A.guardarAjustes({tono: e.target.value}); });
+  }
+
   function pintar() {
     if (!document.getElementById("v-ajustes")) return;
     $("#tab-ajustes").hidden = !nube.usuario;
     if (!nube.usuario) return;
+    pintarVoz();
     pintarChipIA();
     pintarModos();
     pintarUso();
@@ -325,6 +399,7 @@
 
   function montar() {
     if (!document.getElementById("v-ajustes")) return;
+    montarVoz();
     montarIA();
     $("#aj-modos").addEventListener("change", (e) => {
       const i = e.target.closest("[data-modo]");

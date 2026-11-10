@@ -34,10 +34,17 @@ import red_wifi
 
 S = None           # el modulo del servidor en marcha; lo pone iniciar()
 
-# voces que se ofrecen (solo de mujer, a peticion del usuario): id, nombre para la pantalla, modelo, hablante
-VOCES = [
+# voces que se ofrecen: id, nombre para la pantalla, modelo, hablante (o estilo). Desde la 2.0.0 (10 nov) van
+# primero las de alta calidad, Supertonic 3 (tts_supertonic.py; las mismas que la app, web/voz.js): el
+# usuario dijo que las de Piper estaban "del asco" y eligio la F4. Todas usan el mismo modelo (una carpeta);
+# cambiar entre ellas no lo recarga. Las de Piper siguen para elegirlas en el panel.
+SUPERTONIC = "voces/supertonic3"
+VOCES = [("st-F4", "Alta calidad · Mujer 4 (la elegida)", SUPERTONIC, "F4")] + [
+    ("st-%s" % e, "Alta calidad · %s %s" % ("Mujer" if e[0] == "F" else "Hombre", e[1]), SUPERTONIC, e)
+    for e in ("F1", "F2", "F3", "F5", "M1", "M2", "M3", "M4", "M5")] + [
+    ("claude", "Mujer · México", "voces_prueba/modelos/es_MX-claude-high.onnx", None),
+    ("ald", "Hombre · México", "voces/es_MX-ald-medium.onnx", None),
     ("sharvard-f", "Sharvard · mujer · España", "voces/es_ES-sharvard-medium.onnx", "F"),
-    ("claude", "Claude · mujer · México", "voces_prueba/modelos/es_MX-claude-high.onnx", None),
     ("daniela", "Daniela · mujer · Argentina (lenta)", "voces_prueba/modelos/es_AR-daniela-high.onnx", None),
 ]
 RESPUESTAS = {"corta": "Responde en 1 o 2 frases.", "normal": "Responde en 2 a 4 frases."}
@@ -51,7 +58,9 @@ TIPOS_MIME = {".html": "text/html; charset=utf-8", ".js": "text/javascript; char
 
 # Fase 13: tipo de voz (tts.Tts.agudo): infantil = mas aguda sin hablar mas rapido (no hay voces de nino en espanol)
 TONOS = {"normal": 1.0, "infantil": 1.32, "muy_infantil": 1.55}
-AJUSTES = {"voz": "sharvard-f", "personalidad": "", "respuesta": "normal", "salida_voz": "esp32", "tono": "infantil"}
+# 2.0.0: el tono propio de cada voz, como base en web/voz.js. La de hombre (~160 Hz) un 8 % mas grave.
+BASE_VOZ = {"ald": 0.92}
+AJUSTES = {"voz": "st-F4", "personalidad": "", "respuesta": "normal", "salida_voz": "esp32", "tono": "normal"}
 SALIDAS_VOZ = ("esp32", "pc")
 ACEPTADOS = {}      # mac -> {"nombre", "aceptado"} (Bluetooth del ESP32) o + {"via": "wifi", "ip", "tipo", "fabricante"}
 _RE_MAC = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
@@ -102,7 +111,13 @@ def aplicar_ajustes():
     from llm import prompt_con_fecha
     from tts import Tts
     voz = next((v for v in VOCES if v[0] == AJUSTES["voz"]), VOCES[0])
-    if (voz[2], voz[3]) != (S.TTS_VOZ, S.TTS_HABLANTE) or S.TTS is None:
+    if voz[2] == SUPERTONIC:
+        from tts_supertonic import TtsSupertonic
+        if S.TTS_VOZ != SUPERTONIC or S.TTS is None:
+            S.TTS = TtsSupertonic(_ruta(SUPERTONIC), estilo=voz[3])
+        S.TTS.estilo = voz[3]                   # misma carpeta: solo cambia el estilo, sin recargar
+        S.TTS_VOZ, S.TTS_HABLANTE = voz[2], voz[3]
+    elif (voz[2], voz[3]) != (S.TTS_VOZ, S.TTS_HABLANTE) or S.TTS is None:
         S.TTS = Tts(_ruta(voz[2]), hablante=voz[3]) if voz[3] else Tts(_ruta(voz[2]))
         S.TTS_VOZ, S.TTS_HABLANTE = voz[2], voz[3]
     system = prompt_con_fecha(date.today()).replace(RESPUESTAS["normal"], RESPUESTAS[AJUSTES["respuesta"]])
@@ -113,7 +128,7 @@ def aplicar_ajustes():
         for sesion in S.SESIONES + list(S.MOVILES.values()):
             sesion.llm.system = system
     S.SALIDA_VOZ = AJUSTES["salida_voz"]
-    S.TTS.agudo = TONOS.get(AJUSTES.get("tono"), 1.0)
+    S.TTS.agudo = TONOS.get(AJUSTES.get("tono"), 1.0) * BASE_VOZ.get(voz[0], 1.0)
     S.log("panel: voz %s (%s) por %s, respuestas %s, personalidad %r"
           % (voz[0], AJUSTES.get("tono", "normal"), AJUSTES["salida_voz"], AJUSTES["respuesta"], AJUSTES["personalidad"]))
 

@@ -148,7 +148,7 @@ ol.pasos li::marker { color: var(--blue); font-weight: 800; }
 .btn.grande { padding: 12px 20px; font-size: 15px; border-radius: 12px; }
 .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
 .acciones { display: flex; gap: 8px; flex-wrap: wrap; }
-label.campo { display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
+label.campo, div.campo { display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
 input[type=text], input[type=email], input[type=password], textarea, select { width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 10px 12px; font-weight: 400; }
 input:focus, textarea:focus, select:focus { border-color: var(--blue-2); }
 textarea { min-height: 90px; resize: vertical; }
@@ -583,3 +583,100 @@ input[type=number] { width: 100%; padding: 10px 12px; border: 1px solid var(--li
 .fila-modelo .n { color: var(--muted); font-size: 12.5px; text-align: right; font-variant-numeric: tabular-nums; }
 .fila-modelo .costo { grid-column: 1 / -1; color: var(--muted); font-size: 12.5px; }
 .fila-modelo .costo.real { color: #c2410c; font-weight: 650; }
+
+/* Fase 15 (2.0.0): la voz de Pixel en Ajustes (ajustes.js + voz.js) */
+#card-voz { margin-bottom: 16px; }
+#card-voz h3 { font-size: 14px; margin: 14px 0 6px; }
+.voces-px { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin-top: 10px; }
+.voz-px { display: flex; gap: 10px; align-items: center; padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; background: var(--surface); min-width: 0; }
+.voz-px:has(input:checked) { border-color: var(--blue-2); background: var(--blue-soft); }
+.voz-px input[type=radio] { accent-color: var(--blue); flex: none; }
+.voz-px .txt { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.voz-px .txt small { color: var(--muted); font-size: 12.5px; line-height: 1.35; }
+.voz-px .estado.ok { color: var(--green); font-weight: 600; }
+.voz-px .estado.info { color: var(--blue); font-weight: 600; }
+.voz-px .estado.mal { color: var(--bad); }
+.voz-px .barra { display: block; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 3px; }
+.voz-px .barra i { display: block; height: 100%; background: var(--blue); transition: width .3s; }
+.voz-px select { margin-top: 6px; max-width: 100%; padding: 5px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.voz-px .btn { flex: none; }
+
+/* 2.0.0: la cuenta arriba, la pantalla de entrada, la bienvenida y Mi perfil (perfil.js) */
+.cuenta { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 3px 12px 3px 3px; cursor: pointer; max-width: 180px; }
+.cuenta:hover { border-color: var(--blue-2); }
+.cuenta .nombre { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; overflow: hidden; flex: none; display: inline-grid; place-items: center; background: var(--grad); color: #fff; font-weight: 700; font-size: 13px; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar.grande { width: 96px; height: 96px; font-size: 34px; box-shadow: 0 0 0 4px var(--blue-soft); }
+body.sin-sesion nav.tabs, body.sin-sesion .pills, body.sin-sesion .cuenta { display: none !important; }
+body.sin-sesion .top .wrap { justify-content: center; }
+body.sin-sesion .marca { margin-right: 0; }
+#hero-acciones .google { display: inline-flex; align-items: center; gap: 10px; }
+#hero-acciones .google svg { width: 22px; height: 22px; background: #fff; border-radius: 50%; padding: 2px; }
+.entrada-nota { color: var(--muted); font-size: 13.5px; margin: 10px auto 0; max-width: 340px; }
+.entrada-firma { color: var(--muted); font-size: 12px; margin: 6px 0 0; letter-spacing: .02em; }
+.bienvenida { margin-bottom: 16px; border-color: var(--blue-2); background: var(--grad-suave); }
+.bienvenida .titulo { display: flex; align-items: center; gap: 10px; }
+.bienvenida .bv-icono { width: 40px; height: 40px; }
+.bienvenida h2 { margin: 0; }
+.bienvenida p { margin: 10px 0 12px; line-height: 1.55; }
+#v-perfil > .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.grid.perfil { display: grid; gap: 16px; grid-template-columns: 1fr; margin-top: 12px; }
+@media (min-width: 860px) { .grid.perfil { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: start; } }
+#f-perfil { display: grid; gap: 10px; }
+#f-perfil textarea { min-height: 76px; }
+#f-perfil .contador { margin-top: -6px; }
+.pf-cabeza { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
+.pf-lado { display: grid; gap: 16px; }
+#card-md .acciones, #card-cuenta .acciones { flex-wrap: wrap; }
+#pf-md-estado .ok { color: var(--green); font-weight: 600; }
+#pf-md-estado .mal { color: var(--bad); font-weight: 600; }
+#pf-md-estado:empty { display: none; }
+#f-perfil .form-fila { grid-template-columns: 1fr 1fr; }
+@media (max-width: 560px) { #f-perfil .form-fila { grid-template-columns: 1fr; } }
+/* en el celular la cuenta va al lado del nombre de Pixel y las pildoras debajo */
+@media (max-width: 760px) {
+  .top .cuenta { order: 1; }
+  .top .pills { order: 2; width: 100%; }
+}
+body.sin-sesion #v-inicio .hero ~ *, body.sin-sesion #v-inicio .card:not(.hero) { display: none !important; }
+.bienvenida { margin: 0; }
+/* que se vea guardado (perfil.js, pintarGuardado) */
+.pf-guardar { align-items: center; }
+.btn.primario.listo { background: var(--green-soft); color: var(--green); box-shadow: none; border-color: #96f2d7; }
+.btn.primario.listo[disabled] { opacity: 1; cursor: default; }
+.pf-guardado { font-size: 13.5px; }
+.pf-guardado.ok { color: var(--green); font-weight: 600; }
+.pf-guardado.cambios { color: var(--warn); font-weight: 600; }
+@media (prefers-reduced-motion: no-preference) {
+  #f-perfil.recien-guardado { animation: pf-brillo 1.6s ease-out; }
+  @keyframes pf-brillo { 0% { box-shadow: 0 0 0 0 rgba(32, 201, 151, 0.55); border-color: var(--green-2); } 70% { border-color: var(--green-2); } 100% { box-shadow: 0 0 0 16px rgba(32, 201, 151, 0); } }
+}
+
+/* 2.0.0: Contactos (contactos.js) */
+input[type=tel], input[type=search] { width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 10px 12px; font-weight: 400; }
+#v-contactos > .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.grid.contactos { display: grid; gap: 16px; grid-template-columns: 1fr; margin-top: 12px; }
+@media (min-width: 860px) { .grid.contactos { grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); align-items: start; } }
+#f-contacto-app { display: grid; gap: 10px; }
+#f-contacto-app h2 { margin: 0 0 4px; }
+#ct-estado.ok { color: var(--green); font-weight: 600; }
+#ct-estado.mal { color: var(--bad); font-weight: 600; }
+#ct-estado:empty { display: none; }
+.lista-contactos { display: grid; gap: 8px; margin-top: 12px; }
+.contacto { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.contacto.editando { border-color: var(--blue-2); background: var(--blue-soft); }
+.contacto .avatar { width: 40px; height: 40px; font-size: 15px; }
+.contacto .txt { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.contacto .txt a { color: var(--blue); text-decoration: none; font-size: 13.5px; overflow-wrap: anywhere; }
+.contacto .txt a:hover { text-decoration: underline; }
+.contacto .falta { color: var(--muted); font-size: 12.5px; }
+.contacto .botones { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 480px) { .contacto { flex-wrap: wrap; } .contacto .botones { width: 100%; } }
+.voz-px select { width: 100%; }
+.voz-px .txt .btn { justify-self: start; margin-top: 4px; }
+@media (max-width: 480px) {
+  .voz-px { flex-wrap: wrap; }
+  .voz-px .txt { flex-basis: calc(100% - 32px); }
+  .voz-px > .btn { margin-left: 30px; }
+}

@@ -989,3 +989,64 @@ El usuario: "cuando te diga modo enfoque, el agente me muestra las dos opciones 
     - Con clave propia no se llama al Gemini gratis.
 - **Sorpresa:** la librería 1.3.0 manda la clave como `Authorization: Bearer`. La guía de Claude lo confirma para la API `2026-10-21`.
 - **Reglas:** se encontró y se cerró el hueco de `usuarios/<uid>/pixeles/<pid>` (cualquier cuenta anónima podía meterse en la lista de otro). Probado: sin permiso el ESP32 simulado no entra; con permiso sí, y funciona.
+
+# 2.0.0: Píxel te conoce (10 de noviembre, rama `vinculacion_movil`)
+
+El usuario aprobó el plan y pidió además: que en la presentación diga que es «un agente de IA creado por Divergencia IA» y voces de hombre y mujer mexicanos, «súper suaves y elocuentes», en Ajustes. Diseño en CLAUDE.md, «2.0.0».
+
+## Voces de México en el celular
+
+- Se buscaron voces mexicanas gratis que funcionen sin PC. Las oficiales de Piper son dos: `es_MX-claude-high` (mujer, apache-2.0) y `es_MX-ald-medium` (hombre, unlicense), 63 MB cada una. Las de HirCoir (Veritasium, Lucas Melor…) imitan a personas reales: no se usaron.
+- La librería `@mintplex-labs/piper-tts-web@1.0.5` sirve, con dos trampas:
+    - desde `+esm` de jsDelivr trae `onnxruntime-web@1.27.0`, que no casa con sus archivos `.wasm` de la 1.18 (fallo «no available backend found»);
+    - su `TtsSession` es única: pedir otra voz devuelve la primera (las dos muestras salían iguales).
+- Por eso `voz_trabajador.js` hace la síntesis a mano en un hilo aparte, con las versiones fijas y la caché del navegador.
+- **Medido en Chrome sin pantalla (PC, un hilo):**
+
+| | Mujer | Hombre |
+|---|---|---|
+| Preparar la primera vez (bajar 63 MB y cargar) | 8,6 s | 5,9 s |
+| Primera frase (5,5 y 6,2 s de voz) | 1,07 s | 1,03 s |
+| Segunda frase (1,7 y 2,0 s de voz) | 0,30 s | 0,34 s |
+| Preparar con la voz ya en caché | — | 1,0 s |
+
+  Mientras genera, la página sigue a unos 60 cuadros por segundo (38 en 620 ms).
+- **Tono medio** (autocorrelación): mujer 179 Hz, hombre 158-161 Hz. La de hombre se baja un 8 % (`base` 0,92 en el celular y `BASE_VOZ` en el PC): medido en el PC, 0,94 la dejó en 152 Hz.
+- El PC (`panel.VOCES`, `ajustes.json`) pasó a «Mujer · México» con tono normal; el servidor se reinició a las 14:51 y el log dice `panel: voz claude (normal)`.
+
+## Pruebas de punta a punta (Chrome sin pantalla, cuenta anónima borrada al final)
+
+- **Voz** (0 peticiones a la IA, 7 de 7): por defecto mujer de México con tono normal; Personalidad ya no muestra la voz; habla por Web Audio sin `speechSynthesis` y la boca sigue el volumen (143 niveles, de 0,05 a 1); elegir «Hombre» se guarda y se baja; «Escuchar» otra voz no cambia la guardada; «La voz del celular» usa `speechSynthesis`; al volver a una de México, tono normal.
+    - Un fallo encontrado y arreglado: tras cambiar de voz, el hilo había soltado la anterior y «Escuchar» la daba por lista. Ahora el hilo la recarga sola desde la caché.
+- **Entrada y perfil** (1 petición a la IA, 14 de 14): sin sesión solo se ve a Píxel con «Entrar con Google» y la firma de Divergencia IA; la primera vez queda registrado; tarjeta y presentación en voz alta con la voz de México; se apunta la bienvenida; la cuenta sale arriba; el perfil guardado entra en las instrucciones («Quiere que le digas «Anita»», «Háblale de usted»); la foto se recorta, se guarda y sale arriba; el .md con la plantilla llena el formulario sin IA y no guarda solo; un .md libre lo lee la IA (puso «Vale», de usted, y los gustos); «Borrar mi perfil» lo deja vacío.
+
+## Pendientes
+
+1. Probar en el celular de verdad: cuánto tarda la voz de México en Android (la primera frase de cada respuesta), y que la presentación suene tras «Entrar con Google».
+2. El nombre «Divergencia IA» está como `CREADOR` en `perfil.js`, en `agente.md`, en `INSTRUCCIONES_MINIMAS` y en la firma de la pantalla de entrada (`app.js`). Si se escribe distinto, cambiarlo en los cuatro.
+3. Los visitantes de la feria bajan 63 MB de voz cada uno: con el WiFi de la feria está bien; con datos del celular, Píxel usa su voz hasta que termine.
+
+## Más pedidos del 10 nov (tarde)
+
+- **«✓ Guardado» en el perfil**: probado (17 de 17 en la prueba del perfil, 0 peticiones).
+- **WhatsApp en el PC**: la pestaña quedó en `http://xn--https-sta//web.whatsapp.com/send?...`. `xn--https-sta` es «httpsñ»: `xdotool type` con el teclado `latam,us` escribió «ñ» en vez de «:». Ahora todo se pega con `xclip`, y con WhatsApp abierto se busca el chat con «Nuevo chat» sin recargar. `tools/prueba_puente_pc.py`: todo bien. Falta probarlo con su WhatsApp de verdad (Ctrl+Alt+N y la búsqueda por número no se pueden probar sin él).
+- **Contactos**: 10 de 10 en el navegador (importa de la memoria una sola vez, agrega, avisa, rechaza sin datos, edita sin duplicar, WhatsApp y Gmail lo encuentran, borra), 0 peticiones.
+
+## Voces de calidad: Supertonic 3 (10 nov)
+
+El usuario: «las voces están del asco, busca cosas de calidad, sé que hay voces en GitHub de calidad, garantiza eso».
+- **Supertonic 3** (Supertone, mayo 2026; código MIT, modelo OpenRAIL-M): 31 idiomas con español, 10 voces (F1-F5, M1-M5), 44,1 kHz, sin fonemas (lee letras: no necesita espeak). Pesa 398 MB en fp32 (vector_estimator 256, vocoder 101, text_encoder 36). Supertonic 2: 263 MB, 5 idiomas.
+- No se pudo instalar su librería (`pip install supertonic`: denegado por venir de fuera); se escribió el algoritmo de su ejemplo oficial con el onnxruntime del `.venv`.
+- **Muestras** en `voces_prueba/supertonic3/` (y `piper_mujer_claude`, `piper_hombre_ald` para comparar). Tono: F 165-205 Hz, M 85-132 Hz.
+- **Whisper small** las entiende igual que a Piper (las diferencias son «Píxel/Pixel», «tres/3» y «un agente/una gente»), y les pone «¿…?» a las preguntas.
+- **Velocidad en el PC (Python, 4 hilos):** 8 pasos 0,54-0,79 × tiempo real; 4 pasos 0,46; 3 pasos 0,36.
+- **En el navegador (Chrome sin pantalla, WebAssembly de un hilo, como en el celular):** 4 pasos = 1,0 × tiempo real (8,2 s de voz en 8,2 s: 6,3 s los pasos, 1,7 s el vocoder); 8 pasos = 1,7 ×. En un celular sería 2 a 4 veces más lento: hace falta WebGPU, que aquí no se pudo medir (Chrome sin pantalla solo tiene SwiftShader, por software).
+
+## La voz elegida: Supertonic 3, F4 (10 nov, tarde)
+
+- El usuario oyó las muestras y eligió `supertonic3_F4`. Las voces de Piper se quitaron de la app.
+- **Números:** Supertonic lee «3», «10» y «2026», pero no «°C» («21…»), y con «$ 45.000 pesos, o 3,5 dólares» Whisper oyó «$45,000 o $35,000». Por eso `leer()` los pasa a palabras antes; con eso Whisper oyó «21 grados», «45 mil pesos» y «25 %».
+- **En la app** (Chrome sin pantalla, WebAssembly): 8 de 8 en la prueba de la voz (por defecto la F4, bajada y lista en 21-40 s, suena por Web Audio sin `speechSynthesis`, la boca sigue el volumen, elegir «Hombre 1» se guarda, «Escuchar» no cambia la guardada, la del celular sigue funcionando, cifras en palabras). Bajó a 4 pasos sola (va a ~1 × tiempo real en WebAssembly).
+- Con `--enable-unsafe-swiftshader`, Chrome sin pantalla ofrece una «tarjeta gráfica» por software: ahora se descarta (`tarjetaDeVerdad`).
+- **En el PC:** se carga en 0,9 s; 1,6 s de voz en 0,78 s, 5,1 s en 1,71 s, 5,0 s en 2,79 s. Servidor reiniciado a las 15:57: `panel: voz st-F4 (normal)`.
+- **Pendiente:** medirla en el Android del usuario (con y sin WebGPU) y ver si la bajada de 400 MB es aceptable en la feria.
