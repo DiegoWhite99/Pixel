@@ -227,7 +227,9 @@
   }
 
   function ponerEstado(e) {
+    const antes = est.estado;
     est.estado = e;
+    if ((e === "pensando") !== (antes === "pensando")) sonarPensando(e === "pensando");
     pintar();
   }
 
@@ -268,19 +270,55 @@
     }
   }
 
-  function beep(f0, f1) {                      // como los del ESP32: sube al oir la orden, baja al terminar
-    if (!audio || audio.state !== "running") return;
-    const t = audio.currentTime + 0.01, o = audio.createOscillator(), g = audio.createGain();
-    o.frequency.setValueAtTime(f0, t);
-    o.frequency.linearRampToValueAtTime(f1, t + 0.12);
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(0.15, t + 0.01);
-    g.gain.setValueAtTime(0.15, t + 0.11);
-    g.gain.linearRampToValueAtTime(0, t + 0.12);
-    o.connect(g);
-    g.connect(audio.destination);
-    o.start(t);
-    o.stop(t + 0.13);
+  // ------------------------------------------------------------------ sonidos (Fase 14)
+  // Pedido del usuario (10 nov): un sonido al llamar a Pixel, otro mientras piensa y otro al terminar.
+  // Con Web Audio, sin archivos: notas cortas con un armonico (suenan a campanita) que se apagan solas.
+  // Se quitan en Ajustes ("Sonidos"). Mientras suenan el reconocimiento esta parado: no se oye a si mismo.
+  const SONIDOS = {
+    entrada: [[659.25, 0], [987.77, 0.08], [1318.51, 0.16]],    // mi, si, mi agudo: sube ("te escucho")
+    salida: [[1318.51, 0], [987.77, 0.08], [659.25, 0.16]],      // al reves: baja ("ya termine")
+    aviso: [[880, 0], [1174.66, 0.12]],                          // lo que dice por su cuenta (recordatorio, pomodoro)
+  };
+  const PENSAR = [523.25, 659.25, 783.99, 659.25];               // do, mi, sol, mi: muy bajito mientras piensa
+  const PENSAR_DESDE_MS = 600, PENSAR_CADA_MS = 420;            // si contesta antes (un atajo), no suena
+  const sonidosListos = () => !!audio && audio.state === "running" && activo("sonidos");
+
+  function nota(f, t, dura, vol) {
+    const o = audio.createOscillator(), o2 = audio.createOscillator(), g = audio.createGain(), g2 = audio.createGain();
+    o.type = "sine";
+    o2.type = "sine";
+    o.frequency.setValueAtTime(f, t);
+    o2.frequency.setValueAtTime(f * 2.01, t);                    // el armonico, un poco desafinado: campanita
+    g2.gain.setValueAtTime(0.22, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dura);
+    o.connect(g); o2.connect(g2); g2.connect(g); g.connect(audio.destination);
+    o.start(t); o2.start(t);
+    o.stop(t + dura + 0.02); o2.stop(t + dura + 0.02);
+  }
+
+  // Devuelve los ms que dura (para no volver a escuchar mientras suena)
+  function sonido(cual) {
+    const notas = SONIDOS[cual];
+    if (!notas || !sonidosListos()) return 0;
+    const t = audio.currentTime + 0.01;
+    for (const [f, d] of notas) nota(f, t + d, 0.34, 0.12);
+    return Math.round((notas[notas.length - 1][1] + 0.34) * 1000);
+  }
+
+  // Mientras piensa (esperando a Gemini): una nota suave cada PENSAR_CADA_MS
+  const piensa = {reloj: 0, i: 0};
+  function sonarPensando(si) {
+    clearTimeout(piensa.reloj);
+    if (!si) return;
+    piensa.i = 0;
+    const tic = () => {
+      if (est.estado !== "pensando") return;
+      if (sonidosListos()) nota(PENSAR[piensa.i++ % PENSAR.length], audio.currentTime + 0.01, 0.28, 0.035);
+      piensa.reloj = setTimeout(tic, PENSAR_CADA_MS);
+    };
+    piensa.reloj = setTimeout(tic, PENSAR_DESDE_MS);
   }
 
   function decirFrase(texto) {
@@ -504,6 +542,7 @@
     const id = ++est.turnoId;
     if (cara) cara.emocion("curioso", 1600);   // "¿si?": un ojo grande y la cabeza ladeada
     pararRec();
+    sonido("entrada");
     decirFrase("Dime");
     await finHablar();
     if (id !== est.turnoId) return;
@@ -759,8 +798,8 @@
     if (Date.now() - est.ultimaT > OLVIDO_MS) est.historial = [];
     est.ultimaT = Date.now();
     conversar("tu", texto);
+    sonido("entrada");
     ponerEstado("pensando");
-    beep(800, 1200);
     let respuesta;
     const r = respuestaPendiente(texto);
     if (r !== null) {
@@ -786,7 +825,7 @@
     }
     await finHablar();
     if (id !== est.turnoId) return;
-    beep(1200, 800);
+    const sale = sonido("salida");
     est.ultimaT = Date.now();
     // si Pixel pregunto algo ("¿Qué quieres que ponga?", "¿Lo envío?"), se le contesta sin decir "Píxel"
     if (est.pendiente) {
@@ -795,7 +834,7 @@
       oye.ventanaHasta = est.pendiente.hasta;
     }
     else if (/\?["'»)]*\s*$/.test(respuesta || "")) oye.ventanaHasta = Date.now() + VENTANA_MS;
-    await esperar(200);
+    await esperar(Math.max(200, sale));          // que no se oiga a si mismo al volver a escuchar
     if (id === est.turnoId) volverAEscuchar();
   }
 
@@ -811,7 +850,7 @@
     if (opciones.toast !== false) toast(frase);
     if (cara && opciones.gesto !== false) cara.emocion(opciones.gesto || "sorpresa", 1100);
     if (opciones.registro !== false) conversar("px", frase);
-    if (opciones.beep !== false) beep(800, 1200);
+    if (opciones.beep !== false) sonido("aviso");
     decirFrase(frase);
     await finHablar();
     if (id === est.turnoId) volverAEscuchar();
@@ -935,7 +974,7 @@
       const frase = tarde ? `Se me pasó un recordatorio de ${cuandoDicho(r.cuando, ahora)}: ${r.texto}.` : `Recordatorio: ${r.texto}.`;
       toast(frase);
       conversar("px", frase);
-      beep(800, 1200);
+      sonido("aviso");
       decirFrase(frase);
       await finHablar();
       if (id === est.turnoId) volverAEscuchar();
@@ -1245,7 +1284,7 @@
 
   // Lo que usan los modulos (cerebro.js, google.js, tiempo.js, aparatos.js)
   const nucleo = {
-    est, oye, decir: decirFrase, finHablar, pararRec, volverAEscuchar, ponerEstado, conversar, pintar, aviso, beep, ocupado,
+    est, oye, decir: decirFrase, finHablar, pararRec, volverAEscuchar, ponerEstado, conversar, pintar, aviso, sonido, beep: () => sonido("aviso"), ocupado,
     conTiempo, esperar, confirmar, anunciar, generarJSON, desbloquear, orden, mostrarVideo, escuchar: empezar,
     hayIA: () => !!est.ai, ajustes: () => est.ajustes, sistema, herramientas,
     // Ajustes (ajustes.js): los interruptores, el modelo de hoy y el dia del cupo de Google

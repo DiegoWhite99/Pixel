@@ -185,27 +185,75 @@ WHATSAPP_ESPERA_S = 12      # lo que tarda WhatsApp Web en abrir el chat con el 
 WHATSAPP_MAX_S = 30
 
 
+# Titulo de la ventana del navegador cuando su pestaña activa es WhatsApp Web: "(90) WhatsApp - Google Chrome".
+# Estricto a proposito: "WhatsApp - Buscar con Google" no vale (no se debe escribir en otra pestaña).
+RE_TITULO_WA = re.compile(r"^(\(\d+\)\s*)?WhatsApp\s+[-–—]\s+(Google Chrome|Chromium)\s*$", re.I)
+
+
 def _ventana_whatsapp():
-    """El id de la ventana del navegador con WhatsApp delante (su titulo dice "WhatsApp"), o "" """
+    """El id de la ventana del navegador cuya pestaña activa es WhatsApp Web, o "" """
     rc, out = _correr(["xdotool", "search", "--onlyvisible", "--name", "WhatsApp"])
-    ids = [x for x in out.split() if x.isdigit()] if rc == 0 else []
-    return ids[-1] if ids else ""
+    for w in (out.split() if rc == 0 else []):
+        if w.isdigit():
+            rc2, nombre = _correr(["xdotool", "getwindowname", w])
+            if rc2 == 0 and RE_TITULO_WA.match(nombre.strip()):
+                return w
+    return ""
+
+
+def _traer_pestana_whatsapp():
+    """Si WhatsApp Web esta en una pestaña de fondo de Chrome, la trae al frente con la busqueda de
+    pestañas (Ctrl+Shift+A, "WhatsApp", Enter). Solo cuenta si despues la pestaña activa es WhatsApp Web
+    (titulo estricto); si no, cierra el buscador y devuelve "" (no se toca ninguna otra pestaña)."""
+    rc, out = _correr(["xdotool", "search", "--onlyvisible", "--class", "google-chrome"])
+    ventanas = [w for w in out.split() if w.isdigit()] if rc == 0 else []
+    if not ventanas:
+        return ""
+    _correr(["xdotool", "windowactivate", "--sync", ventanas[-1], "key", "--clearmodifiers", "ctrl+shift+a"])
+    time.sleep(0.8)
+    _correr(["xdotool", "type", "--delay", "25", "WhatsApp"])
+    time.sleep(0.6)
+    _correr(["xdotool", "key", "--clearmodifiers", "Return"])
+    time.sleep(1.0)
+    w = _ventana_whatsapp()
+    if not w:
+        _correr(["xdotool", "key", "--clearmodifiers", "Escape"])
+    return w
+
+
+def _ir_en_pestana(ventana, url):
+    """Carga url en esa misma pestaña (sin abrir otra): Ctrl+L en su barra, la direccion y Enter."""
+    _correr(["xdotool", "windowactivate", "--sync", ventana, "key", "--clearmodifiers", "ctrl+l"])
+    time.sleep(0.3)
+    _correr(["xdotool", "type", "--delay", "6", url], timeout=30)
+    time.sleep(0.2)
+    _correr(["xdotool", "key", "--clearmodifiers", "Return"])
 
 
 def whatsapp(numero, texto):
-    """Abre WhatsApp Web en el navegador del PC con el chat y el mensaje escritos (el enlace oficial
-    "click to chat") y, si hay xdotool, oprime Enter en esa ventana para enviarlo. La app solo manda
-    esta orden despues de que el usuario confirma. Dos Enter separados: si el primero llega antes de
-    que cargue el chat no hace nada, y si ya lo envio el segundo cae en la caja vacia (no manda nada)."""
+    """WhatsApp Web en el PC con el chat y el mensaje ya escritos (el enlace oficial "click to chat") y,
+    con xdotool, Enter para enviarlo. La app solo manda esta orden despues de que el usuario confirma.
+    - Si WhatsApp Web ya esta abierto (o en una pestaña de fondo), el chat se carga en ESA pestaña: abrir
+      otra la dejaria en "WhatsApp está abierto en otra ventana" (pedido del usuario el 10 nov).
+    - Si no esta abierto, se abre con xdg-open (una pestaña nueva).
+    - Dos Enter separados: si el primero llega antes de que cargue el chat no hace nada, y si ya lo envio
+      el segundo cae en la caja vacia (no manda nada)."""
     num = re.sub(r"\D", "", str(numero or ""))
     if not 8 <= len(num) <= 15:
         raise ErrorPuente("Ese número no parece válido.")
     texto = str(texto or "").strip()[:1000]
     if not texto:
         raise ErrorPuente("El mensaje está vacío.")
-    _abrir("https://web.whatsapp.com/send?phone=%s&text=%s" % (num, urllib.parse.quote(texto)))
-    _log("puente: WhatsApp a +%s...%s abierto en el PC" % (num[:2], num[-2:]))
-    if _correr(["xdotool", "version"])[0] != 0:
+    url = "https://web.whatsapp.com/send?phone=%s&text=%s" % (num, urllib.parse.quote(texto))
+    xdotool = _correr(["xdotool", "version"])[0] == 0
+    ventana = (_ventana_whatsapp() or _traer_pestana_whatsapp()) if xdotool else ""
+    if ventana:
+        _ir_en_pestana(ventana, url)
+        _log("puente: WhatsApp a +%s...%s en la pestaña que ya estaba abierta" % (num[:2], num[-2:]))
+    else:
+        _abrir(url)
+        _log("puente: WhatsApp a +%s...%s abierto en una pestaña nueva" % (num[:2], num[-2:]))
+    if not xdotool:
         return {"mensaje": "abierto", "decir": "Te lo dejé escrito en WhatsApp del PC: oprime Enter para enviarlo."}
     t0 = time.time()
     time.sleep(WHATSAPP_ESPERA_S)

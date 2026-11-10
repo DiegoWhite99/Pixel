@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Asistente de voz para una demo de feria, todo en el PC salvo la IA de Gemini, que es opcional (Fase 11). Un ESP32-S3 (micrófono INMP441; su firmware **no** está en este repo) manda audio por TCP; el servidor en Python lo transcribe (faster-whisper), decide qué hacer (acciones por regex, clasificador LLM o respuesta libre del LLM vía Ollama) y devuelve voz sintetizada (Piper). Palabra de activación: "Píxel" (antes "Nova", que Whisper oía como "No, no."; ver `memoria.md`).
 
-Git: https://github.com/DiegoWhite99/Pixel, **público**. Ahí no entran claves, grabaciones ni datos personales: ver `.gitignore`. El 9 nov se fusionó `vinculacion_movil` (Fases 11 a 13) en `main`; el trabajo nuevo sigue en `vinculacion_movil`. Versiones: etiquetas `vX.Y.Z`; la primera, `v1.0.0` (10 nov), es `515c390`, lo publicado en pixelassitance.web.app ese día. El repositorio tiene su propio `core.sshCommand` con `~/.ssh/id_ed25519_wikiia`: la llave por defecto, `id_ed25519`, es una deploy key del repo AGATA, y GitHub la rechaza aquí. No hay `requirements.txt` ni linter; las únicas pruebas son las de la Fase 13 (`tools/prueba_*`). Las dependencias viven en `.venv/` (Python 3.10: faster-whisper 1.2.1, piper-tts 1.8.0, numpy, yt-dlp y, desde la Fase 13, androidtvremote2 0.3.3); `venv/` es una copia con los mismos paquetes que no se usa. Ollama corre aparte en `127.0.0.1:11434` con el modelo `qwen2.5:3b`. Con clave de Gemini, Gemini responde y Ollama queda de respaldo (ver **Gemini**).
+Git: https://github.com/DiegoWhite99/Pixel, **público**. Ahí no entran claves, grabaciones ni datos personales: ver `.gitignore`. El 9 nov se fusionó `vinculacion_movil` (Fases 11 a 13) en `main`; el trabajo nuevo sigue en `vinculacion_movil`. Versiones: etiquetas `vX.Y.Z` (X cambio grande, Y funciones nuevas, Z arreglos), con su historia en `README.md` (tabla y una sección por versión: al publicar una, se escribe ahí). `v1.0.0`, `v1.2.1`, `v1.3.0` y `v1.3.1` son del 10 nov; `v1.3.1` está publicada y `main` apunta a ella. El repositorio tiene su propio `core.sshCommand` con `~/.ssh/id_ed25519_wikiia`: la llave por defecto, `id_ed25519`, es una deploy key del repo AGATA, y GitHub la rechaza aquí. No hay `requirements.txt` ni linter; las únicas pruebas son las de la Fase 13 (`tools/prueba_*`). Las dependencias viven en `.venv/` (Python 3.10: faster-whisper 1.2.1, piper-tts 1.8.0, numpy, yt-dlp y, desde la Fase 13, androidtvremote2 0.3.3); `venv/` es una copia con los mismos paquetes que no se usa. Ollama corre aparte en `127.0.0.1:11434` con el modelo `qwen2.5:3b`. Con clave de Gemini, Gemini responde y Ollama queda de respaldo (ver **Gemini**).
 
 ## Comandos
 
@@ -60,6 +60,7 @@ Pruebas de las Fases 13 y 14 (las únicas automáticas del proyecto):
 ```bash
 node tools/prueba_modulos.js                 # funciones puras de web/*.js en Node, sin página (segundos)
 .venv/bin/python tools/prueba_obsidian.py    # sincronización con Obsidian, con base de datos falsa
+.venv/bin/python tools/prueba_puente_pc.py    # WhatsApp en el PC (xdotool y xdg-open sustituidos: no envía nada)
 # de punta a punta: Chrome sin pantalla, Gemini y Firebase de verdad (cuenta anónima que se borra al final),
 # Google simulado y un ESP32 simulado (tools/puente_simulado.py). Gasta ~35 peticiones de Gemini.
 python3 -m http.server 8099 -d web &
@@ -350,7 +351,11 @@ La parte `musica` necesita que YouTube suene en Chrome sin pantalla. Tras muchas
 - **WhatsApp** (`web/whatsapp.js` y `puente_pc.whatsapp`; pedido: "dile que entre a WhatsApp y le escriba a tal persona hola"). Con el enlace oficial "click to chat" (`wa.me`), sin bots ni programas no oficiales: con esos WhatsApp puede bloquear el número.
     - La herramienta `escribir_whatsapp` no envía: arma el mensaje y pregunta "¿Se lo mando?" (`confirmar`, con `seguir`: una corrección va a Gemini). Solo "sí" o el botón llaman a `abrir()`.
     - **Celular:** abre `wa.me/<número>?text=` (WhatsApp redirige a `api.whatsapp.com/send`) y el usuario toca enviar. Si el navegador no deja abrir sin un toque (el "sí" fue por voz), queda la tarjeta `#ag-whatsapp` con "Abrir WhatsApp". No usar `noopener` en `window.open`: con él siempre devuelve `null`.
-    - **PC:** cuando el usuario lo pide, o si la app está en un computador con el PC en línea, la orden `/api/pc {accion: "whatsapp", numero, texto}` abre `web.whatsapp.com/send` con `xdg-open`, espera `WHATSAPP_ESPERA_S` y oprime Enter dos veces con `xdotool` en la ventana "WhatsApp". El segundo Enter cae en la caja vacía si el primero ya envió. `xdotool` lo instaló el usuario el 10 nov; el servicio tiene `DISPLAY` y `XAUTHORITY`. Sin `xdotool`, lo deja escrito.
+    - **PC:** cuando el usuario lo pide, o si la app está en un computador con el PC en línea, va la orden `/api/pc {accion: "whatsapp", numero, texto}`. `xdotool` lo instaló el usuario el 10 nov; el servicio tiene `DISPLAY` y `XAUTHORITY`. Sin `xdotool`, lo deja escrito.
+        - Si WhatsApp Web ya está abierto, usa **esa pestaña** (pedido del usuario: no abrir otra, que dejaría "WhatsApp está abierto en otra ventana"). La reconoce por el título de la ventana (`RE_TITULO_WA`, estricto: "(90) WhatsApp - Google Chrome", no "WhatsApp - Buscar con Google"). Si está de fondo, la trae con la búsqueda de pestañas de Chrome (Ctrl+Shift+A, "WhatsApp", Enter), y solo la usa si después el título lo confirma.
+        - En esa pestaña: Ctrl+L, escribe la dirección `web.whatsapp.com/send?...` y Enter (WhatsApp se recarga ahí). Si no está abierto en ninguna parte, abre una pestaña nueva con `xdg-open`.
+        - Después espera `WHATSAPP_ESPERA_S` y oprime Enter dos veces en la ventana de WhatsApp. El segundo cae en la caja vacía si el primero ya envió.
+        - Pruebas sin tocar el escritorio: `.venv/bin/python tools/prueba_puente_pc.py`.
     - **Números:** van en la nota de la persona en el cerebro ("WhatsApp: +57 300 123 4567", `conNumero`). Si no lo tiene, Píxel lo pregunta; la respuesta termina en "?" para que el número se diga sin "Píxel", y lo guarda con `Cerebro.recordar`. El indicativo por defecto sale del idioma del navegador (`es-CO` → 57).
     - No probar el camino del PC de verdad: enviaría un mensaje real. Se prueba con `_abrir` y `_correr` sustituidos.
 - **Ajustes** (`web/ajustes.js`, pestaña Ajustes; `v1.3.0`; pedido: "todos los modos de Píxel con un switch de on y off y una descripción: esto gasta la licencia de Gemini, esto no", "un visual del costo de Gemini" y "dejar el consumo en bajo").
@@ -364,6 +369,13 @@ La parte `musica` necesita que YouTube suene en Chrome sin pantalla. Tras muchas
     - Ajustes dibuja: cifras de hoy, columnas de 7 días (una serie, un color, con globo y "Ver en tabla"), en qué se gasta y lo que costaría con el plan de pago (`PRECIOS`).
     - `PRECIOS` = precios oficiales del 10 nov 2026 (ai.google.dev/gemini-api/docs/pricing): 3.5 Flash-Lite US$ 0,30 entrada y 2,50 salida por millón de tokens, y 3.1 Flash-Lite 0,25 y 1,50. El plan gratis no cobra; Google no publica un número fijo de peticiones gratis por día.
     - Los días de más de 30 se borran al abrir.
+- **Sonidos** (`agente.js`, pedido del 10 nov: "sonidos de entrada cuando llamo a Píxel, de pensar y de salida"). Con Web Audio, sin archivos: notas con un armónico que suenan a campanita.
+    - `sonido("entrada")`: mi-si-mi subiendo, al empezar cada orden y antes del "Dime".
+    - `sonido("salida")`: la misma bajando, al acabar. Se espera a que termine antes de volver a escuchar.
+    - `sonido("aviso")`: lo que dice por su cuenta (recordatorios, `anunciar`).
+    - `sonarPensando()`: do-mi-sol-mi muy bajito mientras el estado es "pensando". Empieza a los 600 ms, así que un atajo instantáneo no lo hace sonar.
+    - Reemplazan los `beep()` de antes. Se apagan con el modo `sonidos` de Ajustes.
+    - En las pruebas, un `AudioContext` falso apunta las frecuencias.
 - **La regla del correo** (el usuario: "que no envíe sin aprobación, mantener esa regla"): una prueba de `prueba_modulos.js` falla si alguna herramienta se llama como enviar, si `drafts/send` aparece más de una vez o si `enviarBorrador` se usa fuera de una confirmación.
 
 **TTS** (`tts.py`): Piper sale a 22050 Hz y se remuestrea a 16000 Hz con numpy (FIR paso bajo + interpolación lineal, sin scipy).

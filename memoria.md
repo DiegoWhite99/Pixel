@@ -960,3 +960,19 @@ El usuario: "cuando te diga modo enfoque, el agente me muestra las dos opciones 
     - 1 petición, 1.300 tokens (1.200 de entrada y 100 de salida) y "pagando serían US$ 0,0006".
     - Apagar «Modo enfoque» esconde su pestaña y su atajo. Con Gemini apagado contesta en local sin pedir nada, y el modo enfoque sigue.
     - "salir" no sacaba del modo enfoque (la tarjeta lo dice): arreglado.
+
+### Sonidos de entrada, pensar y salida
+
+- Pedido: "pon sonidos de entrada cuando llamo a Píxel, de pensar y de salida". Hechos con Web Audio (campanita: nota + armónico x2,01). Reemplazan los pitidos de antes.
+- Probado con un AudioContext falso que apunta las notas: "¿qué hora es?" con Gemini tardando 1,6 s → 659 988 1319 (entrada), 523 659 784 659 (pensando), 1319 988 659 (salida). "Píxel" solo: entrada y "Dime". Un atajo: sin "pensando". Con "Sonidos" apagado en Ajustes: nada.
+
+### WhatsApp en el PC: usar la pestaña que ya está abierta
+
+- El usuario: "si ya está abierto WhatsApp en el PC no debe iniciar una nueva pestaña, debe mantenerse en la pestaña y redactar el mensaje desde allí". Con otra pestaña, WhatsApp Web deja la nueva en "está abierto en otra ventana".
+- Ahora `puente_pc.whatsapp` busca la ventana de WhatsApp Web por su título (estricto) o la trae de fondo con Ctrl+Shift+A. En esa pestaña escribe la dirección `send?phone=…&text=…` y oprime Enter. Solo abre otra pestaña si WhatsApp no está abierto.
+- Probado con un escritorio falso (`tools/prueba_puente_pc.py`, 10 casos), y en el escritorio real solo la parte de reconocer la ventana: encontró "(90) WhatsApp - Google Chrome". Enviar de verdad no se probó: mandaría un mensaje real.
+
+### v1.3.1 publicada (10 nov)
+
+- Sonidos y WhatsApp en la pestaña abierta. README reescrito con la tabla de versiones, una sección por versión y cómo publicar una nueva.
+- `main` se fusionó hasta v1.3.1, para que GitHub muestre el README nuevo; la rama por defecto es `main`.

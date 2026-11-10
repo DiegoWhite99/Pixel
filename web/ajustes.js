@@ -35,6 +35,7 @@
     {id: "apuntes", nombre: "Notas dictadas", que: "«Píxel, toma nota» y la pestaña Notas.", gasto: "no", cuanto: "Dictar no usa Gemini."},
     {id: "clasificar", nombre: "Asunto automático de las notas", que: "Al guardar una nota, Gemini le pone asunto y lo más importante.", gasto: "si", cuanto: "1 petición por nota. Apagado, lo saca del título.", de: "apuntes"},
     {id: "analizar", nombre: "Ofrecer analizar cada nota", que: "Al terminar una nota, pregunta si la analiza (resumen, ideas, lo destacado).", gasto: "aveces", cuanto: "1 petición, solo si dices que sí.", de: "apuntes"},
+    {id: "sonidos", nombre: "Sonidos", que: "Una campanita al llamarlo, una melodía suave mientras piensa y otra al terminar.", gasto: "no", cuanto: "Sin Gemini."},
     {id: "humor", nombre: "Personalidad juguetona", que: "Se ríe si lo tocas, hace cosas al azar y avisa antes de dormirse.", gasto: "no", cuanto: "Sin Gemini."},
   ];
   const ETIQUETA = {si: "Gasta Gemini", aveces: "Gemini a veces", no: "Sin Gemini", ahorra: "Ahorra Gemini"};
