@@ -90,7 +90,8 @@ async function enviar(ruta, cuerpo, silencioso) {
 
 // ------------------------------------------------------------------ pestanas
 function vista() {
-  const nombre = (location.hash || "#inicio").slice(1);
+  // 2.0.0: sin sesion, la app es solo la pantalla de entrada (Inicio con "Entrar con Google")
+  const nombre = document.body.classList.contains("sin-sesion") ? "inicio" : (location.hash || "#inicio").slice(1);
   const v = document.getElementById("v-" + nombre) ? nombre : "inicio";
   document.querySelectorAll("section.vista").forEach((s) => { s.hidden = s.id !== "v-" + v; });
   document.querySelectorAll("nav.tabs a").forEach((a) => a.setAttribute("aria-current", a.dataset.vista === v ? "page" : "false"));
@@ -468,7 +469,7 @@ function pintarNube(d) {
     chip.textContent = !u ? "Sin sesión" : !nube.pid ? "PC sin enlazar" : conectado ? "PC conectado" : "PC desconectado";
     chip.className = "chip" + (conectado ? " ok" : nube.pid ? " warn" : "");
     if (u) h += `<div class="fila"><span class="ico">${icono("pixel")}</span><div class="txt"><small>Sesión iniciada como</small><b>${esc(u.displayName || u.email || "anónimo")}</b>${u.email && u.displayName ? `<small>${esc(u.email)}</small>` : ""}</div>
-      <button class="btn" type="button" data-salir>Cerrar sesión</button></div>`;
+      <button class="btn" type="button" data-cambiar-cuenta>Cambiar de cuenta</button><button class="btn" type="button" data-salir>Cerrar sesión</button></div>`;
     h += nube.pid
       ? `<p class="sub">Este celular ya es Píxel. Además, esta cuenta maneja <b>${esc(n.nombre || "el Píxel del PC")}</b> (ESP32 y panel) desde cualquier sitio con internet.</p>`
       : '<p class="sub">Este celular ya es Píxel: no necesita el PC. Si también tienes el Píxel del PC, con el ESP32, puedes enlazarlo para manejarlo desde aquí.</p>';
@@ -570,6 +571,7 @@ async function iniciarNube() {
 }
 
 function sesion(u) {
+  nube.authListo = true;
   nube.quitar.forEach((f) => f());
   if (nube.quitarMios) nube.quitarMios();
   Object.assign(nube, {usuario: u, uid: u ? u.uid : "", quitar: [], quitarMios: null, mios: null, pid: null, estado: null, vivo: 0});
@@ -578,9 +580,15 @@ function sesion(u) {
   nube.quitarMios = nube.d.onValue(nube.d.ref(nube.db, `usuarios/${nube.uid}/pixeles`), (s) => { nube.mios = s.val() || {}; elegirPixel(); }, errorNube);
 }
 
+// Siempre se elige la cuenta (Fase 14: para la feria se entra con una cuenta de demostracion, no la personal).
+// Con la sesion abierta tambien sirve para cambiar de cuenta: la nueva reemplaza a la anterior.
 async function entrar() {
+  // el toque de "Entrar" deja sonar a Pixel (su presentacion) y empieza a bajar su voz de Mexico
+  if (window.Agente) { try { Agente.nucleo.desbloquear(); Agente.nucleo.voz.preparar(); } catch (e) { /* sin agente aun */ } }
   try {
-    await nube.au.signInWithPopup(nube.auth, new nube.au.GoogleAuthProvider());
+    const p = new nube.au.GoogleAuthProvider();
+    p.setCustomParameters({prompt: "select_account"});
+    await nube.au.signInWithPopup(nube.auth, p);
   } catch (e) {
     if (e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request") return;
     toast(e.code === "auth/popup-blocked" ? "El navegador bloqueó la ventana de Google: permítela y toca Entrar otra vez."
@@ -630,7 +638,13 @@ function revisarNube() {
   };
   const acciones = $("#hero-acciones");
   acciones.hidden = !nube.d || !!nube.usuario;          // con sesion, Inicio es de Pixel en este celular
-  if (!nube.usuario) acciones.innerHTML = '<button class="btn primario grande" type="button" data-entrar>Entrar con Google</button>';
+  // 2.0.0: la pantalla de entrada. Se espera a saber si hay sesion guardada (authListo) para no ensenarla de golpe
+  const entrada = !!nube.d && !!nube.authListo && !nube.usuario;
+  if (entrada !== document.body.classList.contains("sin-sesion")) { document.body.classList.toggle("sin-sesion", entrada); vista(); }
+  if (!nube.usuario && !acciones.querySelector("[data-entrar]")) acciones.innerHTML = `<button class="btn primario grande google" type="button" data-entrar>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22z"/><path fill="#FBBC05" d="M6.4 14c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2V7.4H3.1a10 10 0 0 0 0 9.2z"/><path fill="#EA4335" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3.1 7.4L6.4 10C7.2 7.8 9.4 6 12 6z"/></svg>Entrar con Google</button>
+    <p class="entrada-nota">¿Primera vez? Al entrar quedas registrado con tu cuenta de Google. Lo que le cuentes a Píxel solo lo ves tú.</p>
+    <p class="entrada-firma">Píxel · creado por Divergencia IA</p>`;
   if (!nube.d) {
     pill("#pill-servidor", "warn", nube.error ? "Sin nube" : "Conectando…");
     if (cara) cara.estado("esperando");
@@ -643,7 +657,7 @@ function revisarNube() {
     pill("#pill-ollama", "", "IA: Gemini");
     if (cara) cara.estado("esperando");
     $("#zzz").hidden = !cara;
-    hero("¡Hola! Soy Píxel", "Entra con tu cuenta de Google y háblame: vivo en este celular.");
+    hero("¡Hola! Soy Píxel", "Tu asistente de voz con inteligencia artificial. Entra con Google para empezar.");
     pintarNube(null);
     return;
   }
@@ -718,6 +732,8 @@ function pintarVisibles() {
 async function pedirAPixel(codigo) {
   const n = Math.random().toString(36).slice(2, 12);
   const d = nube.d;
+  // el permiso para que ESE Pixel entre en la lista de esta cuenta (las reglas solo lo dejan 15 min despues)
+  await d.set(d.ref(nube.db, `usuarios/${nube.uid}/enlazando/${enlazando.pid}`), d.serverTimestamp());
   await d.set(d.ref(nube.db, `pixeles/${enlazando.pid}/solicitudes/${nube.uid}`), {codigo, n, nombre: nombreApp()});
   return esperarRespuesta(enlazando.pid, "enlace-" + nube.uid, n, 15000);
 }
@@ -740,8 +756,9 @@ $("#presets").addEventListener("click", (e) => {
 function datosAgente() {
   const voz = document.querySelector("input[name=voz]:checked"), resp = document.querySelector("input[name=respuesta]:checked");
   const salida = document.querySelector("input[name=salida_voz]:checked"), tono = document.querySelector("input[name=tono]:checked");
-  return {voz: voz && voz.value, respuesta: resp && resp.value, personalidad: $("#personalidad").value, salida_voz: salida ? salida.value : "esp32",
-    tono: tono ? tono.value : undefined};
+  // en la app de internet la voz y su tipo se eligen en Ajustes (2.0.0): aqui no se tocan
+  return {voz: EN_INTERNET ? undefined : voz && voz.value, respuesta: resp && resp.value, personalidad: $("#personalidad").value,
+    salida_voz: salida ? salida.value : "esp32", tono: EN_INTERNET ? undefined : tono ? tono.value : undefined};
 }
 $("#f-agente").addEventListener("input", () => { agenteTocado = true; });
 $("#f-agente").addEventListener("change", () => { agenteTocado = true; });
@@ -783,6 +800,7 @@ document.addEventListener("click", async (e) => {
   if (t.closest("[data-buscar-pixel]")) { abrirEnlazar(); return; }
   if (t.closest("[data-entrar]")) { entrar(); return; }
   if (t.closest("[data-salir]")) { if (confirm("¿Cerrar sesión en este navegador?")) nube.au.signOut(nube.auth); return; }
+  if (t.closest("[data-cambiar-cuenta]")) { entrar(); return; }
   const en = t.closest("[data-enlazar]");
   if (en) {
     enlazando = {pid: en.dataset.enlazar, nombre: en.dataset.nombre};

@@ -221,23 +221,68 @@ def _traer_pestana_whatsapp():
     return w
 
 
-def _ir_en_pestana(ventana, url):
-    """Carga url en esa misma pestaña (sin abrir otra): Ctrl+L en su barra, la direccion y Enter."""
-    _correr(["xdotool", "windowactivate", "--sync", ventana, "key", "--clearmodifiers", "ctrl+l"])
+# Con WhatsApp Web ya abierto no se ve que chat quedo abierto (el titulo de la ventana no lo dice): el mensaje
+# se deja escrito y el usuario oprime Intro. Asi nunca se envia a otra persona por error.
+WHATSAPP_ENVIAR_EN_PESTANA = False
+
+
+def _al_portapapeles(texto):
+    """Pone texto en el portapapeles con xclip y devuelve lo que habia (texto) para dejarlo como estaba.
+    Se sustituye en las pruebas."""
+    try:
+        antes = subprocess.run(["xclip", "-selection", "clipboard", "-o"], capture_output=True, timeout=2,
+                               stdin=subprocess.DEVNULL).stdout.decode("utf-8")
+    except (OSError, subprocess.TimeoutExpired, UnicodeDecodeError):
+        antes = None
+    try:
+        # xclip se queda en segundo plano sirviendo el portapapeles: sin DEVNULL, run() lo esperaria
+        subprocess.run(["xclip", "-selection", "clipboard", "-i"], input=texto.encode("utf-8"), timeout=3,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except (OSError, subprocess.TimeoutExpired):
+        raise ErrorPuente("Falta xclip en el PC para escribir en WhatsApp (sudo apt install xclip).")
+    return antes
+
+
+def _pegar(texto):
+    """Escribe texto en la ventana activa pegandolo (portapapeles + Ctrl+V). xdotool type confunde teclas
+    con la distribucion de teclado del usuario (latam,us): el 10 nov los ":" de https: salieron como "ñ" y la
+    pestaña quedo en http://httpsñ//web.whatsapp.com/... Pegar respeta tildes, signos y emojis."""
+    antes = _al_portapapeles(texto)
+    time.sleep(0.15)
+    _correr(["xdotool", "key", "--clearmodifiers", "ctrl+v"])
+    time.sleep(0.6)
+    if antes:
+        _al_portapapeles(antes)
+
+
+def _escribir_en_whatsapp_abierto(ventana, num, texto):
+    """En la pestaña de WhatsApp Web que ya esta abierta, SIN recargarla (pedido del usuario el 10 nov):
+    cierra el chat que haya (Escape), abre "Nuevo chat" (Ctrl+Alt+N), busca el numero, abre el primer
+    resultado y pega el mensaje. Si el numero no esta en sus contactos, el mensaje queda en el buscador y no
+    se envia a nadie. Se busca sin el indicativo (los ultimos 10 digitos): asi coincide con como lo guardo."""
+    _correr(["xdotool", "windowactivate", "--sync", ventana])
+    time.sleep(0.4)
+    for _ in range(2):                          # el primero cierra menus o paneles; el segundo, el chat abierto
+        _correr(["xdotool", "key", "--clearmodifiers", "Escape"])
+        time.sleep(0.3)
+    _correr(["xdotool", "key", "--clearmodifiers", "ctrl+alt+n"])
+    time.sleep(1.2)
+    _pegar(num[-10:])
+    time.sleep(2.5)                             # que WhatsApp busque
+    _correr(["xdotool", "key", "--clearmodifiers", "Down"])
     time.sleep(0.3)
-    _correr(["xdotool", "type", "--delay", "6", url], timeout=30)
-    time.sleep(0.2)
     _correr(["xdotool", "key", "--clearmodifiers", "Return"])
+    time.sleep(1.5)                             # se abre el chat con la caja de escribir lista
+    _pegar(texto)
 
 
 def whatsapp(numero, texto):
-    """WhatsApp Web en el PC con el chat y el mensaje ya escritos (el enlace oficial "click to chat") y,
-    con xdotool, Enter para enviarlo. La app solo manda esta orden despues de que el usuario confirma.
-    - Si WhatsApp Web ya esta abierto (o en una pestaña de fondo), el chat se carga en ESA pestaña: abrir
-      otra la dejaria en "WhatsApp está abierto en otra ventana" (pedido del usuario el 10 nov).
-    - Si no esta abierto, se abre con xdg-open (una pestaña nueva).
-    - Dos Enter separados: si el primero llega antes de que cargue el chat no hace nada, y si ya lo envio
-      el segundo cae en la caja vacia (no manda nada)."""
+    """El mensaje en WhatsApp Web del PC. La app solo manda esta orden despues de que el usuario confirma.
+    - Si WhatsApp Web ya esta abierto (o en una pestaña de fondo), se escribe en ESA pestaña sin recargarla
+      ni abrir otra (pedidos del usuario del 10 nov): busca a la persona y deja el mensaje escrito.
+    - Si no esta abierto, se abre con xdg-open el enlace oficial "click to chat" (pestaña nueva, con el chat y
+      el mensaje ya puestos) y, con xdotool, se oprime Enter para enviarlo. Dos Enter separados: si el
+      primero llega antes de que cargue el chat no hace nada, y si ya lo envio el segundo cae en la caja vacia."""
     num = re.sub(r"\D", "", str(numero or ""))
     if not 8 <= len(num) <= 15:
         raise ErrorPuente("Ese número no parece válido.")
@@ -248,13 +293,16 @@ def whatsapp(numero, texto):
     xdotool = _correr(["xdotool", "version"])[0] == 0
     ventana = (_ventana_whatsapp() or _traer_pestana_whatsapp()) if xdotool else ""
     if ventana:
-        _ir_en_pestana(ventana, url)
-        _log("puente: WhatsApp a +%s...%s en la pestaña que ya estaba abierta" % (num[:2], num[-2:]))
-    else:
-        _abrir(url)
-        _log("puente: WhatsApp a +%s...%s abierto en una pestaña nueva" % (num[:2], num[-2:]))
+        _escribir_en_whatsapp_abierto(ventana, num, texto)
+        _log("puente: WhatsApp a +%s...%s escrito en la pestaña que ya estaba abierta" % (num[:2], num[-2:]))
+        if not WHATSAPP_ENVIAR_EN_PESTANA:
+            return {"mensaje": "escrito", "decir": "Te lo dejé escrito en WhatsApp, en el PC. Revisa que sea su chat y oprime Intro para enviarlo."}
+        _correr(["xdotool", "key", "--clearmodifiers", "Return"])
+        return {"mensaje": "enviado", "decir": "Listo: lo escribí en WhatsApp del PC y oprimí enviar."}
+    _abrir(url)
+    _log("puente: WhatsApp a +%s...%s abierto en una pestaña nueva" % (num[:2], num[-2:]))
     if not xdotool:
-        return {"mensaje": "abierto", "decir": "Te lo dejé escrito en WhatsApp del PC: oprime Enter para enviarlo."}
+        return {"mensaje": "abierto", "decir": "Te lo dejé escrito en WhatsApp del PC: oprime Intro para enviarlo."}
     t0 = time.time()
     time.sleep(WHATSAPP_ESPERA_S)
     ventana = _ventana_whatsapp()
@@ -262,7 +310,7 @@ def whatsapp(numero, texto):
         time.sleep(2)
         ventana = _ventana_whatsapp()
     if not ventana:
-        return {"mensaje": "abierto", "decir": "Abrí WhatsApp en el PC, pero no encontré su ventana para enviarlo. Míralo y oprime Enter."}
+        return {"mensaje": "abierto", "decir": "Abrí WhatsApp en el PC, pero no encontré su ventana para enviarlo. Míralo y oprime Intro."}
     for i in range(2):
         _correr(["xdotool", "windowactivate", "--sync", ventana, "key", "--clearmodifiers", "Return"])
         if i == 0:

@@ -17,7 +17,7 @@
   // El cupo gratis de Gemini es por modelo y por dia: si uno lo agota (429 PerDay), se sigue con el
   // siguiente hasta que se renueve (medianoche del Pacifico). gemini-flash-lite-latest es el mismo 3.5.
   const MODELOS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
-  const MODULOS = ["cerebro.js", "google.js", "tiempo.js", "aparatos.js", "musica.js", "humor.js", "apuntes.js", "whatsapp.js", "ajustes.js"];
+  const MODULOS = ["cerebro.js", "google.js", "tiempo.js", "aparatos.js", "musica.js", "humor.js", "apuntes.js", "contactos.js", "whatsapp.js", "ajustes.js", "perfil.js"];
   const MAX_RONDAS = 4;                         // vueltas herramienta -> Gemini en un mismo turno
   const CONFIRMAR_MS = 15000;                   // tras preguntar "¿lo envío?", se contesta sin decir "Píxel"
   // Firebase App Check (consola > App Check > app web Pixel > reCAPTCHA v3): su clave de sitio. Si en la
@@ -41,10 +41,11 @@
   const PAUSA_FIN_MS = 1200;
   const PAUSA_PIXEL_MS = 1800;
   const ACTIVACION = "Píxel";
-  // Tipo de voz (Fase 13): no hay voces de nino, asi que la infantil es la del celular mas aguda
-  // (pitch) y un poco mas rapida. Por defecto, infantil (lo pidio el usuario el 9 nov).
+  // Tipo de voz (Fase 13): no hay voces de nino, asi que la infantil es la misma voz mas aguda.
+  // Desde la 2.0.0 la voz por defecto es la de alta calidad (Supertonic, voz.js) con tono normal: el usuario la
+  // pidio "super suave y elocuente" (10 nov). La infantil sigue en Ajustes.
   const TONOS = {normal: {pitch: 1, rate: 1.05}, infantil: {pitch: 1.55, rate: 1.08}, muy_infantil: {pitch: 1.9, rate: 1.1}};
-  const TONO_DEFECTO = "infantil";
+  const TONO_DEFECTO = "normal";
   const VARIANTES = ["bixel"];                  // plano() ya iguala Pixel y Píxel
   const PREFIJOS = ["oye", "hey", "hola"];
   const FIN_FRASE = ".!?…", CORTE_PRIMERA = ",;", CIERRES = "\"')»", PRIMERA_MIN_PALABRAS = 6;
@@ -256,6 +257,25 @@
     return vs.find((v) => idVoz(v) === est.ajustes.voz) || vs[0] || null;
   }
 
+  // 2.0.0: la voz de alta calidad (voz.js, Supertonic 3). Sin voz guardada, la F4 (la que eligio el usuario);
+  // "celular" = la mejor del celular. Las de Piper de antes ("mx-mujer"...) pasan a la de alta calidad.
+  // Si este aparato resulto demasiado lento para ella (VP.lenta()), habla la del celular.
+  const VP = typeof VozPixel !== "undefined" ? VozPixel : null;
+  function vozPixel(id) {
+    if (!VP || !VP.soportada()) return null;
+    const v = VP.normal(id !== undefined ? id : (est.ajustes.voz || VP.DEFECTO));
+    return VP.de(v) && (id !== undefined || !VP.lenta()) ? v : null;
+  }
+  // La baja en segundo plano (unos 400 MB, una sola vez): sola solo con WiFi y sin "ahorro de datos";
+  // con datos del celular, cuando se pide (Ajustes -> "Bajar ahora" o "Escuchar").
+  function prepararVoz(forzar, id) {
+    const v = vozPixel(id);
+    if (!v || VP.info().lista || VP.info().bajando) return;
+    const c = typeof navigator !== "undefined" && navigator.connection;
+    if (!forzar && c && (c.saveData || c.type === "cellular")) return;
+    VP.preparar(v).catch((e) => console.warn("voz:", e.message));
+  }
+
   // la primera vez, dentro de un toque: iPhone (y Chrome) solo dejan sonar despues de tocar la pagina
   function desbloquear() {
     try {
@@ -321,8 +341,15 @@
     piensa.reloj = setTimeout(tic, PENSAR_DESDE_MS);
   }
 
-  function decirFrase(texto) {
-    habla.cola.push(texto);
+  // con: {voz, tono} para probar una voz sin guardarla (Ajustes -> Escuchar)
+  function decirFrase(texto, con) {
+    const item = {texto};
+    const id = vozPixel(con && con.voz);
+    if (id && VP.info(id).lista) {               // se pide ya: se va generando mientras suena la anterior
+      item.sonido = VP.sintetizar(id, texto, (con && con.tono) || est.ajustes.tono)
+        .catch((e) => { console.warn("voz:", e.message); return null; });
+    } else if (con && con.voz && !id) item.vozCelular = con.voz;
+    habla.cola.push(item);
     siguiente();
   }
 
@@ -335,7 +362,7 @@
       else avisarFin();
       return;
     }
-    const texto = habla.cola.shift();
+    const item = habla.cola.shift(), texto = item.texto;
     if (est.estado !== "hablando") ponerEstado("hablando");
     const act = {texto, reloj: null};
     const fin = () => {
@@ -345,12 +372,27 @@
       siguiente();
     };
     habla.actual = act;
+    if (item.sonido && audio) {                  // la voz de alta calidad; si falla, la del celular
+      act.reloj = setTimeout(fin, 20000);
+      item.sonido.then((s) => {
+        if (habla.actual !== act) return;
+        if (!s || !audio || audio.state !== "running") { hablarCelular(act, texto, fin, item.vozCelular); return; }
+        clearTimeout(act.reloj);
+        act.piper = VP.reproducir(audio, s, fin);
+        act.reloj = setTimeout(fin, act.piper.dura * 1000 + 3000);
+      });
+      return;
+    }
+    hablarCelular(act, texto, fin, item.vozCelular);
+  }
+
+  function hablarCelular(act, texto, fin, idCelular) {
     if (typeof speechSynthesis === "undefined" || typeof SpeechSynthesisUtterance === "undefined") {
       act.reloj = setTimeout(fin, 600 + texto.length * 60);      // sin voz: el texto queda en pantalla
       return;
     }
     const u = new SpeechSynthesisUtterance(texto);
-    const v = vozElegida();
+    const v = (idCelular && voces().find((x) => idVoz(x) === idCelular)) || vozElegida();
     if (v) { u.voice = v; u.lang = v.lang; } else u.lang = idioma();
     const tono = TONOS[est.ajustes.tono] || TONOS[TONO_DEFECTO];
     u.pitch = tono.pitch;
@@ -380,7 +422,9 @@
 
   function callar() {
     habla.cola = [];
-    if (habla.actual) { clearTimeout(habla.actual.reloj); habla.actual = null; }
+    const act = habla.actual;
+    if (act) { clearTimeout(act.reloj); habla.actual = null; if (act.piper) act.piper.parar(); }
+    if (VP) VP.callar();
     if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
     avisarFin();
   }
@@ -388,6 +432,7 @@
   // la boca: con eventos de palabra (si el navegador los da) abre en cada palabra; si no, una envolvente
   function nivelBoca() {
     if (!habla.actual) return null;
+    if (habla.actual.piper) { const n = habla.actual.piper.nivel(); return n > 0.05 ? 0.15 + 0.85 * n : 0.05; }
     const t = performance.now(), dt = t - habla.boundaryT;
     if (dt < 250) return 0.3 + 0.6 * (1 - dt / 250);
     return 0.2 + 0.5 * Math.abs(Math.sin(t / 95)) * (0.6 + 0.4 * Math.abs(Math.sin(t / 41)));
@@ -573,9 +618,9 @@
   }
 
   // Si agente.md no carga (sin red la primera vez), lo minimo para que Pixel funcione
-  const INSTRUCCIONES_MINIMAS = "Te llamas {{ACTIVACION}} y eres un asistente de voz que vive en una app del celular; hablas en español "
+  const INSTRUCCIONES_MINIMAS = "Te llamas {{ACTIVACION}} y eres un agente de inteligencia artificial creado por Divergencia IA, un asistente de voz que vive en una app del celular; hablas en español "
     + "y lo que respondes se lee en voz alta, sin listas, markdown ni emojis. {{LARGO}} Para hacer algo llama siempre a su función. "
-    + "Lo que puedes hacer:\n{{CAPACIDADES}}\n{{ESTILO}}\nAhora es {{FECHA}}, hora local del usuario.";
+    + "Quién es el usuario:\n{{PERFIL}}\nLo que puedes hacer:\n{{CAPACIDADES}}\n{{ESTILO}}\nAhora es {{FECHA}}, hora local del usuario.";
 
   // Rellena la plantilla de agente.md. "texto" es lo que dijo el usuario: los modulos lo usan para
   // buscar lo relevante (el cerebro hace RAG con las notas y saber.md).
@@ -596,6 +641,9 @@
       CAPACIDADES: capacidades.join("\n"),
       ESTILO: a.personalidad ? "Estilo que pidió el usuario: " + a.personalidad : "Sin estilo especial: amable y natural.",
       FECHA: fechaAhora(),
+      // 2.0.0: Mi perfil (perfil.js)
+      PERFIL: (typeof window !== "undefined" && window.PixelPerfil && window.PixelPerfil.paraPrompt(activo("ahorro")))
+        || "Todavía no llenó su perfil. Si viene al caso, invítale a hacerlo: se abre tocando su foto, arriba a la derecha.",
     };
     let s = (est.instrucciones || INSTRUCCIONES_MINIMAS).replace(/\{\{(\w+)\}\}/g, (t, k) => (k in valores ? valores[k] : t));
     if (est.pendiente) extra.push("## Esperando confirmación\nPreguntaste: «" + est.pendiente.pregunta + "». Si el usuario pide cambios, "
@@ -628,10 +676,20 @@
     return Math.min(20000, Math.max(5000, m ? Number(m[1]) * 1000 : 12000));
   }
 
-  function textoError(e) {
+  function textoError(e, prov) {
     if (cara) cara.emocion("triste", 2600);
     const s = String((e && (e.message || e.code)) || e);
     console.warn("agente:", e);
+    if (prov && prov.propio) {                  // con la clave del usuario: decir de quien es el problema
+      const quien = (Proveedores.LISTA[prov.proveedor] || {}).nombre || "tu proveedor", st = e && e.status;
+      if (!navigator.onLine || /failed to fetch|network|timeout|timed out/i.test(s)) { est.iaError = "red"; return "No tengo conexión con internet ahora mismo."; }
+      est.iaError = "propia";
+      if (st === 401 || st === 403 || /api key|apikey|authentication|unauthori|invalid.*key|permission/i.test(s)) return `La clave de ${quien} no funciona. Revísala en Ajustes.`;
+      if (st === 402 || /credit|balance|billing|insufficient|quota|payment/i.test(s)) return `Tu cuenta de ${quien} no tiene saldo o se le acabó el cupo. Revísala, o vuelve a Píxel gratis en Ajustes.`;
+      if (st === 429) return `${quien} dice que le estoy preguntando demasiado rápido. Dame un minuto.`;
+      if (st === 404 || /model/i.test(s)) return `${quien} no reconoce el modelo elegido. Elige otro en Ajustes.`;
+      return `${quien} me dio un error. Revisa la clave en Ajustes, o vuelve a Píxel gratis.`;
+    }
     if (esCupo(e)) {
       if (!cupoDelDia(e)) { est.iaError = "minuto"; return "Me están haciendo muchas preguntas seguidas. Dame un minuto y vuelve a preguntarme."; }
       est.iaError = "cupo";
@@ -649,16 +707,23 @@
 
   // Un turno con Gemini. Puede dar varias vueltas: si una herramienta devuelve datos ({respuesta}),
   // se le devuelven a Gemini y lo que conteste se dice. Las que devuelven texto ya lo dijeron.
+  // El proveedor de IA elegido en Ajustes (proveedores.js): {propio: false} = Gemini gratis por Firebase
+  const proveedor = () => (typeof Proveedores !== "undefined" ? Proveedores.actual() : {proveedor: "pixel", propio: false});
+  const modeloUso = (prov) => (prov.propio ? Proveedores.claveUso(prov) : modeloDeHoy());
+
   async function pensar(texto, id) {
     const dicho = [];
     const decir = (f) => { dicho.push(f); decirFrase(f); };
-    if (!est.ai) {
+    const prov = proveedor();
+    if (!est.ai && !prov.propio) {
       decir(est.aviso || "Todavía me estoy despertando. Inténtalo en unos segundos.");
     } else {
       habla.generando = true;
       try {
-        const crear = () => est.ia.getGenerativeModel(est.ai, {model: modeloDeHoy(), systemInstruction: sistema(texto), tools: herramientas(),
-          generationConfig: {maxOutputTokens: 1500, thinkingConfig: {thinkingLevel: "LOW"}}}, {timeout: 30000});
+        const generationConfig = {maxOutputTokens: 1500, thinkingConfig: {thinkingLevel: "LOW"}};
+        const crear = () => (prov.propio
+          ? Proveedores.motor(prov, {sistema: sistema(texto), herramientas: herramientas(), generationConfig})
+          : est.ia.getGenerativeModel(est.ai, {model: modeloDeHoy(), systemInstruction: sistema(texto), tools: herramientas(), generationConfig}, {timeout: 30000}));
         let modelo = crear();
         const contents = est.historial.concat([{role: "user", parts: [{text: texto}]}]);
         let reintentado = false;
@@ -670,13 +735,13 @@
             r = await modelo.generateContentStream({contents});
           } catch (e) {
             // cupo del dia agotado en este modelo: el siguiente, sin decir nada
-            while (esCupo(e) && cupoDelDia(e) && siguienteModelo()) {
+            while (!prov.propio && esCupo(e) && cupoDelDia(e) && siguienteModelo()) {   // con clave propia no se cambia de modelo
               modelo = crear();
               try { r = await modelo.generateContentStream({contents}); e = null; break; } catch (e2) { e = e2; }
             }
             if (!e) { /* ya respondio otro modelo */ }
             // limite por minuto: se avisa, se espera lo que pide Google y se intenta una vez mas
-            else if (!esCupo(e) || cupoDelDia(e) || reintentado) throw e;
+            else if (prov.propio || !esCupo(e) || cupoDelDia(e) || reintentado) throw e;
             else {
               reintentado = true;
               console.warn("agente: limite por minuto de Gemini, reintento", e);
@@ -703,7 +768,7 @@
             }
           }
           if (buf.trim()) decir(buf.trim());
-          contarUso(ronda ? "herramienta" : "charla", modeloDeHoy(), gasto);
+          contarUso(ronda ? "herramienta" : "charla", modeloUso(prov), gasto);
           if (!llamadas.length) break;
           const resultados = [];
           let hayDatos = false;
@@ -734,7 +799,7 @@
         if (est.aviso.startsWith("Firebase pide")) est.aviso = "";
       } catch (e) {
         if (id !== est.turnoId) return;
-        decir(textoError(e));
+        decir(textoError(e, prov));
       } finally {
         habla.generando = false;
         siguiente();
@@ -947,6 +1012,7 @@
         tono: TONOS[v.tono] ? v.tono : TONO_DEFECTO};
       pintarFormulario();
       pintar();
+      prepararVoz();
     }, (e) => console.warn("agente: ajustes", e)));
   }
 
@@ -982,12 +1048,16 @@
     est.diciendoRec = false;
   }
 
+  // Lo que no venga (la Personalidad ya no trae la voz: esta en Ajustes) se queda como estaba
   async function guardarAjustes(a) {
-    const nuevo = {personalidad: String(a.personalidad || "").trim().slice(0, 300), respuesta: a.respuesta === "corta" ? "corta" : "normal",
-      voz: String(a.voz || "").slice(0, 200), tono: TONOS[a.tono] ? a.tono : TONO_DEFECTO};
+    const voz = a.voz !== undefined && a.voz !== null ? a.voz : est.ajustes.voz, tono = a.tono || est.ajustes.tono;
+    const nuevo = {personalidad: String(a.personalidad !== undefined ? a.personalidad : est.ajustes.personalidad).trim().slice(0, 300),
+      respuesta: (a.respuesta || est.ajustes.respuesta) === "corta" ? "corta" : "normal",
+      voz: String(voz || "").slice(0, 200), tono: TONOS[tono] ? tono : TONO_DEFECTO};
     est.ajustes = nuevo;                       // vale ya en este celular aunque no se pueda guardar
     agenteTocado = false;
     pintar();
+    prepararVoz(true);
     if (!nube.uid) return false;
     try {
       await conTiempo(nube.d.set(refAjustes(), nuevo), 8000);
@@ -1004,9 +1074,26 @@
     desbloquear();
     const id = ++est.turnoId;
     pararRec();
-    const v = vozElegida();
+    const v = vozElegida(), mx = vozPixel();
+    if (mx && !VP.info().lista) toast(`Todavía estoy bajando mi voz de alta calidad (unos ${VP.MB} MB): por ahora sueno con la del celular.`);
     decirFrase(`Hola, soy ${ACTIVACION}. Así sueno en este celular.`);
-    if (!v) toast("Este navegador no tiene voces en español: Píxel solo podrá escribir.", true);
+    if (!v && !(mx && VP.info(mx).lista)) toast("Este navegador no tiene voces en español: Píxel solo podrá escribir.", true);
+    await finHablar();
+    if (id === est.turnoId) volverAEscuchar();
+  }
+
+  // Ajustes -> Escuchar: una muestra con esa voz y ese tipo, sin guardarla. La de alta calidad se baja si falta.
+  async function escucharVoz(voz, tono) {
+    if (ocupado()) { toast("Espera a que termine de hablar.", true); return; }
+    desbloquear();
+    const mx = vozPixel(voz);
+    if (mx && !VP.info(mx).lista) {
+      try { await VP.preparar(mx); } catch (e) { toast("No pude bajar esa voz: " + e.message, true); return; }
+      if (ocupado()) return;
+    }
+    const id = ++est.turnoId;
+    pararRec();
+    decirFrase(`Hola, soy ${ACTIVACION}. Así sueno con esta voz. ¿Te gusta?`, {voz, tono});
     await finHablar();
     if (id === est.turnoId) volverAEscuchar();
   }
@@ -1022,6 +1109,8 @@
     if (!est.montado || agenteTocado) return;
     const a = est.ajustes, vs = voces(), elegida = vozElegida();
     $("#activacion").textContent = ACTIVACION;
+    $("#voz-bloque").hidden = true;            // 2.0.0: la voz se elige en Ajustes (ajustes.js)
+    $("#voz-en-ajustes").hidden = false;
     $("#voces").innerHTML = vs.length
       ? vs.map((v) => `<label class="voz"><input type="radio" name="voz" value="${esc(idVoz(v))}" ${elegida && idVoz(v) === idVoz(elegida) ? "checked" : ""}><span>${esc(v.name)} <small class="sub">· ${esc(v.lang)}</small></span></label>`).join("")
       : '<div class="vacio">Este navegador no tiene voces en español. Píxel te contestará por escrito.</div>';
@@ -1072,7 +1161,8 @@
     pill("#pill-esp", oye.quiere ? "ok" : SR ? "" : "warn", propio && propio.pill ? propio.pill : oye.quiere ? "Escuchando" : SR ? "Micrófono apagado" : "Sin reconocimiento de voz");
     pill("#pill-ollama", !est.ai ? "" : est.iaError ? "warn" : "ok",
       !est.ai ? "IA cargando…" : est.iaError === "cupo" ? "Gemini sin cupo hoy" : est.iaError === "red" ? "Sin internet"
-        : est.iaError === "appcheck" ? "Falta App Check" : est.iaError === "minuto" ? "Gemini: espera un minuto" : est.iaError ? "Gemini con error" : "IA: Gemini");
+        : est.iaError === "appcheck" ? "Falta App Check" : est.iaError === "minuto" ? "Gemini: espera un minuto"
+        : est.iaError === "propia" ? "IA: error con tu clave" : est.iaError ? "Gemini con error" : nombreIA());
     if (cara) cara.estado(e === "hablando" ? "hablando" : e === "pensando" ? "pensando" : oye.quiere ? "escuchando" : "normal");
     $("#zzz").hidden = true;
     $("#latido").className = "latido" + (e === "hablando" ? " habla" : e === "escuchando" || e === "pensando" ? " ok" : "");
@@ -1188,6 +1278,12 @@
   // No pasa por la voz ni por el historial.
   //   motivo: para la cuenta del uso (Ajustes): "aprender", "clasificar", "analizar"...
   async function generarJSON(prompt, instrucciones, motivo) {
+    const prov = proveedor();
+    if (prov.propio) {
+      const r = await Proveedores.motor(prov, {sistema: instrucciones || "", generationConfig: {maxOutputTokens: 1200, responseMimeType: "application/json"}}).generateContent(prompt);
+      contarUso(motivo || "otro", modeloUso(prov), r.response && r.response.usageMetadata);
+      return JSON.parse(r.response.text());
+    }
     if (!est.ai) throw new Error("IA sin cargar");
     for (;;) {
       const modelo = est.ia.getGenerativeModel(est.ai, {model: modeloDeHoy(), systemInstruction: instrucciones || undefined,
@@ -1200,6 +1296,12 @@
         if (!(esCupo(e) && cupoDelDia(e) && siguienteModelo())) throw e;
       }
     }
+  }
+
+  // Lo que dice la pildora de la IA: el gratis o el modelo de la clave del usuario
+  function nombreIA() {
+    const prov = proveedor();
+    return prov.propio ? "IA: " + Proveedores.nombreModelo(Proveedores.sanear(prov.modelo)) + " · tu clave" : "IA: Gemini";
   }
 
   // ------------------------------------------------------------------ cuanto se gasta de Gemini (Fase 14)
@@ -1286,9 +1388,10 @@
   const nucleo = {
     est, oye, decir: decirFrase, finHablar, pararRec, volverAEscuchar, ponerEstado, conversar, pintar, aviso, sonido, beep: () => sonido("aviso"), ocupado,
     conTiempo, esperar, confirmar, anunciar, generarJSON, desbloquear, orden, mostrarVideo, escuchar: empezar,
-    hayIA: () => !!est.ai, ajustes: () => est.ajustes, sistema, herramientas,
+    hayIA: () => !!est.ai || proveedor().propio, ajustes: () => est.ajustes, sistema, herramientas,
+    voz: {escuchar: escucharVoz, preparar: prepararVoz, actual: () => vozPixel() || "celular", celular: () => voces().map((v) => ({id: idVoz(v), nombre: v.name, lang: v.lang}))},
     // Ajustes (ajustes.js): los interruptores, el modelo de hoy y el dia del cupo de Google
-    activo, modos: (o) => { modos = Object.assign({}, o || {}); pintar(); }, MODOS_DEFECTO, modeloDeHoy, diaDelCupo, MODELOS,
+    activo, modos: (o) => { modos = Object.assign({}, o || {}); pintar(); }, MODOS_DEFECTO, modeloDeHoy, diaDelCupo, MODELOS, contarUso,
   };
 
   window.Agente = {iniciar, usuario, nivelBoca, guardarAjustes, probar, pintar, modulo, nucleo,

@@ -161,9 +161,15 @@ const cuerpoDe = (raw) => Buffer.from(raw.split("\r\n\r\n")[1].replace(/\r\n/g, 
   await hasta(page, () => window.Agente && window.Agente.activo() && document.querySelector("#pill-ollama").textContent.includes("Gemini"), 40000, "agente listo");
   const uid = await page.evaluate(() => nube.uid);
   console.log(`listo en ${Date.now() - t0} ms, cuenta de prueba ${uid.slice(0, 6)}…`);
+  // 2.0.0: la prueba oye lo que dice Pixel por speechSynthesis, asi que usa la voz del celular (la de Mexico va
+  // por Web Audio). La cuenta es nueva: primero Pixel se presenta.
+  await page.evaluate(() => Agente.guardarAjustes({voz: "celular", tono: "infantil"}));
   await page.click("#ag-btn");
+  await hasta(page, () => window.__dichas.some((t) => /creado por Divergencia IA/.test(t)), 40000, "presentación");
+  await hasta(page, () => !Agente.nucleo.ocupado() && !document.querySelector("#bienvenida").hidden, 60000, "fin de la presentación");
+  console.log("  OK   la cuenta nueva queda registrada y Píxel se presenta");
 
-  const escuchando = () => page.evaluate(() => /Te escucho|Dime|Modo música|Música en pausa/.test(document.querySelector("#hero-estado").textContent) && window.__rec.inst && window.__rec.inst.vivo);
+  const escuchando = () => page.evaluate(() => !Agente.nucleo.ocupado() && window.__rec.inst && window.__rec.inst.vivo);
   // Dice algo (con o sin "Píxel") y espera a que Pixel conteste y vuelva a escuchar. Devuelve lo que dijo.
   async function hablar(texto, ms) {
     await espera(Number(process.env.PAUSA || 3000));   // como una persona; y el plan gratis de Gemini tiene limite por minuto
@@ -172,7 +178,7 @@ const cuerpoDe = (raw) => Buffer.from(raw.split("\r\n\r\n")[1].replace(/\r\n/g, 
     await page.evaluate((t) => window.__rec.inst.decir(t), texto);
     await hasta(page, (j) => window.__dichas.length > j, ms || 45000, "respuesta a: " + texto, k);
     await espera(500);
-    await hasta(page, () => /Te escucho|Dime|Modo música|Música en pausa/.test(document.querySelector("#hero-estado").textContent) && window.__rec.inst.vivo, 45000, "fin de: " + texto);
+    await hasta(page, () => !Agente.nucleo.ocupado() && window.__rec.inst.vivo, 45000, "fin de: " + texto);
     const dicho = (await page.evaluate((j) => window.__dichas.slice(j), k)).join(" ");
     console.log(`\n» ${texto}\n  Píxel: ${dicho}`);
     return dicho;
@@ -329,7 +335,7 @@ const cuerpoDe = (raw) => Buffer.from(raw.split("\r\n\r\n")[1].replace(/\r\n/g, 
       await espera(800);
       const heroMusica = await page.evaluate(() => [document.querySelector("#hero-estado").textContent, document.querySelector("#pill-esp").textContent, document.querySelector(".hero").classList.contains("modo-musica")]);
       comprobar(/Modo música/.test(heroMusica[0]) && /Modo música/.test(heroMusica[1]) && heroMusica[2], "se nota el «Modo música» (título, píldora y colores)", JSON.stringify(heroMusica));
-      comprobar((await page.evaluate(() => window.__tonos.slice(-1)[0])) === 1.55, "la voz es la infantil (tono 1,55)");
+      comprobar((await page.evaluate(() => window.__tonos.slice(-1)[0])) === 1.55, "la voz del celular con tono infantil (1,55)");
       await espera(1500);
       let baile = await page.evaluate(() => { const d = cara.depurar(); return {animo: d.animo, baile: d.baile}; });
       console.log("  baile:", JSON.stringify(baile));
@@ -407,7 +413,7 @@ const cuerpoDe = (raw) => Buffer.from(raw.split("\r\n\r\n")[1].replace(/\r\n/g, 
       await page.evaluate(() => window.__rec.inst.decir("Píxel, pausa la música"));
       await hasta(page, () => /pensando|hablando/.test(document.querySelector("#hero-estado").textContent) || window.PixelMusica.estado().jugador.volumen <= 12, 8000, "que baje");
       const bajo = (await est()).jugador.volumen;
-      await hasta(page, (j) => window.__dichas.length > j && /Te escucho|Dime|Modo música|Música en pausa/.test(document.querySelector("#hero-estado").textContent), 40000, "respuesta a pausa", k);
+      await hasta(page, (j) => window.__dichas.length > j && !Agente.nucleo.ocupado(), 40000, "respuesta a pausa", k);
       await espera(800);
       e = await est();
       console.log("  » Píxel, pausa la música\n  Píxel:", (await page.evaluate((j) => window.__dichas.slice(j), k)).join(" "));
@@ -563,7 +569,9 @@ const cuerpoDe = (raw) => Buffer.from(raw.split("\r\n\r\n")[1].replace(/\r\n/g, 
       let sid = "";
       sim.stdout.on("data", (b) => String(b).split("\n").filter(Boolean).forEach((l) => {
         const j = JSON.parse(l);
-        if (j.listo) sid = j.listo; else if (j.ruta) { ordenes.push(j); console.log("    [ESP32]", j.ruta, JSON.stringify(j.cuerpo), "->", j.mensaje); }
+        // el permiso para enlazar que da la app (las reglas lo piden desde la Fase 14), en cuanto se sabe su id
+        if (j.pid) page.evaluate((pid) => nube.d.set(nube.d.ref(nube.db, `usuarios/${nube.uid}/enlazando/${pid}`), nube.d.serverTimestamp()), j.pid).catch(() => {});
+        else if (j.listo) sid = j.listo; else if (j.ruta) { ordenes.push(j); console.log("    [ESP32]", j.ruta, JSON.stringify(j.cuerpo), "->", j.mensaje); }
       }));
       sim.stderr.on("data", (b) => console.log("    [ESP32 error]", String(b).slice(0, 200)));
       try {
@@ -621,7 +629,7 @@ const cuerpoDe = (raw) => Buffer.from(raw.split("\r\n\r\n")[1].replace(/\r\n/g, 
   // limpieza: los datos y la cuenta anonima de la prueba
   const limpio = await page.evaluate(async () => {
     const d = nube.d, r = (x) => d.ref(nube.db, `usuarios/${nube.uid}/${x}`);
-    await Promise.all(["cerebro", "tareas", "pomodoro", "preferencias", "recordatorios", "ajustes", "aparatos", "apuntes"].map((x) => d.remove(r(x)).catch(() => {})));
+    await Promise.all(["cerebro", "tareas", "pomodoro", "preferencias", "recordatorios", "ajustes", "aparatos", "apuntes", "perfil", "uso"].map((x) => d.remove(r(x)).catch(() => {})));
     return nube.usuario.delete().then(() => "cuenta borrada", (e) => "no pude borrar la cuenta: " + e.code);
   });
   console.log(limpio);

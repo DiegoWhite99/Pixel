@@ -3,7 +3,8 @@
     "visibles": {
       ".read": "auth != null",
       "$pid": {
-        ".write": "auth != null && auth.uid === $pid"
+        ".write": "auth != null && auth.uid === $pid",
+        ".validate": "newData.hasChildren(['nombre', 'hasta']) && newData.child('nombre').isString() && newData.child('nombre').val().length <= 60 && newData.child('hasta').isNumber()"
       }
     },
     "pixeles": {
@@ -54,7 +55,13 @@
         ".read": "auth != null && auth.uid === $uid",
         "pixeles": {
           "$pid": {
-            ".write": "auth != null && (auth.uid === $pid || (auth.uid === $uid && !newData.exists()))"
+            ".write": "auth != null && ((auth.uid === $pid && (data.exists() || (root.child('usuarios/' + $uid + '/enlazando/' + $pid).isNumber() && root.child('usuarios/' + $uid + '/enlazando/' + $pid).val() > now - 900000))) || (auth.uid === $uid && !newData.exists()))"
+          }
+        },
+        "enlazando": {
+          ".write": "auth != null && auth.uid === $uid",
+          "$pid": {
+            ".validate": "newData.isNumber() && newData.val() <= now + 60000"
           }
         },
         "recordatorios": {
@@ -73,6 +80,66 @@
             "$otro": {
               ".validate": false
             }
+          }
+        },
+        "contactos": {
+          ".write": "auth != null && auth.uid === $uid",
+          "$id": {
+            ".validate": "newData.hasChildren(['nombre']) && (newData.child('telefono').exists() || newData.child('correo').exists())",
+            "nombre": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60"
+            },
+            "telefono": {
+              ".validate": "newData.isString() && newData.val().matches(/^[0-9]{0,15}$/)"
+            },
+            "correo": {
+              ".validate": "newData.isString() && newData.val().length <= 120"
+            },
+            "actualizado": {
+              ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+            },
+            "$otro": {
+              ".validate": false
+            }
+          }
+        },
+        "perfil": {
+          ".write": "auth != null && auth.uid === $uid",
+          "nombre": {
+            ".validate": "newData.isString() && newData.val().length <= 60"
+          },
+          "apodo": {
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
+          "trato": {
+            ".validate": "newData.val() === 'tu' || newData.val() === 'usted'"
+          },
+          "foto": {
+            ".validate": "newData.isString() && newData.val().length <= 120000 && newData.val().beginsWith('data:image/jpeg;base64,')"
+          },
+          "sobre": {
+            ".validate": "newData.isString() && newData.val().length <= 600"
+          },
+          "gustos": {
+            ".validate": "newData.isString() && newData.val().length <= 600"
+          },
+          "ayuda": {
+            ".validate": "newData.isString() && newData.val().length <= 600"
+          },
+          "reglas": {
+            ".validate": "newData.isString() && newData.val().length <= 600"
+          },
+          "creado": {
+            ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+          },
+          "actualizado": {
+            ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+          },
+          "bienvenida": {
+            ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+          },
+          "$otro": {
+            ".validate": false
           }
         },
         "ajustes": {
@@ -158,6 +225,9 @@
             "$modo": {
               ".validate": "$modo.matches(/^[a-z]{2,20}$/) && newData.isBoolean()"
             }
+          },
+          "contactos_importados": {
+            ".validate": "newData.isBoolean()"
           },
           "$otro": {
             ".validate": false
@@ -342,7 +412,8 @@
                 },
                 "$otro": {
                   ".validate": false
-                }
+                },
+                ".validate": "$modelo.length <= 100"
               }
             },
             "$otro": {

@@ -311,6 +311,8 @@
     quien = String(quien || "").trim();
     const d = direccion(quien);
     if (d.correo) return {nombre: d.nombre, correo: d.correo};
+    const c = window.PixelContactos && window.PixelContactos.conCorreo(quien);   // 2.0.0: primero en Contactos
+    if (c) return {nombre: c.nombre, correo: c.correo};
     const notas = (window.Cerebro && window.Cerebro.notas()) || [];
     for (const n of notas) {
       const m = /[\w.+-]+@[\w-]+(\.[\w-]+)+/.exec(n.texto);

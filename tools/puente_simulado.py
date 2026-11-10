@@ -133,8 +133,19 @@ def main():
     entrar()
     pid, uid = auth["uid"], a.dueno
     ahora = int(time.time() * 1000)
+    # La app tiene que dar antes el permiso para enlazar (usuarios/<uid>/enlazando/<pid>, Fase 14): sin el, las
+    # reglas no dejan entrar en su lista. Se avisa el id y se reintenta, como hace el ESP32 de verdad.
+    print(json.dumps({"pid": pid}), flush=True)
     db("PUT", "pixeles/%s/duenos/%s" % (pid, uid), {"nombre": "app", "desde": ahora})
-    db("PUT", "usuarios/%s/pixeles/%s" % (uid, pid), {"nombre": a.nombre, "desde": ahora, "tipo": "puente"})
+    t0 = time.time()
+    while True:
+        try:
+            db("PUT", "usuarios/%s/pixeles/%s" % (uid, pid), {"nombre": a.nombre, "desde": ahora, "tipo": "puente"})
+            break
+        except urllib.error.HTTPError as e:
+            if e.code not in (401, 403) or time.time() - t0 > 40:
+                raise
+            time.sleep(1)
     db("PUT", "pixeles/%s/estado" % pid, {"json": json.dumps({"tipo": "puente", "nombre": a.nombre, "capacidades": CAPACIDADES,
                                                                "ip": "192.168.1.143", "ir_rx": True, "version": "simulado"}), "t": SV})
     print(json.dumps({"listo": pid}), flush=True)

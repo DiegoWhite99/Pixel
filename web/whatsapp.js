@@ -67,6 +67,9 @@
   function buscarPersona(nombre) {
     const q = String(nombre || "").trim();
     if (!q || /\d{4}/.test(q)) return null;
+    // 2.0.0: primero en Contactos (contactos.js); se devuelve con la misma forma que una nota
+    const c = window.PixelContactos && window.PixelContactos.conTelefono(q);
+    if (c) return {titulo: c.nombre, texto: "WhatsApp: " + formato(c.telefono), tipo: "persona", contacto: true};
     const ns = notas();
     const exacta = ns.find((n) => window.Cerebro.texto.mismoTitulo(n.titulo, q));
     if (exacta) return exacta;
@@ -79,10 +82,14 @@
   }
 
   // Guarda (o cambia) el numero en la nota de la persona; si no hay nota, la crea (tipo persona)
+  // 2.0.0: va a Contactos (contactos.js); sin ese modulo, a la nota del cerebro como antes
   async function guardarNumero(nota, nombre, n) {
-    if (!window.Cerebro || !window.Cerebro.recordar) return;
     const titulo = nota ? nota.titulo : nombre.replace(/^\s*(?:a|al|la|el)\s+/i, "").trim();
     if (!titulo) return;
+    if (window.PixelContactos) {
+      try { await window.PixelContactos.guardar({nombre: titulo, telefono: n}); return; } catch (e) { console.warn("whatsapp: no guarde el contacto", e); }
+    }
+    if (!window.Cerebro || !window.Cerebro.recordar) return;
     try { await window.Cerebro.recordar(titulo, conNumero(nota ? nota.texto : "", n), nota ? nota.tipo : "persona", "voz"); } catch (e) { console.warn("whatsapp: no guarde el numero", e); }
   }
 

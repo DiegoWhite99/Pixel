@@ -13,7 +13,7 @@ ctx.self = ctx;
 vm.createContext(ctx);
 // lo que pone app.js: aqui solo lo justo para que los modulos carguen sin pagina
 vm.runInContext("var nube = {uid: '', usuario: null, d: null}; var $ = () => null; var esc = (t) => String(t); var toast = () => {};", ctx);
-for (const f of ["agente.js", "cerebro.js", "google.js", "tiempo.js", "aparatos.js", "musica.js", "humor.js", "apuntes.js", "whatsapp.js", "ajustes.js"]) {
+for (const f of ["proveedores.js", "proveedor_claude.js", "voz.js", "agente.js", "cerebro.js", "google.js", "tiempo.js", "aparatos.js", "musica.js", "humor.js", "apuntes.js", "contactos.js", "whatsapp.js", "ajustes.js", "perfil.js"]) {
   const ruta = path.join(WEB, f);
   if (fs.existsSync(ruta)) vm.runInContext(fs.readFileSync(ruta, "utf8"), ctx, {filename: f});
 }
@@ -21,8 +21,14 @@ for (const f of ["agente.js", "cerebro.js", "google.js", "tiempo.js", "aparatos.
 let fallos = 0, hechas = 0;
 // los objetos del contexto falso tienen otro Object: se comparan pasando por JSON
 const igual = (a, b) => assert.deepStrictEqual(JSON.parse(JSON.stringify(a)), b);
+const esperando = [];                          // las pruebas asincronas (devuelven una promesa)
 function prueba(nombre, f) {
-  try { f(); hechas++; } catch (e) { fallos++; console.log("FALLA", nombre, "\n ", e.message); }
+  const mal = (e) => { fallos++; console.log("FALLA", nombre, "\n ", e.message); };
+  try {
+    const r = f();
+    if (r && typeof r.then === "function") esperando.push(r.then(() => { hechas++; }, mal));
+    else hechas++;
+  } catch (e) { mal(e); }
 }
 
 // ---------------------------------------------------------------- nucleo
@@ -459,9 +465,71 @@ if (ctx.PixelAjustes) {
   prueba("ajustes: todos los modos de Píxel tienen su interruptor", () => {
     const ids = new Set(ctx.PixelAjustes.MODOS.map((m) => m.id));
     const ag = fs.readFileSync(path.join(WEB, "agente.js"), "utf8");
-    const modulos = JSON.parse(/const MODULOS = (\[[^\]]*\])/.exec(ag)[1]).map((f) => f.replace(".js", "")).filter((m) => m !== "ajustes");
+    const modulos = JSON.parse(/const MODULOS = (\[[^\]]*\])/.exec(ag)[1]).map((f) => f.replace(".js", "")).filter((m) => !["ajustes", "perfil", "contactos"].includes(m));   // no son modos: siempre van
     for (const m of modulos) assert.ok(ids.has(m), "falta en Ajustes: " + m);
     for (const m of ctx.PixelAjustes.MODOS) assert.ok(["si", "aveces", "no", "ahorra"].includes(m.gasto) && m.que && m.cuanto, m.id);
+  });
+}
+
+// ------------------------------------------------------------------ proveedores de IA (Fase 14)
+{
+  const P = vm.runInContext("Proveedores", ctx), C = vm.runInContext("ProveedorClaude", ctx), X = P.texto;
+  const decl = [{functionDeclarations: [{name: "ver_tareas", description: "Ver", parameters: {type: "object", properties: {cuadrante: {type: "string"}}}},
+    {name: "escribir_whatsapp", description: "WA", parameters: {type: "object", properties: {para: {type: "string"}, mensaje: {type: "string"}}, required: ["para", "mensaje"]}},
+    {name: "modo_enfoque", description: "Enfoque"}]}];
+  const historia = [{role: "user", parts: [{text: "escríbele a Ana"}]},
+    {role: "model", parts: [{text: "Voy."}, {functionCall: {name: "escribir_whatsapp", args: {para: "Ana", mensaje: "hola"}, id: "c1"}}]},
+    {role: "user", parts: [{functionResponse: {name: "escribir_whatsapp", response: {resultado: "ok"}, id: "c1"}}]}];
+  prueba("proveedores: OpenAI y compatibles (GPT, OpenRouter, DeepSeek)", () => {
+    igual(X.aMensajesOpenAI(historia, "Eres Píxel"), [{role: "system", content: "Eres Píxel"}, {role: "user", content: "escríbele a Ana"},
+      {role: "assistant", content: "Voy.", tool_calls: [{id: "c1", type: "function", function: {name: "escribir_whatsapp", arguments: '{"para":"Ana","mensaje":"hola"}'}}]},
+      {role: "tool", tool_call_id: "c1", content: '{"resultado":"ok"}'}]);
+    const ts = X.aHerramientasOpenAI(decl);
+    assert.strictEqual(ts.length, 3);
+    igual(ts[2], {type: "function", function: {name: "modo_enfoque", description: "Enfoque", parameters: {type: "object", properties: {}}}});
+    const d = decl[0].functionDeclarations;
+    assert.ok(X.entradaValida("escribir_whatsapp", {para: "Ana", mensaje: "hola"}, d) && !X.entradaValida("escribir_whatsapp", {para: "Ana"}, d) && !X.entradaValida("otra", {}, d));
+    assert.strictEqual(X.extraerJSON('Claro: {"a": 1} listo'), '{"a": 1}');
+  });
+  prueba("proveedores: la respuesta en vivo de OpenAI, con una herramienta en trozos", async () => {
+    const sse = (evs) => new Response(evs.map((e) => "data: " + JSON.stringify(e) + "\n\n").join("") + "data: [DONE]\n\n");
+    const trozos = [];
+    for await (const t of X.trozosOpenAI(sse([{choices: [{delta: {content: "Ho"}}]}, {choices: [{delta: {content: "la"}}]},
+      {choices: [{delta: {tool_calls: [{index: 0, id: "t9", function: {name: "escribir_whatsapp", arguments: '{"para":"An'}}]}}]},
+      {choices: [{delta: {tool_calls: [{index: 0, function: {arguments: 'a","mensaje":"hola"}'}}]}, finish_reason: "tool_calls"}]},
+      {choices: [], usage: {prompt_tokens: 900, completion_tokens: 30}}]), decl[0].functionDeclarations)) trozos.push(t);
+    const textos = trozos.flatMap((t) => t.candidates[0].content.parts).filter((p) => p.text).map((p) => p.text).join("");
+    const final = trozos[trozos.length - 1];
+    assert.strictEqual(textos, "Hola");
+    igual(final.candidates[0].content.parts, [{functionCall: {name: "escribir_whatsapp", args: {para: "Ana", mensaje: "hola"}, id: "t9"}}]);
+    igual(final.usageMetadata, {promptTokenCount: 900, candidatesTokenCount: 30});
+    // cortado por el tope: no se ejecuta la herramienta
+    const cortados = [];
+    for await (const t of X.trozosOpenAI(sse([{choices: [{delta: {tool_calls: [{index: 0, id: "t1", function: {name: "ver_tareas", arguments: "{}"}}]}, finish_reason: "length"}]}]), decl[0].functionDeclarations)) cortados.push(t);
+    igual(cortados[cortados.length - 1].candidates[0].content.parts, []);
+  });
+  prueba("proveedores: Claude (formato de mensajes y herramientas)", () => {
+    igual(C.texto.aMensajes(historia), [{role: "user", content: [{type: "text", text: "escríbele a Ana"}]},
+      {role: "assistant", content: [{type: "text", text: "Voy."}, {type: "tool_use", id: "c1", name: "escribir_whatsapp", input: {para: "Ana", mensaje: "hola"}}]},
+      {role: "user", content: [{type: "tool_result", tool_use_id: "c1", content: '{"resultado":"ok"}'}]}]);
+    const hs = C.texto.aHerramientas(decl);
+    assert.ok(hs.every((h) => h.eager_input_streaming === true && h.input_schema.type === "object"));
+    assert.ok(C.texto.entradaValida({name: "escribir_whatsapp", input: {para: "Ana", mensaje: "hola"}}, hs) && !C.texto.entradaValida({name: "escribir_whatsapp", input: "{}"}, hs));
+    igual(C.texto.uso({input_tokens: 10, cache_read_input_tokens: 5, output_tokens: 7}), {promptTokenCount: 15, candidatesTokenCount: 7});
+  });
+  prueba("proveedores: nombres, precios y lo que se apunta", () => {
+    assert.strictEqual(P.sanear("moonshotai/kimi-k2.5"), "moonshotai_kimi-k2_5");
+    assert.strictEqual(P.claveUso({propio: true, modelo: "claude-haiku-5-5"}), "propia:claude-haiku-5-5");
+    assert.strictEqual(P.nombreModelo("propia:claude-opus-5-5"), "Claude Opus 5.5 · tu clave");
+    igual(P.precioDe("propia:claude-haiku-5-5"), {e: 0.10, s: 0.50});
+    igual(P.precioDe("gemini-3_5-flash-lite"), {e: 0.30, s: 2.50});
+    assert.strictEqual(P.precioDe("propia:modelo-raro"), null);
+    assert.ok(P.claveValida("claude", "sk-ant-api03-abcdefghijklmnopqrstuvwxyz") && !P.claveValida("claude", "AIzaXXXXXXXXXXXXXXXXXXXXXXXX") && P.claveValida("openai", "sk-proj-1234567890abcdef"));
+    igual(P.actual(), {proveedor: "pixel", modelo: "", clave: "", base: "", propio: false});   // sin nada guardado: el gratis
+    // el panel: lo de la clave propia se cuenta aparte de lo gratis
+    const J = ctx.PixelAjustes.texto, dia = {m: {"propia:claude-haiku-5-5": {n: 2, e: 1000000, s: 1000000}, "gemini-3_5-flash-lite": {n: 1, e: 1000000, s: 0}}};
+    assert.ok(Math.abs(J.costoDia(dia, "propia") - 0.60) < 1e-9 && Math.abs(J.costoDia(dia, "gratis") - 0.30) < 1e-9);
+    igual(J.porModelo({d1: dia}, ["d1"]).map(([k, x]) => [k, x.n]), [["propia:claude-haiku-5-5", 2], ["gemini-3_5-flash-lite", 1]]);
   });
 }
 
@@ -486,5 +554,111 @@ if (ctx.Cerebro && ctx.Cerebro.texto.enlaces) {
   });
 }
 
-console.log(fallos ? `${fallos} fallo(s), ${hechas} bien` : `todo bien (${hechas} pruebas)`);
-process.exit(fallos ? 1 : 0);
+// ------------------------------------------------------------------ 2.0.0: la voz de Mexico (voz.js)
+{
+  const V = vm.runInContext("VozPixel", ctx);      // const de arriba: no queda en window
+  prueba("voz: Supertonic 3, 10 voces, la F4 por defecto; las de Piper de antes pasan a ella", () => {
+    assert.strictEqual(V.VOCES.length, 10);
+    assert.strictEqual(V.DEFECTO, "st-F4");
+    assert.strictEqual(V.de("st-F4").estilo, "F4");
+    assert.strictEqual(V.de("mx-mujer").id, "st-F4");
+    assert.strictEqual(V.de("celular"), null);
+  });
+  prueba("voz: los números, horas, precios y símbolos se leen en palabras", () => {
+    const L = V.texto.leer;
+    assert.strictEqual(L("Mañana a las 3 de la tarde, el 10 de noviembre de 2026."), "Mañana a las tres de la tarde, el diez de noviembre de dos mil veintiséis.");
+    assert.strictEqual(L("Tienes 25 % de batería y hacen 21 °C."), "Tienes veinticinco por ciento de batería y hacen veintiún grados.");
+    assert.strictEqual(L("La reunión es a las 15:30 con 1 persona."), "La reunión es a las quince y treinta con una persona.");
+    assert.strictEqual(L("Cuesta $ 45.000, o 3,5 dólares."), "Cuesta cuarenta y cinco mil pesos, o tres coma cinco dólares.");
+    assert.strictEqual(V.texto.enLetras(2500000), "dos millones quinientos mil");
+    assert.strictEqual(V.texto.enLetras(115), "ciento quince");
+    assert.strictEqual(L("Hola, ¿qué tal?"), "Hola, ¿qué tal?");
+  });
+  prueba("voz: más pasos si sobra tiempo, menos si va justa, y «lenta» si ni así alcanza", () => {
+    const A = V.texto.ajustarPasos;
+    assert.strictEqual(A({pasos: 5, lentas: 0}, 0.2).pasos, 6);
+    assert.strictEqual(A({pasos: 5, lentas: 0}, 0.8).pasos, 4);
+    assert.strictEqual(A({pasos: 8, lentas: 0}, 0.1).pasos, 8);
+    assert.ok(!A({pasos: 4, lentas: 1}, 1.5).lenta && A({pasos: 4, lentas: 2}, 1.5).lenta);
+    assert.strictEqual(A({pasos: 4, lentas: 2}, 0.9).lentas, 0);
+  });
+  prueba("voz: la boca sigue el volumen (0 a 1)", () => {
+    const sr = 1000, pcm = new Float32Array(400);
+    for (let i = 100; i < 200; i++) pcm[i] = Math.sin(i) * 0.5;      // silencio, voz, silencio
+    const e = V.texto.envolvente(pcm, sr, 0.1);
+    assert.strictEqual(e.length, 4);
+    assert.ok(e[1] === 1 && e[0] === 0 && e[3] === 0);
+    assert.strictEqual(V.texto.agudo("infantil"), 1.32);
+    assert.strictEqual(V.texto.agudo("raro"), 1);
+  });
+}
+
+// ------------------------------------------------------------------ 2.0.0: Mi perfil (perfil.js)
+if (ctx.PixelPerfil) {
+  const P = ctx.PixelPerfil.texto;
+  const PERFIL = {nombre: "Diego Castelblanco", apodo: "Dieguito", trato: "usted", sobre: "Estudio ingeniería en Bogotá.",
+    gustos: "La salsa y la robótica.", ayuda: "Organizar la feria.", reglas: "Explícame con ejemplos."};
+  prueba("perfil: la plantilla .md va y vuelve sin la IA", () => {
+    const r = P.leerMarkdown(P.aMarkdown(PERFIL));
+    assert.strictEqual(r.reconocidos, 7);
+    igual(r.campos, PERFIL);
+  });
+  prueba("perfil: .md con títulos parecidos, listas y apartados extra", () => {
+    const r = P.leerMarkdown("---\nautor: yo\n---\n# Yo\n## Nombre\nAna\n## Trato\nDe usted, por favor\n## Hobbies\n- cine\n- **lectura**\n## Mascotas\nUn gato\n");
+    igual(r.campos, {nombre: "Ana", trato: "usted", gustos: "cine\nlectura", sobre: "Mascotas: Un gato"});
+  });
+  prueba("perfil: un .md escrito a su manera lo lee la IA", () => {
+    const r = P.leerMarkdown("Hola, me llamo Ana y me gusta el cine.\n\n## Mi gato\nSe llama Tom.");
+    assert.strictEqual(r.reconocidos, 0);
+    assert.ok(r.sobrante.includes("me llamo Ana"));
+  });
+  prueba("perfil: lo que entra en las instrucciones, sin pronombres", () => {
+    const t = P.paraPrompt(PERFIL, false);
+    assert.ok(t.includes("«Dieguito»") && t.includes("Háblale de usted") && t.includes("robótica") && t.includes("nunca la seguridad"));
+    assert.ok(!/\b(él|ella|lo trates|la trates)\b/i.test(t), t);
+    assert.ok(P.paraPrompt(Object.assign({}, PERFIL, {sobre: "x".repeat(600)}), true).length < P.paraPrompt(Object.assign({}, PERFIL, {sobre: "x".repeat(600)}), false).length);
+    assert.strictEqual(P.paraPrompt(null), "");
+  });
+  prueba("perfil: la presentación (Divergencia IA, la API del modelo, el perfil)", () => {
+    const t = P.presentacion("Diego", false);
+    assert.ok(t.startsWith("¡Hola, Diego!") && t.includes("creado por Divergencia IA") && t.includes("híbrido") && t.includes("Markdown") && t.includes("Te invito"));
+    assert.ok(P.presentacion("", true).startsWith("¡Hola! ") && P.presentacion("", true).includes("Lo invito"));
+    assert.strictEqual(P.nombreCorto({nombre: "Diego Castelblanco"}), "Diego");
+    assert.strictEqual(P.nombreCorto({nombre: "Diego Castelblanco", apodo: "Dieguito"}), "Dieguito");
+    assert.strictEqual(P.iniciales("diego castelblanco"), "DC");
+  });
+  prueba("perfil: agente.md tiene el lugar del perfil", () => {
+    const md = fs.readFileSync(path.join(WEB, "agente.md"), "utf8");
+    assert.ok(md.includes("{{PERFIL}}") && md.includes("Divergencia IA"));
+  });
+}
+
+// ------------------------------------------------------------------ 2.0.0: Contactos (contactos.js)
+if (ctx.PixelContactos) {
+  const C = ctx.PixelContactos.texto;
+  prueba("contactos: celular con indicativo y correo limpio", () => {
+    igual(C.limpio({nombre: "  Ana   Gómez ", telefono: "300 123 4567", correo: "Ana.Gomez@Gmail.com "}), {nombre: "Ana Gómez", telefono: "573001234567", correo: "ana.gomez@gmail.com"});
+    assert.strictEqual(C.telefono("+34 612 34 56 78"), "34612345678");
+    assert.strictEqual(C.telefono("123"), "");
+    assert.strictEqual(C.formato("573001234567"), "+57 300 123 4567");
+  });
+  prueba("contactos: buscar por nombre (sin tildes, «a Ana», solo con lo que hace falta)", () => {
+    const l = [{nombre: "Ana Gómez", telefono: "573001234567", correo: ""}, {nombre: "Andrés", telefono: "", correo: "andres@x.co"}, {nombre: "Laura", telefono: "573009999999", correo: "laura@x.co"}];
+    assert.strictEqual(C.buscar(l, "a ana", "telefono").nombre, "Ana Gómez");
+    assert.strictEqual(C.buscar(l, "andres", "correo").nombre, "Andrés");
+    assert.strictEqual(C.buscar(l, "andres", "telefono"), null);
+    assert.strictEqual(C.buscar(l, "pedro"), null);
+  });
+  prueba("contactos: las personas de la memoria con número o correo se pasan una vez", () => {
+    const notas = [{tipo: "persona", titulo: "Ana", texto: "Mi hermana. WhatsApp: +57 300 123 4567"},
+      {tipo: "persona", titulo: "Correo de Pedro", texto: "pedro@gmail.com"}, {tipo: "persona", titulo: "Laura", texto: "Sin datos"},
+      {tipo: "gusto", titulo: "Música", texto: "300 123 4567"}];
+    igual(C.desdeNotas(notas, []), [{nombre: "Ana", telefono: "573001234567", correo: ""}, {nombre: "Pedro", telefono: "", correo: "pedro@gmail.com"}]);
+    assert.strictEqual(C.desdeNotas(notas, [{nombre: "ana"}]).length, 1);
+  });
+}
+
+Promise.all(esperando).then(() => {
+  console.log(fallos ? `${fallos} fallo(s), ${hechas} bien` : `todo bien (${hechas} pruebas)`);
+  process.exit(fallos ? 1 : 0);
+});
