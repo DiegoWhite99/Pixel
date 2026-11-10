@@ -17,7 +17,7 @@
   // El cupo gratis de Gemini es por modelo y por dia: si uno lo agota (429 PerDay), se sigue con el
   // siguiente hasta que se renueve (medianoche del Pacifico). gemini-flash-lite-latest es el mismo 3.5.
   const MODELOS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
-  const MODULOS = ["cerebro.js", "google.js", "tiempo.js", "aparatos.js", "musica.js", "humor.js", "apuntes.js"];
+  const MODULOS = ["cerebro.js", "google.js", "tiempo.js", "aparatos.js", "musica.js", "humor.js", "apuntes.js", "whatsapp.js"];
   const MAX_RONDAS = 4;                         // vueltas herramienta -> Gemini en un mismo turno
   const CONFIRMAR_MS = 15000;                   // tras preguntar "¿lo envío?", se contesta sin decir "Píxel"
   // Firebase App Check (consola > App Check > app web Pixel > reCAPTCHA v3): su clave de sitio. Si en la
@@ -1009,7 +1009,8 @@
     for (const m of modulos) { try { if (m.pintar) m.pintar(); } catch (e) { console.warn("agente:", m.nombre, e); } }
     if (!conSesion) return;                   // sin sesion, Inicio lo pinta app.js ("Entrar con Google")
 
-    // un modulo puede poner su propio estado en Inicio (la musica: "Modo música" / "Música en pausa")
+    // un modulo puede poner su propio estado en Inicio (la musica: "Modo música"; tiempo.js: el pomodoro
+    // o la guia de Eisenhower). Manda el primero de MODULOS que conteste.
     let propio = null;
     for (const m of modulos) { try { if (m.hero) { propio = m.hero(); if (propio) break; } } catch (er) { propio = null; } }
     pill("#pill-esp", oye.quiere ? "ok" : SR ? "" : "warn", propio && propio.pill ? propio.pill : oye.quiere ? "Escuchando" : SR ? "Micrófono apagado" : "Sin reconocimiento de voz");
@@ -1030,7 +1031,9 @@
       const enMusica = propio && (e === "escuchando" || e === "listo") && !ventana && !oido;
       $("#hero-estado").textContent = enMusica ? propio.titulo : titulo;
       $("#hero-sub").textContent = enMusica ? propio.sub : sub;
-      $(".hero").classList.toggle("modo-musica", !!(propio && propio.modo));
+      // cada modo tiene sus colores (estilos.css): musica, pausa, pomodoro, descanso, matriz
+      $(".hero").classList.toggle("modo-musica", !!(propio && (propio.modo === "musica" || propio.modo === "pausa")));
+      $(".hero").dataset.modo = (propio && propio.modo) || "";
     }
     const conv = est.conversacion.length
       ? `<div class="conv">${est.conversacion.map((c) => `<p class="${c.quien}"><b>${c.quien === "tu" ? "Tú" : "Píxel"}</b> ${esc(c.texto)}</p>`).join("")}</div>`

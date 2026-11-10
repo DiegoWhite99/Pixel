@@ -903,3 +903,49 @@ El usuario: "toca diferenciar cuándo se queda en modo música y no… me gustar
     - No se intentó esquivar el bloqueo (por ejemplo, cambiando el user agent). `prueba_app.js musica` lo detecta y marca lo que necesita sonido como `OMIT`.
     - También se acabó el cupo diario de la YouTube Data API (429). Píxel respondió con la tarjeta de siempre.
 - Error mío en un script de prueba: si fallaba, buscaba `window.nube` para borrar la cuenta anónima, pero `nube` no está en `window`. Quedó una cuenta anónima más sin borrar (sin datos), que se suma a las ~15 del ESP32.
+
+## 10 de noviembre: v1.0.0 y segunda fase
+
+- Publicada en vivo la versión del 9 nov y creada la primera etiqueta, `v1.0.0` (`515c390`).
+- El usuario pidió una segunda fase con su plan de 6 puntos. Hecho, sin gastar cupo de Gemini en las pruebas (Gemini interceptado: 0 llamadas):
+    - **Pomodoro/Eisenhower en Inicio.** Probado de punta a punta en la app (cuenta anónima, borrada al final):
+        - "organiza mis tareas" desde Enfoque vuelve a Inicio y abre la guía.
+        - "tengo que entregar el informe de física para el viernes" ya cuenta como urgente: solo pregunta si es importante. "llamar a la abuela" → no / "mmm creo que sí" → Planificar. "organizar el escritorio, no es urgente ni importante" → Eliminar.
+        - "listo" → resumen y "¿Empezamos un pomodoro con ella?" → "sí" → modo Pomodoro con el anillo. Pausa, sigue y "¿cuánto queda?" por voz; "Ya terminé" → anuncio y descanso; "para el pomodoro" → Inicio normal.
+        - Errores míos encontrados al probar frases: "¿qué es un pomodoro?" empezaba uno (el atajo aceptaba "un" como verbo); "qué hago hoy" iba a la matriz (puede ser el calendario); "creo que sí" no se entendía.
+        - El anillo se salía por abajo de la escena: el SVG tomaba el alto de una fila de grid sin alto definido.
+    - **Mapa del cerebro.** Con 10 notas de ejemplo: 17 nodos (Tú + 6 carpetas + 10 notas), 7 conexiones.
+        - Primera versión: todo apretado en el centro y etiquetas pisadas. Más repulsión, aristas más largas y etiquetas que no chocan.
+        - `obsidian.py`: pie de enlaces, índices y colores. La prueba de Obsidian tenía un error mío: `open(..., "w")` vaciaba la nota antes de leerla, y una nota vacía cuenta como borrada.
+    - **ESP32.** Sin piezas ni volver a cargar el firmware: la prueba usa la orden que no existe (eco) y `http` al panel del PC.
+        - Con el ESP32 simulado: en línea, contesta en 0,5 s. Por voz: "ESP32 de prueba funciona".
+        - El diagnóstico del PC decía "TV emparejado" solo porque existía el certificado (creado en mis pruebas del 9 nov): nunca se emparejó. Ahora cuenta `tv_emparejados.json`.
+    - **Google.** "Probar con mi cuenta" probado con un Google simulado: 3 pasos bien y 0 escrituras.
+    - **Regla del correo.** Una prueba la protege.
+- Pendiente, necesita al usuario (uno a uno):
+    1. Enlazar el ESP32 desde el celular (Dispositivos → "Agregar ESP32 por Bluetooth") y tocar "Probar".
+    2. Conectar Google en el celular y "Probar con mi cuenta"; luego "Píxel, crea un evento mañana a las 3".
+    3. Activar Obsidian en Personalidad y abrir la vista de grafo en el PC.
+    4. Emparejar el TV.
+
+### Después: "Píxel, modo enfoque"
+
+El usuario: "cuando te diga modo enfoque, el agente me muestra las dos opciones y me propone hacer el Eisenhower, me guía, y después por cada tarea me da el pomodoro".
+
+- Hecho en `tiempo.js`, sin Gemini. Probado de punta a punta (0 llamadas a Gemini, cuenta anónima borrada):
+    - "Píxel, modo enfoque" → las dos opciones y "¿Empezamos con la matriz?" → "sí" → guía con 2 tareas → "listo" → "¿Empezamos? Te doy un pomodoro para cada una" → "sí" → plan de 2.
+    - "¿La terminaste?" → "aún no" → pomodoro 2 de 3 con la misma tarea → "sí, ya la terminé" → la tacha → pomodoro 3 de 3 con la siguiente → "¡Terminaste tu plan de enfoque!".
+- Reglas de la base de datos publicadas otra vez: el pomodoro admite `plan`, `paso` y `seguir`.
+- El usuario mandó una captura con la tarjeta del modo enfoque rota en el PC: la clase `.enfoque` de la tarjeta chocaba con la rejilla de 2 columnas de la página Enfoque (`.enfoque { grid-template-columns: 260px 2fr }`, solo con más de 760 px; mi prueba era de 390 px y no lo vio). Arreglado y rehecho el diseño: opciones en filas con icono, la etiqueta "Empezar aquí" y la tira "1 Ordenar tareas → 2 Pomodoro por tarea". Revisado a 1280 y a 390 px.
+
+### WhatsApp (v1.2.1)
+
+- Pedido: "entra a WhatsApp y escríbele a tal persona hola". Se explicaron las opciones: enlace oficial wa.me, bots no oficiales (riesgo de bloqueo) y la API oficial (es para empresas). El usuario eligió hacerlo en los dos lados, celular y PC, y pidió el tag 1.2.1 para esto.
+- Probado con un Gemini simulado (0 de cupo):
+    - Ana, con número guardado: "¿Se lo mando?" → botón → `api.whatsapp.com/send/?phone=573001234567&text=Hola`.
+    - Laura, sin número: lo pregunta → "300 765 4321" → lo guarda en su nota → "sí" → abre.
+    - "no" → no abre nada.
+- Errores encontrados:
+    - La pregunta del número no terminaba en "?" y el número sin "Píxel" se ignoraba.
+    - `window.open(…, "noopener")` siempre devuelve `null`, y Píxel decía "toca Abrir WhatsApp" aunque ya lo había abierto.
+- El camino del PC (WhatsApp Web + `xdotool`) se probó solo con sustitutos: probarlo de verdad mandaría un mensaje real.

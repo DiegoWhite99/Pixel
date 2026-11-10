@@ -191,6 +191,15 @@
           "tareaId": {
             ".validate": "newData.isString() && newData.val().length <= 40"
           },
+          "plan": {
+            ".validate": "newData.isString() && newData.val().length <= 4000"
+          },
+          "paso": {
+            ".validate": "newData.isNumber()"
+          },
+          "seguir": {
+            ".validate": "newData.isBoolean()"
+          },
           "$otro": {
             ".validate": false
           }

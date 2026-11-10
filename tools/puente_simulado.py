@@ -19,8 +19,10 @@ Solo libreria estandar. Al salir borra sus datos y su cuenta.
 Imprime una linea JSON por cada orden ejecutada (para las pruebas)."""
 
 import argparse
+import ipaddress
 import json
 import signal
+import socket
 import sys
 import threading
 import time
@@ -73,8 +75,26 @@ def ejecutar(ruta, cuerpo):
         return True, "infrarrojo enviado", {}
     if m == "wol":
         return True, "paquete enviado", {}
-    if m == "http":
-        return True, "llamada hecha", {}
+    if m == "http":                                      # como http() del firmware: GET a la red de casa
+        url = str(cuerpo.get("url") or "")
+        if not url.startswith("http://"):
+            return False, "Solo direcciones http:// de tu red de casa.", {}
+        try:
+            ip = ipaddress.ip_address(socket.gethostbyname(urllib.parse.urlsplit(url).hostname or ""))
+        except (OSError, ValueError):
+            ip = None
+        if ip is None or not ip.is_private:
+            return False, "Esa dirección no es de un aparato de tu red de casa.", {}
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "Pixel"}), timeout=5) as r:
+                codigo = r.status
+        except urllib.error.HTTPError as e:
+            codigo = e.code
+        except (OSError, ValueError):
+            return False, "El aparato no contestó.", {}
+        if not 200 <= codigo < 400:
+            return False, "El aparato contestó con un error (%d)." % codigo, {}
+        return True, "hecho", {}
     return False, "El ESP32 no sabe hacer eso.", {}
 
 

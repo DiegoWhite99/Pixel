@@ -148,6 +148,7 @@
             try {
               const e = JSON.parse(v.json), p = e.puente || e;          // el PC lo trae en "puente"; el ESP32 es todo puente
               Object.assign(ap.puentes[pid], {capacidades: p.capacidades || [], tvs: p.tvs || [], mac: p.mac || "", ip: p.ip || (e.servidor && e.servidor.ip) || "",
+                panel: (e.servidor && e.servidor.panel) || 0, version: p.version || "", rssi: p.rssi || 0,
                 ir_rx: !!p.ir_rx, wifi: (e.wifi && e.wifi.dispositivos) || []});
             } catch (er) { /* estado roto: se ignora */ }
             pintar();
@@ -165,6 +166,69 @@
     const r = nube.d.push(ref(`pixeles/${pid}/ordenes`));
     await N.conTiempo(nube.d.set(r, {uid: nube.uid, ruta, cuerpo: JSON.stringify(cuerpo || {}), t: nube.d.serverTimestamp()}), 8000);
     return esperarRespuesta(pid, r.key, "", ms || 15000);
+  }
+
+  // ------------------------------------------------------------------ probar un puente (Fase 14)
+  // De punta a punta y sin piezas: la orden va por internet (Firebase) y la respuesta vuelve.
+  //  - ESP32: 1) una orden que no existe ("/api/eco"): si contesta "esa orden no existe", recibe y
+  //    contesta; 2) que pida una pagina al panel del PC por el WiFi de casa (orden http): llega a la
+  //    red de casa, que es lo que necesita para encender el PC por red o hablar con aparatos WiFi.
+  //  - PC: /api/pc {accion: "probar"} (solo lee): volumen, musica y si el TV esta emparejado.
+  // Devuelve [{ok, texto}] (una linea por paso) y un resumen para decir.
+  async function probarPuente(pid) {
+    const p = ap.puentes[pid], pasos = [];
+    if (!p) return {pasos: [{ok: false, texto: "Ese puente ya no está enlazado."}], resumen: "Ese puente ya no está enlazado."};
+    const seg = (t0) => `${((Date.now() - t0) / 1000).toFixed(1).replace(".", ",")} s`;
+    if (!enLinea(pid)) {
+      pasos.push({ok: false, texto: `Sin latido: ${p.tipo === "puente" ? "¿el ESP32 está encendido y con WiFi?" : "¿el PC está encendido con el servidor?"}`});
+      return {pasos, resumen: `${p.nombre} no está conectado.`};
+    }
+    pasos.push({ok: true, texto: "En línea (manda su latido)"});
+    if (p.tipo === "puente") {
+      let t0 = Date.now();
+      try { await mandar(pid, "/api/eco", {}, 15000); pasos.push({ok: true, texto: `Recibe órdenes y contesta (${seg(t0)})`}); } catch (e) {
+        const m = String(e.message || e);
+        if (/no existe/.test(m)) pasos.push({ok: true, texto: `Recibe órdenes y contesta (${seg(t0)})`});
+        else if (/dueña/.test(m)) { pasos.push({ok: false, texto: "No te reconoce como dueño: vuelve a enlazarlo por Bluetooth"}); return {pasos, resumen: "El ESP32 no me reconoce como su dueño."}; }
+        else { pasos.push({ok: false, texto: "No contestó la orden: " + m}); return {pasos, resumen: "El ESP32 no contestó."}; }
+      }
+      const pc = Object.entries(ap.puentes).find(([id, x]) => x.tipo !== "puente" && x.ip && enLinea(id));
+      if (pc) {
+        t0 = Date.now();
+        try {
+          await mandar(pid, "/api/aparato", {metodo: "http", url: `http://${pc[1].ip}:${pc[1].panel || 8080}/api/voz`}, 20000);
+          pasos.push({ok: true, texto: `Llega a tu red de casa: habló con el PC (${pc[1].ip}) en ${seg(t0)}`});
+        } catch (e) { pasos.push({ok: false, texto: "No llegó al PC por el WiFi de casa: " + (e.message || e)}); }
+      } else pasos.push({ok: null, texto: "La red de casa no se probó: hace falta el PC en línea"});
+      pasos.push({ok: null, texto: `Piezas: emisor infrarrojo en IO${16}, receptor en IO${15} y relé en un pin libre. Sin ellas, puede encender el PC por red.`});
+      if (p.version) pasos.push({ok: null, texto: `Programa del puente ${p.version}${p.rssi ? ` · WiFi ${p.rssi} dBm` : ""}`});
+    } else {
+      const t0 = Date.now();
+      try {
+        const r = await mandar(pid, "/api/pc", {accion: "probar"}, 15000);
+        let d = {};
+        try { d = JSON.parse(r.resultados || "{}"); } catch (e) { d = {}; }
+        pasos.push({ok: true, texto: `Contesta órdenes (${seg(t0)})`});
+        pasos.push({ok: d.volumen !== null && d.volumen !== undefined, texto: d.volumen !== null && d.volumen !== undefined ? `Volumen del PC: ${d.volumen} %` : "No pude leer el volumen (pactl)"});
+        pasos.push({ok: !/sin playerctl/.test(d.musica || ""), texto: `Música: ${d.musica === "nada abierto" ? "no hay ningún reproductor abierto" : d.musica || "?"}`});
+        pasos.push({ok: /emparejado/.test(d.tv || "") && !/sin/.test(d.tv || ""), texto: `TV Android: ${d.tv || "?"}`});
+      } catch (e) {
+        pasos.push({ok: false, texto: "No contestó: " + (e.message || e)});
+        return {pasos, resumen: "El PC no contestó."};
+      }
+    }
+    const malos = pasos.filter((x) => x.ok === false).length;
+    return {pasos, resumen: malos ? `${p.nombre}: ${malos} cosa${malos === 1 ? "" : "s"} por revisar. Te dejo el detalle en Dispositivos.`
+      : `${p.nombre} funciona: recibe las órdenes y contesta.`};
+  }
+
+  function pintarPrueba(pid, r) {
+    const caja = $("#ap-prueba");
+    if (!caja) return;
+    const p = ap.puentes[pid];
+    caja.hidden = false;
+    caja.innerHTML = r ? `<b>Prueba de ${esc(p ? p.nombre : "puente")}</b><ul>${r.pasos.map((x) => `<li class="${x.ok === true ? "ok" : x.ok === false ? "mal" : ""}">${esc(x.texto)}</li>`).join("")}</ul>`
+      : `<div class="buscando"><span class="giro"></span>Probando ${esc(p ? p.nombre : "el puente")}…</div>`;
   }
 
   async function hacer(a, accion, valor) {
@@ -292,7 +356,8 @@
     const ps = Object.entries(ap.puentes);
     const hp = ps.length ? ps.map(([pid, p]) => `<div class="fila"><span class="ico ${enLinea(pid) ? "verde" : ""}">${svg(p.tipo === "puente" ? "otro" : "pc")}</span>
         <div class="txt"><b>${esc(p.nombre)}</b><small>${p.tipo === "puente" ? "ESP32" : "PC con el servidor"} · ${enLinea(pid) ? "conectado" : "desconectado"}${p.capacidades.length ? " · " + esc(p.capacidades.join(", ")) : ""}</small></div>
-        <span class="chip ${enLinea(pid) ? "ok" : "warn"}">${enLinea(pid) ? "En línea" : "Sin conexión"}</span></div>`).join("")
+        <span class="chip ${enLinea(pid) ? "ok" : "warn"}">${enLinea(pid) ? "En línea" : "Sin conexión"}</span>
+        <button class="btn suave" type="button" data-probar-puente="${esc(pid)}">Probar</button></div>`).join("")
       : '<div class="vacio">Aún no hay puentes. Agrega el ESP32 por Bluetooth, o enlaza el PC en Cuentas.</div>';
     if (hp !== ap.pintadoP) { $("#ap-puentes").innerHTML = hp; ap.pintadoP = hp; pintarFormulario(); }
     const xs = ap.aparatos;
@@ -386,6 +451,13 @@
     $("#ap-metodo").addEventListener("change", camposMetodo);
     $("#f-aparato").addEventListener("submit", guardarAparato);
     $("#ap-ble-btn").addEventListener("click", () => agregarEsp32());
+    $("#ap-puentes").addEventListener("click", async (e) => {
+      const b = e.target.closest("[data-probar-puente]");
+      if (!b) return;
+      b.disabled = true;
+      pintarPrueba(b.dataset.probarPuente, null);
+      try { pintarPrueba(b.dataset.probarPuente, await probarPuente(b.dataset.probarPuente)); } finally { b.disabled = false; }
+    });
     $("#ap-lista").addEventListener("click", async (e) => {
       const b = e.target.closest("button");
       if (!b || b.disabled) return;           // cada boton espera lo suyo; los demas siguen funcionando
@@ -430,13 +502,23 @@
 
   A.modulo({
     nombre: "aparatos", montar, alUsuario, pintar, ejecutar,
+    // "Píxel, prueba el ESP32" / "prueba el PC": la misma prueba que el boton, sin Gemini
+    atajo: (texto) => {
+      const m = /^(?:prueba|probar|pruebame|verifica|revisa|comprueba|chequea)\s+(?:el\s+|la\s+|los\s+|mis\s+|si\s+funciona\s+el\s+)?(esp ?32|esp|puente|puentes|pc|computador|portatil|laptop|ordenador)\b/.exec(A.texto.plano(String(texto || "")).trim());
+      if (!m || !nube.uid) return undefined;
+      const esp = /esp|puente/.test(m[1]);
+      const pid = Object.keys(ap.puentes).find((id) => (ap.puentes[id].tipo === "puente") === esp);
+      if (!pid) return Promise.resolve(esp ? "Aún no tengo el ESP32 enlazado. En Dispositivos, toca «Agregar ESP32 por Bluetooth»." : "El PC no está enlazado a tu cuenta.");
+      pintarPrueba(pid, null);
+      return probarPuente(pid).then((r) => { pintarPrueba(pid, r); return r.resumen; });
+    },
     herramientas: () => (nube.uid ? HERRAMIENTAS : []),
     capacidad: () => (lista().length ? `- Manejar los aparatos de la casa (controlar_aparato, ver_aparatos): ${lista().map((a) => a.nombre).join(", ")}.`
       : "- Manejar aparatos de la casa, cuando el usuario los agregue en Dispositivos (ahora no hay ninguno)."),
     contexto: () => (lista().length ? "## Aparatos\n" + lista().map((a) => `- ${a.nombre} (${TIPOS[a.tipo] || a.tipo}): ${accionesDe(a).join(", ").replace(/_/g, " ") || "sin botones aprendidos"}${enLinea(a.puente) ? "" : "; su puente está desconectado"}.`).join("\n") : ""),
   });
 
-  window.PixelAparatos = {texto: {buscarAparato, plan, accionesDe, conArticulo}, TIPOS, METODOS, mandar,
+  window.PixelAparatos = {texto: {buscarAparato, plan, accionesDe, conArticulo}, TIPOS, METODOS, mandar, probar: probarPuente,
     // el primer puente en linea que sabe hacer algo ("youtube": el PC busca videos con yt-dlp)
     puenteCon: (cap) => Object.keys(ap.puentes).find((pid) => capacidades(pid).includes(cap) && enLinea(pid)) || ""};
 })();

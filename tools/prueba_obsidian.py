@@ -104,5 +104,44 @@ with tempfile.TemporaryDirectory() as base:
     r = obsidian.sincronizar(base, UID, db)
     comprobar(os.path.exists(os.path.join(base, "LEEME.md")), "sin notas sigue bien %s" % r)
 
+# 8. Fase 14: el grafo. Mismas notas de ejemplo que la prueba "mapa" de prueba_modulos.js (los dos lados
+#    deben dar los mismos enlaces)
+EJEMPLO = [{"titulo": "Ana", "texto": "Mi hermana; estudia medicina.", "tipo": "persona"},
+           {"titulo": "Feria de ciencias", "texto": "Proyecto Píxel con Ana para la feria.", "tipo": "proyecto"},
+           {"titulo": "Música", "texto": "Le gusta Queen.", "tipo": "gusto"},
+           {"titulo": "Estudio", "texto": "Estudia con MÚSICA de fondo. Ver [[Feria de ciencias]].", "tipo": "yo"}]
+comprobar(obsidian.enlaces(EJEMPLO) == [(1, 0), (3, 1), (3, 2)], "enlaces: Feria->Ana, Estudio->Feria y Estudio->Música %s" % obsidian.enlaces(EJEMPLO))
+
+with tempfile.TemporaryDirectory() as base:
+    leer = lambda rel: open(os.path.join(base, rel), encoding="utf-8").read()
+    base_datos.clear()
+    for i, n in enumerate(EJEMPLO):
+        base_datos["-Nej%d" % i] = dict(n, fijo=False, actualizado=next(reloj), origen="app")
+    obsidian.sincronizar(base, UID, db)
+    estudio = leer("Sobre mí/Estudio.md")
+    comprobar(obsidian.MARCA in estudio and "[[Sobre mí]] · [[Feria de ciencias]] · [[Música]]" in estudio, "pie de enlaces en la nota")
+    comprobar(base_datos["-Nej3"]["texto"] == EJEMPLO[3]["texto"], "el pie no llega a la app")
+    comprobar("[[Sobre mí]] (1)" in leer("Tú.md") and "- [[Ana]]" in leer("Personas.md") and "[[Tú]]" in leer("Personas.md"), "notas índice: Tú y una por carpeta")
+    # rehacer el pie no cuenta como cambio: la siguiente vuelta no sube nada
+    r = obsidian.sincronizar(base, UID, db)
+    comprobar(r == {"a_obsidian": 0, "a_app": 0, "borradas": 0}, "estable: el pie no se sube a la app %s" % r)
+    # editar el texto en Obsidian si sube (sin el pie) y el pie se rehace
+    editado = leer("Gustos/Música.md").replace("Le gusta Queen.", "Le gusta Queen; la oye con Ana.")   # leer antes de abrir para escribir
+    with open(os.path.join(base, "Gustos", "Música.md"), "w", encoding="utf-8") as g:
+        g.write(editado)
+    r = obsidian.sincronizar(base, UID, db)
+    comprobar(r["a_app"] == 1 and base_datos["-Nej2"]["texto"] == "Le gusta Queen; la oye con Ana.", "editar en Obsidian sube el texto sin el pie")
+    comprobar("[[Gustos]] · [[Ana]]" in leer("Gustos/Música.md"), "y el pie ya la une con Ana")
+    r = obsidian.sincronizar(base, UID, db)
+    comprobar(not any(r.values()), "y queda estable %s" % r)
+    # una carpeta sin notas pierde su indice; un archivo del usuario con nombre de indice no se toca
+    with open(os.path.join(base, "Notas.md"), "w", encoding="utf-8") as g:
+        g.write("Mis notas sueltas")
+    del base_datos["-Nej2"]
+    obsidian.sincronizar(base, UID, db)
+    comprobar(not os.path.exists(os.path.join(base, "Gustos.md")) and leer("Notas.md") == "Mis notas sueltas", "índices: se quitan los vacíos y no pisa archivos del usuario")
+    # colores del grafo
+    comprobar(obsidian.colores(base) and '"path:\\"Personas\\""' in leer(".obsidian/graph.json") and not obsidian.colores(base), "colores del grafo una sola vez")
+
 print("TODO BIEN" if not fallos else "%d FALLO(S)" % fallos)
 sys.exit(1 if fallos else 0)

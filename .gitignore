@@ -20,6 +20,7 @@ gemini*.json
 # Fase 13: el certificado con el que el PC se presenta al TV Android
 tv_cert.pem
 tv_clave.pem
+tv_emparejados.json
 # claves de navegador de la app (web/claves.ejemplo.js es la plantilla)
 web/claves.js
 

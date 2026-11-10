@@ -13,7 +13,7 @@ ctx.self = ctx;
 vm.createContext(ctx);
 // lo que pone app.js: aqui solo lo justo para que los modulos carguen sin pagina
 vm.runInContext("var nube = {uid: '', usuario: null, d: null}; var $ = () => null; var esc = (t) => String(t); var toast = () => {};", ctx);
-for (const f of ["agente.js", "cerebro.js", "google.js", "tiempo.js", "aparatos.js", "musica.js", "humor.js", "apuntes.js"]) {
+for (const f of ["agente.js", "cerebro.js", "google.js", "tiempo.js", "aparatos.js", "musica.js", "humor.js", "apuntes.js", "whatsapp.js"]) {
   const ruta = path.join(WEB, f);
   if (fs.existsSync(ruta)) vm.runInContext(fs.readFileSync(ruta, "utf8"), ctx, {filename: f});
 }
@@ -158,6 +158,61 @@ if (ctx.PixelTiempo) {
     const ts = [{id: "1", texto: "Entregar el informe de física"}, {id: "2", texto: "Comprar pan"}];
     assert.strictEqual(P.buscarTarea(ts, "el informe").id, "1");
     assert.strictEqual(P.buscarTarea(ts, "llamar a mamá"), null);
+  });
+  // Fase 14: la guia de Eisenhower y los atajos del pomodoro (sin Gemini)
+  prueba("guia: la tarea y lo que se dice de ella", () => {
+    igual(P.leerTarea("tengo que entregar el informe de física para el viernes"), {texto: "entregar el informe de física", urgente: true});
+    igual(P.leerTarea("Terminar el informe, es urgente e importante"), {texto: "Terminar el informe", urgente: true, importante: true});
+    igual(P.leerTarea("organizar el escritorio, no es urgente ni importante"), {texto: "organizar el escritorio", urgente: false, importante: false});
+    igual(P.leerTarea("y también comprar los regalos que es importante pero no urgente"), {texto: "comprar los regalos", urgente: false, importante: true});
+    igual(P.leerTarea("llamar a la abuela"), {texto: "llamar a la abuela"});
+  });
+  prueba("guia: respuestas a urgente / importante", () => {
+    igual(P.respuestaPaso("sí", "urgente"), {urgente: true});
+    igual(P.respuestaPaso("no, pero es importante", "urgente"), {importante: true, urgente: false});
+    igual(P.respuestaPaso("es para mañana", "urgente"), {urgente: true});
+    igual(P.respuestaPaso("mmm creo que sí", "importante"), {importante: true});
+    igual(P.respuestaPaso("la verdad no mucho", "importante"), {importante: false});
+    igual(P.respuestaPaso("qué", "importante"), {});
+    const pl = ctx.Agente.texto.plano;
+    assert.ok(P.esListo(pl("listo")) && P.esListo(pl("no, eso es todo")) && P.esListo(pl("no")) && !P.esListo(pl("noviembre")));
+    assert.ok(P.esSalir(pl("sal de la guía")) && !P.esSalir(pl("listo")));
+  });
+  prueba("guia: cuándo se abre", () => {
+    for (const f of ["organiza mis tareas", "ayúdame a organizar mis pendientes", "usa la matriz de Eisenhower", "matriz de Aisenhauer"]) assert.ok(P.pedidoGuia(f), f);
+    for (const f of ["agrega a la matriz de eisenhower comprar pan", "agrega una tarea urgente e importante: entregar el informe", "ordena la música"]) assert.ok(!P.pedidoGuia(f), f);
+    assert.ok(P.pideQueHago("¿qué hago primero?") && P.pideQueHago("por dónde empiezo") && !P.pideQueHago("qué hago hoy"));
+  });
+  prueba("atajos del pomodoro", () => {
+    igual(P.pedidoPomodoro("Empieza un pomodoro de 50 minutos para estudiar física"), {accion: "empezar", minutos: 50, tarea: "estudiar física"});
+    igual(P.pedidoPomodoro("sí, empieza un pomodoro con esa"), {accion: "empezar", tarea: "@sugerida"});
+    igual(P.pedidoPomodoro("pon un pomodoro de media hora con descanso de 10 para el informe"), {accion: "empezar", descanso: 10, minutos: 30, tarea: "informe"});
+    igual(P.pedidoPomodoro("quita la pausa del pomodoro"), {accion: "seguir"});
+    igual(P.pedidoPomodoro("pausa el pomodoro"), {accion: "pausar"});
+    igual(P.pedidoPomodoro("para el pomodoro"), {accion: "parar"});
+    igual(P.pedidoPomodoro("¿cuánto me queda del pomodoro?"), {accion: "estado"});
+    igual(P.pedidoPomodoro("¿cuánto queda?"), {accion: "estado", siHay: true});
+    assert.strictEqual(P.pedidoPomodoro("qué es un pomodoro"), null);
+    assert.strictEqual(P.pedidoPomodoro("pausa"), null);              // sin "pomodoro": es de la musica
+  });
+  prueba("modo enfoque: la frase, la elección y «¿La terminaste?»", () => {
+    for (const f of ["modo enfoque", "Modo Enfoque.", "activa el modo enfoque", "modo en foque", "quiero enfocarme"]) assert.ok(P.pidoEnfoque(f), f);
+    for (const f of ["el enfoque de la cámara", "qué es el modo enfoque"]) assert.ok(!P.pidoEnfoque(f), f);
+    const pl = ctx.Agente.texto.plano;
+    assert.deepStrictEqual(["sí", "la matriz", "mejor pomodoro", "no", "qué"].map((f) => P.eleccionEnfoque(pl(f))), ["si", "matriz", "pomodoro", "no", null]);
+    assert.deepStrictEqual(["sí, ya la terminé", "lista", "aún no", "me falta un poco", "qué hora es"].map(P.respuestaHecha), [true, true, false, false, null]);
+  });
+  prueba("modo enfoque: un pomodoro para cada tarea importante", () => {
+    const ts = [{id: "a", texto: "informe", urgente: true, importante: true}, {id: "b", texto: "llamar", urgente: false, importante: true},
+      {id: "c", texto: "escritorio", urgente: false, importante: false}, {id: "d", texto: "correo", urgente: true, importante: false},
+      {id: "e", texto: "ya hecha", urgente: true, importante: true, hecha: true}];
+    const plan = P.planDeTareas(ts);
+    igual(plan, [{id: "a", texto: "informe"}, {id: "b", texto: "llamar"}]);
+    const p = {plan: JSON.stringify(plan), paso: 0, total: 2};
+    igual(P.avanzarPlan(p, new Set()), {paso: 1, tarea: "llamar", tareaId: "b", seguir: false, total: 2});
+    igual(P.avanzarPlan(Object.assign({}, p, {seguir: true}), new Set()), {paso: 0, tarea: "informe", tareaId: "a", seguir: false, total: 3});
+    assert.strictEqual(P.avanzarPlan(p, new Set(["b"])), null);        // la siguiente ya esta hecha: se acabo el plan
+    igual(P.planDeTareas([ts[2], ts[3]]), [{id: "d", texto: "correo"}]);   // sin importantes: las pendientes menos Eliminar
   });
 }
 
@@ -338,6 +393,74 @@ if (ctx.PixelApuntes) {
       assert.ok(!/id="es-(?!\w+-)/.test(svg.replace(new RegExp(`id="es-${n}-`, "g"), "")), n + ": id sin el nombre de la escena");
       assert.ok(!/https?:|NaN|undefined/.test(svg.replace("http://www.w3.org/2000/svg", "")), n + ": algo raro");
     }
+  });
+}
+
+// ------------------------------------------------------------------ la regla del correo (Fase 14)
+// "Que no envie sin aprobacion, mantener esa regla" (usuario, 10 nov): Gemini no tiene ninguna herramienta
+// que envie, y el unico envio (drafts/send) esta en enviarBorrador, al que solo se llega confirmando.
+prueba("correo: nunca se envía sin confirmar", () => {
+  const g = fs.readFileSync(path.join(WEB, "google.js"), "utf8");
+  const nombres = [...g.matchAll(/\{name: "([a-z_]+)"/g)].map((m) => m[1]);
+  assert.ok(nombres.length >= 9, "herramientas leídas: " + nombres.join());
+  for (const n of nombres) assert.ok(!/envia|enviar|send|mandar/.test(n), "herramienta que envía: " + n);
+  assert.strictEqual((g.match(/drafts\/send/g) || []).length, 1, "un solo sitio envía");
+  const envio = g.slice(g.indexOf("async function enviarBorrador"), g.indexOf("drafts/send"));
+  assert.ok(envio.length > 0 && envio.length < 400, "drafts/send está dentro de enviarBorrador");
+  const usos = [...g.matchAll(/enviarBorrador/g)].length - 1;          // sin contar su definicion
+  const enConfirmar = [...g.matchAll(/hacer: (?:\(\) => )?enviarBorrador\b/g)].length;
+  assert.ok(enConfirmar >= 1 && usos === enConfirmar, `enviarBorrador solo como "hacer" de una confirmación (${enConfirmar} de ${usos})`);
+  assert.ok(/nunca envías nada por tu cuenta/.test(fs.readFileSync(path.join(WEB, "agente.md"), "utf8")), "agente.md lo dice");
+});
+
+// ------------------------------------------------------------------ WhatsApp (Fase 14)
+if (ctx.PixelWhatsapp) {
+  const W = ctx.PixelWhatsapp.texto;
+  prueba("whatsapp: números", () => {
+    assert.strictEqual(W.normalizar("300 123 4567", "57"), "573001234567");
+    assert.strictEqual(W.normalizar("+57 (300) 123-4567", "57"), "573001234567");
+    assert.strictEqual(W.normalizar("0034 612 345 678", "57"), "34612345678");
+    assert.strictEqual(W.normalizar("+34 612 345 678", "57"), "34612345678");
+    assert.strictEqual(W.normalizar("12345", "57"), "");
+    assert.strictEqual(W.numeroDe("Mi hermana. WhatsApp: +57 300 123 4567. Cumple el 3 de mayo"), "+573001234567");
+    assert.strictEqual(W.numeroDe("Su celular es 300-765-4321"), "3007654321");
+    assert.strictEqual(W.numeroDe("Estudia medicina"), "");
+    assert.strictEqual(W.formato("573001234567"), "+57 300 123 4567");
+    assert.strictEqual(W.conNumero("Mi hermana.", "573001234567"), "Mi hermana.\nWhatsApp: +57 300 123 4567");
+    assert.strictEqual(W.conNumero("Mi hermana. WhatsApp: +57 300 000 0000", "573001234567"), "Mi hermana. WhatsApp: +57 300 123 4567");
+    assert.strictEqual(W.urlCelular("573001234567", "hola, ¿cómo vas?"), "https://wa.me/573001234567?text=hola%2C%20%C2%BFc%C3%B3mo%20vas%3F");
+  });
+}
+// La misma regla que el correo para WhatsApp: ninguna herramienta envia, y abrir (lo unico que manda
+// algo) solo se usa como "hacer" de una confirmacion
+prueba("whatsapp: nunca se envía sin confirmar", () => {
+  const w = fs.readFileSync(path.join(WEB, "whatsapp.js"), "utf8");
+  const nombres = [...w.matchAll(/\{name: "([a-z_]+)"/g)].map((m) => m[1]);
+  igual(nombres, ["escribir_whatsapp"]);
+  const usos = [...w.matchAll(/\babrir\(/g)].length - 1;          // sin contar su definicion
+  assert.ok(usos === 1 && /hacer: \(\) => abrir\(/.test(w), "abrir() solo desde la confirmación");
+  assert.strictEqual((w.match(/window\.open\(/g) || []).length, 1);
+  assert.ok(/WhatsApp: igual/.test(fs.readFileSync(path.join(WEB, "agente.md"), "utf8")), "agente.md lo dice");
+});
+
+// ------------------------------------------------------------------ cerebro: el mapa (Fase 14)
+if (ctx.Cerebro && ctx.Cerebro.texto.enlaces) {
+  const C = ctx.Cerebro.texto;
+  // las mismas notas que la prueba 8 de prueba_obsidian.py: los dos lados deben dar los mismos enlaces
+  const EJEMPLO = [{id: "a", titulo: "Ana", texto: "Mi hermana; estudia medicina.", tipo: "persona"},
+    {id: "f", titulo: "Feria de ciencias", texto: "Proyecto Píxel con Ana para la feria.", tipo: "proyecto"},
+    {id: "m", titulo: "Música", texto: "Le gusta Queen.", tipo: "gusto"},
+    {id: "e", titulo: "Estudio", texto: "Estudia con MÚSICA de fondo. Ver [[Feria de ciencias]].", tipo: "yo"}];
+  prueba("mapa: enlaces como obsidian.py", () => {
+    igual(C.enlaces(EJEMPLO), [[1, 0], [3, 1], [3, 2]]);
+  });
+  prueba("mapa: Tú, carpetas, notas y conexiones", () => {
+    const g = C.grafo(EJEMPLO);
+    assert.strictEqual(g.nodos.filter((n) => n.clase === "centro").length, 1);
+    assert.strictEqual(g.nodos.filter((n) => n.clase === "grupo").length, 4);
+    assert.strictEqual(g.aristas.filter((a) => a[2] === "grupo").length, 4);
+    assert.strictEqual(g.aristas.filter((a) => a[2] === "tipo").length, 4);
+    igual(g.aristas.filter((a) => a[2] === "mencion").map((a) => a.slice(0, 2)), [["f", "a"], ["e", "f"], ["e", "m"]]);
   });
 }
 
