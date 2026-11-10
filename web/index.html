@@ -359,10 +359,34 @@
   <!-- CUENTAS -->
   <!-- Fase 14: Ajustes (ajustes.js): los modos de Pixel con su interruptor y lo que se gasta de Gemini -->
   <section class="vista" id="v-ajustes" hidden>
-    <div><h1>Ajustes</h1><p class="sub">Enciende o apaga cada modo de Píxel. Al lado de cada uno ves si gasta Gemini (el cupo gratis de cada día) o no.</p></div>
+    <div><h1>Ajustes</h1><p class="sub">Elige con qué IA piensa Píxel y enciende o apaga cada modo. Al lado de cada uno ves si gasta la IA o no.</p></div>
+    <!-- Fase 14: el proveedor de IA (proveedores.js): Gemini gratis o el modelo que el usuario quiera con su clave -->
+    <div class="card" id="card-ia">
+      <div class="head"><div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="3"/><path d="M9 9h6v6H9zM9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg></div><h2>Proveedor de IA</h2></div>
+        <span class="chip" id="ia-chip">…</span></div>
+      <p class="sub">Píxel piensa gratis con Gemini. Si quieres más cupo u otro modelo (GPT, Claude, Kimi…), elige el proveedor y pon tu clave. La clave se guarda <b>solo en este aparato</b>: no se sube a la nube ni a GitHub.</p>
+      <form class="ia-form" id="f-ia" autocomplete="off">
+        <label class="campo">Proveedor<select id="ia-proveedor"></select></label>
+        <p class="nota" id="ia-ayuda"></p>
+        <label class="campo" id="ia-base-campo" hidden>Dirección del servicio<input type="url" id="ia-base" placeholder="https://…/v1" spellcheck="false"></label>
+        <div id="ia-propio">
+          <label class="campo">Tu clave<input type="password" id="ia-clave" autocomplete="new-password" spellcheck="false"></label>
+          <div class="form-fila ia-modelo">
+            <label class="campo">Modelo<select id="ia-modelo-fijo"></select><input id="ia-modelo" list="ia-modelos" placeholder="Toca «Buscar modelos» o escríbelo" spellcheck="false"><datalist id="ia-modelos"></datalist></label>
+            <button class="btn" type="button" id="ia-buscar">Buscar modelos</button>
+          </div>
+          <div class="form-fila" id="ia-precios">
+            <label class="campo">US$ por millón · entrada<input type="number" id="ia-pe" min="0" step="0.001" inputmode="decimal"></label>
+            <label class="campo">US$ por millón · salida<input type="number" id="ia-ps" min="0" step="0.001" inputmode="decimal"></label>
+          </div>
+        </div>
+        <div class="acciones"><button class="btn primario" type="submit">Guardar y usar</button><button class="btn" type="button" id="ia-probar">Probar</button><button class="btn suave" type="button" id="ia-borrar">Borrar clave</button></div>
+        <div class="prueba-puente" id="ia-prueba" hidden aria-live="polite"></div>
+      </form>
+    </div>
     <div class="grid ajustes">
       <div class="card" id="card-uso">
-        <div class="head"><div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></div><h2>Consumo de Gemini</h2></div></div>
+        <div class="head"><div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></div><h2>Consumo de la IA</h2></div></div>
         <div id="aj-uso"></div>
       </div>
       <div class="card" id="card-modos">
@@ -507,6 +531,8 @@
 
 <script src="escenarios.js"></script>
 <script src="mapa.js"></script>
+<script src="proveedores.js"></script>
+<script src="proveedor_claude.js"></script>
 <script src="cara3d.js"></script>
 <script src="claves.js"></script>
 <script src="app.js"></script>

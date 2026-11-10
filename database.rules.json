@@ -3,7 +3,8 @@
     "visibles": {
       ".read": "auth != null",
       "$pid": {
-        ".write": "auth != null && auth.uid === $pid"
+        ".write": "auth != null && auth.uid === $pid",
+        ".validate": "newData.hasChildren(['nombre', 'hasta']) && newData.child('nombre').isString() && newData.child('nombre').val().length <= 60 && newData.child('hasta').isNumber()"
       }
     },
     "pixeles": {
@@ -54,7 +55,13 @@
         ".read": "auth != null && auth.uid === $uid",
         "pixeles": {
           "$pid": {
-            ".write": "auth != null && (auth.uid === $pid || (auth.uid === $uid && !newData.exists()))"
+            ".write": "auth != null && ((auth.uid === $pid && (data.exists() || (root.child('usuarios/' + $uid + '/enlazando/' + $pid).isNumber() && root.child('usuarios/' + $uid + '/enlazando/' + $pid).val() > now - 900000))) || (auth.uid === $uid && !newData.exists()))"
+          }
+        },
+        "enlazando": {
+          ".write": "auth != null && auth.uid === $uid",
+          "$pid": {
+            ".validate": "newData.isNumber() && newData.val() <= now + 60000"
           }
         },
         "recordatorios": {
@@ -342,7 +349,8 @@
                 },
                 "$otro": {
                   ".validate": false
-                }
+                },
+                ".validate": "$modelo.length <= 100"
               }
             },
             "$otro": {

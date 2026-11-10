@@ -468,7 +468,7 @@ function pintarNube(d) {
     chip.textContent = !u ? "Sin sesión" : !nube.pid ? "PC sin enlazar" : conectado ? "PC conectado" : "PC desconectado";
     chip.className = "chip" + (conectado ? " ok" : nube.pid ? " warn" : "");
     if (u) h += `<div class="fila"><span class="ico">${icono("pixel")}</span><div class="txt"><small>Sesión iniciada como</small><b>${esc(u.displayName || u.email || "anónimo")}</b>${u.email && u.displayName ? `<small>${esc(u.email)}</small>` : ""}</div>
-      <button class="btn" type="button" data-salir>Cerrar sesión</button></div>`;
+      <button class="btn" type="button" data-cambiar-cuenta>Cambiar de cuenta</button><button class="btn" type="button" data-salir>Cerrar sesión</button></div>`;
     h += nube.pid
       ? `<p class="sub">Este celular ya es Píxel. Además, esta cuenta maneja <b>${esc(n.nombre || "el Píxel del PC")}</b> (ESP32 y panel) desde cualquier sitio con internet.</p>`
       : '<p class="sub">Este celular ya es Píxel: no necesita el PC. Si también tienes el Píxel del PC, con el ESP32, puedes enlazarlo para manejarlo desde aquí.</p>';
@@ -578,9 +578,13 @@ function sesion(u) {
   nube.quitarMios = nube.d.onValue(nube.d.ref(nube.db, `usuarios/${nube.uid}/pixeles`), (s) => { nube.mios = s.val() || {}; elegirPixel(); }, errorNube);
 }
 
+// Siempre se elige la cuenta (Fase 14: para la feria se entra con una cuenta de demostracion, no la personal).
+// Con la sesion abierta tambien sirve para cambiar de cuenta: la nueva reemplaza a la anterior.
 async function entrar() {
   try {
-    await nube.au.signInWithPopup(nube.auth, new nube.au.GoogleAuthProvider());
+    const p = new nube.au.GoogleAuthProvider();
+    p.setCustomParameters({prompt: "select_account"});
+    await nube.au.signInWithPopup(nube.auth, p);
   } catch (e) {
     if (e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request") return;
     toast(e.code === "auth/popup-blocked" ? "El navegador bloqueó la ventana de Google: permítela y toca Entrar otra vez."
@@ -718,6 +722,8 @@ function pintarVisibles() {
 async function pedirAPixel(codigo) {
   const n = Math.random().toString(36).slice(2, 12);
   const d = nube.d;
+  // el permiso para que ESE Pixel entre en la lista de esta cuenta (las reglas solo lo dejan 15 min despues)
+  await d.set(d.ref(nube.db, `usuarios/${nube.uid}/enlazando/${enlazando.pid}`), d.serverTimestamp());
   await d.set(d.ref(nube.db, `pixeles/${enlazando.pid}/solicitudes/${nube.uid}`), {codigo, n, nombre: nombreApp()});
   return esperarRespuesta(enlazando.pid, "enlace-" + nube.uid, n, 15000);
 }
@@ -783,6 +789,7 @@ document.addEventListener("click", async (e) => {
   if (t.closest("[data-buscar-pixel]")) { abrirEnlazar(); return; }
   if (t.closest("[data-entrar]")) { entrar(); return; }
   if (t.closest("[data-salir]")) { if (confirm("¿Cerrar sesión en este navegador?")) nube.au.signOut(nube.auth); return; }
+  if (t.closest("[data-cambiar-cuenta]")) { entrar(); return; }
   const en = t.closest("[data-enlazar]");
   if (en) {
     enlazando = {pid: en.dataset.enlazar, nombre: en.dataset.nombre};

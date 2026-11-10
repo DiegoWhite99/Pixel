@@ -628,10 +628,20 @@
     return Math.min(20000, Math.max(5000, m ? Number(m[1]) * 1000 : 12000));
   }
 
-  function textoError(e) {
+  function textoError(e, prov) {
     if (cara) cara.emocion("triste", 2600);
     const s = String((e && (e.message || e.code)) || e);
     console.warn("agente:", e);
+    if (prov && prov.propio) {                  // con la clave del usuario: decir de quien es el problema
+      const quien = (Proveedores.LISTA[prov.proveedor] || {}).nombre || "tu proveedor", st = e && e.status;
+      if (!navigator.onLine || /failed to fetch|network|timeout|timed out/i.test(s)) { est.iaError = "red"; return "No tengo conexión con internet ahora mismo."; }
+      est.iaError = "propia";
+      if (st === 401 || st === 403 || /api key|apikey|authentication|unauthori|invalid.*key|permission/i.test(s)) return `La clave de ${quien} no funciona. Revísala en Ajustes.`;
+      if (st === 402 || /credit|balance|billing|insufficient|quota|payment/i.test(s)) return `Tu cuenta de ${quien} no tiene saldo o se le acabó el cupo. Revísala, o vuelve a Píxel gratis en Ajustes.`;
+      if (st === 429) return `${quien} dice que le estoy preguntando demasiado rápido. Dame un minuto.`;
+      if (st === 404 || /model/i.test(s)) return `${quien} no reconoce el modelo elegido. Elige otro en Ajustes.`;
+      return `${quien} me dio un error. Revisa la clave en Ajustes, o vuelve a Píxel gratis.`;
+    }
     if (esCupo(e)) {
       if (!cupoDelDia(e)) { est.iaError = "minuto"; return "Me están haciendo muchas preguntas seguidas. Dame un minuto y vuelve a preguntarme."; }
       est.iaError = "cupo";
@@ -649,16 +659,23 @@
 
   // Un turno con Gemini. Puede dar varias vueltas: si una herramienta devuelve datos ({respuesta}),
   // se le devuelven a Gemini y lo que conteste se dice. Las que devuelven texto ya lo dijeron.
+  // El proveedor de IA elegido en Ajustes (proveedores.js): {propio: false} = Gemini gratis por Firebase
+  const proveedor = () => (typeof Proveedores !== "undefined" ? Proveedores.actual() : {proveedor: "pixel", propio: false});
+  const modeloUso = (prov) => (prov.propio ? Proveedores.claveUso(prov) : modeloDeHoy());
+
   async function pensar(texto, id) {
     const dicho = [];
     const decir = (f) => { dicho.push(f); decirFrase(f); };
-    if (!est.ai) {
+    const prov = proveedor();
+    if (!est.ai && !prov.propio) {
       decir(est.aviso || "Todavía me estoy despertando. Inténtalo en unos segundos.");
     } else {
       habla.generando = true;
       try {
-        const crear = () => est.ia.getGenerativeModel(est.ai, {model: modeloDeHoy(), systemInstruction: sistema(texto), tools: herramientas(),
-          generationConfig: {maxOutputTokens: 1500, thinkingConfig: {thinkingLevel: "LOW"}}}, {timeout: 30000});
+        const generationConfig = {maxOutputTokens: 1500, thinkingConfig: {thinkingLevel: "LOW"}};
+        const crear = () => (prov.propio
+          ? Proveedores.motor(prov, {sistema: sistema(texto), herramientas: herramientas(), generationConfig})
+          : est.ia.getGenerativeModel(est.ai, {model: modeloDeHoy(), systemInstruction: sistema(texto), tools: herramientas(), generationConfig}, {timeout: 30000}));
         let modelo = crear();
         const contents = est.historial.concat([{role: "user", parts: [{text: texto}]}]);
         let reintentado = false;
@@ -670,13 +687,13 @@
             r = await modelo.generateContentStream({contents});
           } catch (e) {
             // cupo del dia agotado en este modelo: el siguiente, sin decir nada
-            while (esCupo(e) && cupoDelDia(e) && siguienteModelo()) {
+            while (!prov.propio && esCupo(e) && cupoDelDia(e) && siguienteModelo()) {   // con clave propia no se cambia de modelo
               modelo = crear();
               try { r = await modelo.generateContentStream({contents}); e = null; break; } catch (e2) { e = e2; }
             }
             if (!e) { /* ya respondio otro modelo */ }
             // limite por minuto: se avisa, se espera lo que pide Google y se intenta una vez mas
-            else if (!esCupo(e) || cupoDelDia(e) || reintentado) throw e;
+            else if (prov.propio || !esCupo(e) || cupoDelDia(e) || reintentado) throw e;
             else {
               reintentado = true;
               console.warn("agente: limite por minuto de Gemini, reintento", e);
@@ -703,7 +720,7 @@
             }
           }
           if (buf.trim()) decir(buf.trim());
-          contarUso(ronda ? "herramienta" : "charla", modeloDeHoy(), gasto);
+          contarUso(ronda ? "herramienta" : "charla", modeloUso(prov), gasto);
           if (!llamadas.length) break;
           const resultados = [];
           let hayDatos = false;
@@ -734,7 +751,7 @@
         if (est.aviso.startsWith("Firebase pide")) est.aviso = "";
       } catch (e) {
         if (id !== est.turnoId) return;
-        decir(textoError(e));
+        decir(textoError(e, prov));
       } finally {
         habla.generando = false;
         siguiente();
@@ -1072,7 +1089,8 @@
     pill("#pill-esp", oye.quiere ? "ok" : SR ? "" : "warn", propio && propio.pill ? propio.pill : oye.quiere ? "Escuchando" : SR ? "Micrófono apagado" : "Sin reconocimiento de voz");
     pill("#pill-ollama", !est.ai ? "" : est.iaError ? "warn" : "ok",
       !est.ai ? "IA cargando…" : est.iaError === "cupo" ? "Gemini sin cupo hoy" : est.iaError === "red" ? "Sin internet"
-        : est.iaError === "appcheck" ? "Falta App Check" : est.iaError === "minuto" ? "Gemini: espera un minuto" : est.iaError ? "Gemini con error" : "IA: Gemini");
+        : est.iaError === "appcheck" ? "Falta App Check" : est.iaError === "minuto" ? "Gemini: espera un minuto"
+        : est.iaError === "propia" ? "IA: error con tu clave" : est.iaError ? "Gemini con error" : nombreIA());
     if (cara) cara.estado(e === "hablando" ? "hablando" : e === "pensando" ? "pensando" : oye.quiere ? "escuchando" : "normal");
     $("#zzz").hidden = true;
     $("#latido").className = "latido" + (e === "hablando" ? " habla" : e === "escuchando" || e === "pensando" ? " ok" : "");
@@ -1188,6 +1206,12 @@
   // No pasa por la voz ni por el historial.
   //   motivo: para la cuenta del uso (Ajustes): "aprender", "clasificar", "analizar"...
   async function generarJSON(prompt, instrucciones, motivo) {
+    const prov = proveedor();
+    if (prov.propio) {
+      const r = await Proveedores.motor(prov, {sistema: instrucciones || "", generationConfig: {maxOutputTokens: 1200, responseMimeType: "application/json"}}).generateContent(prompt);
+      contarUso(motivo || "otro", modeloUso(prov), r.response && r.response.usageMetadata);
+      return JSON.parse(r.response.text());
+    }
     if (!est.ai) throw new Error("IA sin cargar");
     for (;;) {
       const modelo = est.ia.getGenerativeModel(est.ai, {model: modeloDeHoy(), systemInstruction: instrucciones || undefined,
@@ -1200,6 +1224,12 @@
         if (!(esCupo(e) && cupoDelDia(e) && siguienteModelo())) throw e;
       }
     }
+  }
+
+  // Lo que dice la pildora de la IA: el gratis o el modelo de la clave del usuario
+  function nombreIA() {
+    const prov = proveedor();
+    return prov.propio ? "IA: " + Proveedores.nombreModelo(Proveedores.sanear(prov.modelo)) + " · tu clave" : "IA: Gemini";
   }
 
   // ------------------------------------------------------------------ cuanto se gasta de Gemini (Fase 14)
@@ -1286,9 +1316,9 @@
   const nucleo = {
     est, oye, decir: decirFrase, finHablar, pararRec, volverAEscuchar, ponerEstado, conversar, pintar, aviso, sonido, beep: () => sonido("aviso"), ocupado,
     conTiempo, esperar, confirmar, anunciar, generarJSON, desbloquear, orden, mostrarVideo, escuchar: empezar,
-    hayIA: () => !!est.ai, ajustes: () => est.ajustes, sistema, herramientas,
+    hayIA: () => !!est.ai || proveedor().propio, ajustes: () => est.ajustes, sistema, herramientas,
     // Ajustes (ajustes.js): los interruptores, el modelo de hoy y el dia del cupo de Google
-    activo, modos: (o) => { modos = Object.assign({}, o || {}); pintar(); }, MODOS_DEFECTO, modeloDeHoy, diaDelCupo, MODELOS,
+    activo, modos: (o) => { modos = Object.assign({}, o || {}); pintar(); }, MODOS_DEFECTO, modeloDeHoy, diaDelCupo, MODELOS, contarUso,
   };
 
   window.Agente = {iniciar, usuario, nivelBoca, guardarAjustes, probar, pintar, modulo, nucleo,

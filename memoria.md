@@ -976,3 +976,16 @@ El usuario: "cuando te diga modo enfoque, el agente me muestra las dos opciones 
 
 - Sonidos y WhatsApp en la pestaña abierta. README reescrito con la tabla de versiones, una sección por versión y cómo publicar una nueva.
 - `main` se fusionó hasta v1.3.1, para que GitHub muestre el README nuevo; la rama por defecto es `main`.
+
+### Proveedores de IA, cambio de cuenta y reglas (10 nov, después de v1.3.1)
+
+- **Pedido:** "un espacio en Ajustes donde se ponga la API key según el proveedor"; "que acepten GPT, Kimi, etc. solo con la API key"; y en el panel cómo se gasta.
+- **CORS comprobado con una petición OPTIONS desde el origen de la app:** OpenAI, DeepSeek, OpenRouter, Anthropic y Gemini sí; Kimi (api.moonshot.ai) no, así que va por OpenRouter.
+- **Probado en el navegador con servicios simulados:**
+    - GPT: «Buscar modelos» deja fuera los de embeddings, la herramienta va en dos vueltas con `role: tool`, y la clave mala da un mensaje claro.
+    - Claude: la librería oficial cargó en la página, la herramienta va en dos vueltas devolviendo el bloque de pensar tal cual, Haiku va sin respaldo y Opus con `fallbacks: "default"`.
+    - Gemini con clave propia.
+    - El panel aparta lo de la clave propia.
+    - Con clave propia no se llama al Gemini gratis.
+- **Sorpresa:** la librería 1.3.0 manda la clave como `Authorization: Bearer`. La guía de Claude lo confirma para la API `2026-10-21`.
+- **Reglas:** se encontró y se cerró el hueco de `usuarios/<uid>/pixeles/<pid>` (cualquier cuenta anónima podía meterse en la lista de otro). Probado: sin permiso el ESP32 simulado no entra; con permiso sí, y funciona.

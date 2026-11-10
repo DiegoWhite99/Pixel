@@ -311,6 +311,8 @@
       if (info.dueno && !info.emparejar && !(nube.mios && nube.mios[info.id])) {
         throw new Error("Este ESP32 ya tiene dueño. Pulsa una vez su botón BOOT (el LED parpadea en azul) y vuelve a intentarlo.");
       }
+      // el permiso para que este ESP32 entre en la lista de esta cuenta (las reglas lo piden: 15 min)
+      await N.conTiempo(nube.d.set(ref(`usuarios/${nube.uid}/enlazando/${info.id}`), nube.d.serverTimestamp()), 8000);
       await c.writeValue(enc.encode(JSON.stringify({dueno: nube.uid, nombre: (nube.usuario && (nube.usuario.displayName || nube.usuario.email)) || "Píxel app"})));
       paso('<div class="buscando"><span class="giro"></span>Enlazando el ESP32 con tu cuenta…</div>');
       const t1 = Date.now();

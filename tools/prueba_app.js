@@ -563,7 +563,9 @@ const cuerpoDe = (raw) => Buffer.from(raw.split("\r\n\r\n")[1].replace(/\r\n/g, 
       let sid = "";
       sim.stdout.on("data", (b) => String(b).split("\n").filter(Boolean).forEach((l) => {
         const j = JSON.parse(l);
-        if (j.listo) sid = j.listo; else if (j.ruta) { ordenes.push(j); console.log("    [ESP32]", j.ruta, JSON.stringify(j.cuerpo), "->", j.mensaje); }
+        // el permiso para enlazar que da la app (las reglas lo piden desde la Fase 14), en cuanto se sabe su id
+        if (j.pid) page.evaluate((pid) => nube.d.set(nube.d.ref(nube.db, `usuarios/${nube.uid}/enlazando/${pid}`), nube.d.serverTimestamp()), j.pid).catch(() => {});
+        else if (j.listo) sid = j.listo; else if (j.ruta) { ordenes.push(j); console.log("    [ESP32]", j.ruta, JSON.stringify(j.cuerpo), "->", j.mensaje); }
       }));
       sim.stderr.on("data", (b) => console.log("    [ESP32 error]", String(b).slice(0, 200)));
       try {

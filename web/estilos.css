@@ -568,3 +568,18 @@ input[type=number] { width: 100%; padding: 10px 12px; border: 1px solid var(--li
 .uso-tabla th, .uso-tabla td { text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line); }
 .uso-tabla th:first-child, .uso-tabla td:first-child { text-align: left; }
 #aj-uso .nota { margin: 0; }
+
+/* Fase 14: el proveedor de IA (ajustes.js + proveedores.js) */
+#card-ia { margin-bottom: 16px; }
+.ia-form { display: grid; gap: 10px; max-width: 760px; }
+.ia-form .nota { margin: 0; }
+.ia-form .ia-modelo { align-items: end; }
+.ia-form .ia-modelo .campo { flex: 1; min-width: 0; }
+#ia-propio { display: grid; gap: 10px; }
+#ia-propio[hidden] { display: none; }
+.por-modelo { display: grid; gap: 6px; }
+.fila-modelo { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; font-size: 13.5px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.fila-modelo .nombre { color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
+.fila-modelo .n { color: var(--muted); font-size: 12.5px; text-align: right; font-variant-numeric: tabular-nums; }
+.fila-modelo .costo { grid-column: 1 / -1; color: var(--muted); font-size: 12.5px; }
+.fila-modelo .costo.real { color: #c2410c; font-weight: 650; }

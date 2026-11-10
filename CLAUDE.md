@@ -376,6 +376,26 @@ La parte `musica` necesita que YouTube suene en Chrome sin pantalla. Tras muchas
     - `sonarPensando()`: do-mi-sol-mi muy bajito mientras el estado es "pensando". Empieza a los 600 ms, así que un atajo instantáneo no lo hace sonar.
     - Reemplazan los `beep()` de antes. Se apagan con el modo `sonidos` de Ajustes.
     - En las pruebas, un `AudioContext` falso apunta las frecuencias.
+- **Proveedor de IA con la clave del usuario** (`web/proveedores.js`, `web/proveedor_claude.js`; Ajustes → «Proveedor de IA»). Pedido: "un espacio donde se ponga la API key según el proveedor… que acepten GPT, Kimi, etc. solo con la API key, y en el panel se vea cómo se gasta".
+    - **Proveedores:**
+        - `pixel`: el de siempre, Gemini por Firebase, gratis.
+        - `gemini`: REST con `x-goog-api-key`.
+        - `claude`: la librería oficial `@anthropic-ai/sdk@1.3.0` cargada desde jsDelivr, con `dangerouslyAllowBrowser`. Va en su propio archivo.
+        - `openai`, `openrouter`, `deepseek` y `otro`: compatibles con la API de OpenAI, con `/chat/completions` en vivo y `/models` para elegir.
+    - **Kimi (Moonshot) no tiene CORS** (comprobado el 10 nov): se usa por OpenRouter. OpenAI, DeepSeek, OpenRouter, Anthropic y Gemini sí dejan que la página los llame. Los modelos no se inventan: los de OpenAI, OpenRouter y compañía salen de `/models` («Buscar modelos») o los escribe el usuario.
+    - **La clave se guarda solo en el aparato** (`localStorage` `pixel.ia`): nunca va a la nube ni a git.
+    - `Proveedores.motor()` devuelve el mismo objeto que `getGenerativeModel` de Firebase: `generateContentStream({contents})` con trozos al estilo Gemini, y `generateContent(prompt)`. `pensar()` y `generarJSON()` no cambian con el proveedor. Con clave propia no se cambia de modelo cuando se acaba el cupo; si la clave falla, `textoError` dice de quién es el problema.
+    - **Claude:**
+        - `messages.stream` + `finalMessage()`, `eager_input_streaming` en cada herramienta, con la entrada validada aquí. No ejecuta herramientas si el `stop_reason` es `max_tokens` o `refusal`. Esfuerzo `low`.
+        - En las vueltas con herramientas devuelve el `content` de Claude tal cual, con sus bloques de pensar (`crudos`).
+        - Opus y Sonnet llevan `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`). Haiku no.
+        - Con la API `2026-10-21`, la librería manda la clave como `Authorization: Bearer`, no `x-api-key`: es lo correcto.
+    - **El consumo:** lo de la clave propia se apunta como `propia:<modelo>` y Ajustes lo cuenta aparte, como costo real. Los precios salen de `LISTA` (Gemini y Claude), de OpenRouter, o los escribe el usuario. Probado en el navegador con GPT, Claude y Gemini simulados (`proveedor.js` de las pruebas de esa sesión). Con claves reales todavía no se probó.
+- **Cuenta de Google**: al entrar siempre se elige la cuenta (`prompt: select_account`), y en Cuentas hay «Cambiar de cuenta». Sirve para la cuenta de demostración de la feria. Calendar y Gmail no se piden al entrar, para que un visitante que solo charla no vea el aviso de «app no verificada».
+- **Reglas** (revisión del 10 nov): cada usuario solo ve lo suyo, cada Píxel solo lo suyo, y las órdenes solo las crean los dueños. `visibles` publica nombre y hora, no el código.
+    - **Hueco cerrado:** un Píxel (cualquier cuenta anónima) podía meterse en la lista `usuarios/<uid>/pixeles` de cualquier usuario del que supiera el uid. Ahora solo entra si ya estaba, o si la app escribió antes `usuarios/<uid>/enlazando/<pid>` (vale 15 min).
+    - La app lo escribe al pedir el código (`pedirAPixel`) y antes de pasarle la cuenta al ESP32 por Bluetooth. `puente_simulado.py` avisa su `pid` y reintenta, como el ESP32.
+    - Queda sin cerrar que una cuenta anónima puede gastar el Gemini del proyecto o escribir en su propia rama: eso lo cierra App Check (pendiente).
 - **La regla del correo** (el usuario: "que no envíe sin aprobación, mantener esa regla"): una prueba de `prueba_modulos.js` falla si alguna herramienta se llama como enviar, si `drafts/send` aparece más de una vez o si `enviarBorrador` se usa fuera de una confirmación.
 
 **TTS** (`tts.py`): Piper sale a 22050 Hz y se remuestrea a 16000 Hz con numpy (FIR paso bajo + interpolación lineal, sin scipy).
