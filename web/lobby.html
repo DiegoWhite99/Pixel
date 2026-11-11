@@ -73,6 +73,10 @@
   @media (prefers-reduced-motion: reduce) { .cara svg, .cara .parpado { animation: none; } html { scroll-behavior: auto; } }
   @media (max-width: 760px) { .portada .wrap { grid-template-columns: 1fr; padding-top: 28px; padding-bottom: 32px; gap: 8px; } .cara { order: -1; } .cara svg { width: 190px; } }
 
+  /* video de presentacion (assests/video, comprimido a web/medios: 960x540, ~0.6 MB) */
+  .video .titulo-seccion { margin: 0 auto 18px; text-align: center; }
+  .video video { display: block; width: 100%; max-width: 880px; height: auto; aspect-ratio: 16 / 9; margin: 0 auto; border-radius: var(--radio); box-shadow: var(--sombra); background: var(--surface-2); }
+
   /* secciones */
   section { padding: 48px 0; scroll-margin-top: 60px; }       /* que la barra fija no tape el titulo al saltar */
   section + section { border-top: 1px solid var(--line); }
@@ -174,6 +178,14 @@
     </div>
   </div>
 
+  <section id="video" class="video">
+    <div class="wrap">
+      <div class="titulo-seccion"><h2>Conoce a Píxel</h2></div>
+      <video id="video-pixel" src="medios/pixel.mp4" poster="medios/pixel.jpg" width="960" height="540"
+        autoplay muted loop playsinline controls preload="auto" aria-label="Video de presentación de Píxel"></video>
+    </div>
+  </section>
+
   <section id="como">
     <div class="wrap">
       <div class="titulo-seccion">
@@ -184,7 +196,7 @@
         <div class="tarjeta">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><rect x="7" y="9" width="10" height="5" rx="2.5"/></svg></div>
           <h3>El robot</h3>
-          <p>Un ESP32-S3 con micrófono y altavoz. Le dices «Píxel» y te escucha; responde con su propia voz. Con un emisor infrarrojo y relés, también maneja aparatos de la casa.</p>
+          <p>Un pequeño robot con micrófono y altavoz. Le dices «Píxel» y te escucha; responde con su propia voz. También maneja aparatos de la casa, como el televisor o las luces.</p>
         </div>
         <div class="tarjeta">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div>
@@ -284,19 +296,19 @@
         <article class="tarjeta funcion">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div>
           <h3>Tu computador</h3>
-          <ul><li>Sube, baja o silencia el volumen.</li><li>Pausa la música y abre YouTube.</li><li>Bloquea la sesión o apaga la pantalla; suspender el equipo lo confirmas tú.</li><li>El robot lo enciende por red (Wake-on-LAN).</li></ul>
+          <ul><li>Sube, baja o silencia el volumen.</li><li>Pausa la música y abre YouTube.</li><li>Bloquea la sesión o apaga la pantalla; suspender el equipo lo confirmas tú.</li><li>El robot puede encenderlo.</li></ul>
           <div class="dile"><b>Prueba a decir</b><q>Píxel, sube el volumen del computador</q></div>
         </article>
         <article class="tarjeta funcion">
           <div class="ico verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg></div>
           <h3>Aparatos de la casa</h3>
-          <ul><li>TV Android, aparatos con control infrarrojo, relés y equipos con dirección web.</li><li>Aprende los botones de tus controles remotos.</li><li>Prueba si el robot y el computador responden.</li></ul>
-          <div class="dile"><b>Prueba a decir</b><q>Píxel, prueba el ESP32</q></div>
+          <ul><li>Tu televisor, los aparatos con control remoto, luces, enchufes y otros equipos de la casa.</li><li>Aprende los botones de tus controles remotos.</li><li>Prueba si el robot y el computador responden.</li></ul>
+          <div class="dile"><b>Prueba a decir</b><q>Píxel, prueba el robot</q></div>
         </article>
         <article class="tarjeta funcion">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></div>
           <h3>Tu perfil</h3>
-          <ul><li>Tu nombre, tu foto y cómo quieres que te trate.</li><li>Lo llenas en un formulario o subes un archivo Markdown.</li><li>Píxel lo usa para conocerte desde el primer día.</li></ul>
+          <ul><li>Tu nombre, tu foto y cómo quieres que te trate.</li><li>Lo llenas en un formulario o subes un archivo de texto.</li><li>Píxel lo usa para conocerte desde el primer día.</li></ul>
         </article>
         <article class="tarjeta funcion">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg></div>
@@ -328,7 +340,7 @@
     <div class="wrap">
       <div class="titulo-seccion">
         <h2>Tu inteligencia artificial, tu clave</h2>
-        <p>Píxel no trae una inteligencia artificial incluida: cada persona usa la suya, con su propia clave. Lo que gastes lo cobra tu proveedor, y en Ajustes ves cuántas peticiones y tokens usas cada día.</p>
+        <p>Píxel no trae una inteligencia artificial incluida: cada persona usa la suya, con su propia clave. Lo que gastes lo cobra tu proveedor, y en Ajustes ves cuánto usas cada día.</p>
       </div>
       <div class="proveedores" aria-label="Proveedores compatibles">
         <span>Google Gemini</span><span>Anthropic Claude</span><span>OpenAI (GPT)</span><span>OpenRouter (también Kimi)</span><span>DeepSeek</span><span>Otro compatible con OpenAI</span>
@@ -344,16 +356,15 @@
         <p>El programa de Píxel para tu computador, versión 2.1.0.</p>
       </div>
       <div class="descargas">
-        <div class="tarjeta descarga"><h3>Windows <span class="chip">Versión de prueba</span></h3><p>Instalador .exe para Windows de 64 bits (101 MB).</p>
+        <div class="tarjeta descarga"><h3>Windows <span class="chip">Versión de prueba</span></h3><p>Para Windows de 64 bits (101 MB).</p>
           <a class="btn primario" href="https://github.com/DiegoWhite99/Pixel/releases/download/v2.1.0/Pixel-2.1.0-Setup.exe">Descargar para Windows</a>
           <p class="chico">Si Windows avisa que no conoce el programa, toca «Más información» y luego «Ejecutar de todas formas».</p></div>
-        <div class="tarjeta descarga"><h3>Linux <span class="chip listo">Disponible</span></h3><p>Paquete .deb para Ubuntu, Debian y derivadas de 64 bits (163 MB).</p>
+        <div class="tarjeta descarga"><h3>Linux <span class="chip listo">Disponible</span></h3><p>Para Ubuntu, Debian y derivadas de 64 bits (163 MB).</p>
           <a class="btn primario" href="https://github.com/DiegoWhite99/Pixel/releases/download/v2.1.0/pixel_2.1.0_amd64.deb">Descargar para Linux</a>
           <p class="chico">Instálalo con <code>sudo apt install ./pixel_2.1.0_amd64.deb</code></p></div>
         <div class="tarjeta descarga"><h3>Mac <span class="chip luego">Más adelante</span></h3><p>Todavía en preparación.</p></div>
       </div>
-      <p class="nota">La primera vez, el programa baja unos 600 MB (las voces y el reconocimiento de voz) y abre su panel para vincularlo con tu cuenta.
-        Para comprobar que el archivo llegó entero, compáralo con sus <a href="https://github.com/DiegoWhite99/Pixel/releases/download/v2.1.0/SHA256SUMS">huellas SHA-256</a>.
+      <p class="nota">La primera vez, el programa baja unos 600 MB (lo que necesita para oír y hablar) y abre su panel para vincularlo con tu cuenta.
         Para usar la app no hace falta el programa: entra con Google, pon tu clave de IA y háblale.</p>
     </div>
   </section>
@@ -402,6 +413,8 @@
   let au = null, auth = null, usuario = null;
 
   const decir = (texto, mal) => { sesion.textContent = texto; sesion.classList.toggle("mal", !!mal); };
+  const video = document.getElementById("video-pixel");     // con "reducir movimiento", el video espera a que lo toquen
+  if (video && matchMedia("(prefers-reduced-motion: reduce)").matches) { video.removeAttribute("autoplay"); video.pause(); }
   function pintar() {
     if (usuario) {
       decir(`Entraste como ${usuario.displayName || usuario.email || "tu cuenta"}. `);
