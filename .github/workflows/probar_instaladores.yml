@@ -53,9 +53,10 @@ jobs:
       - name: Arrancar Píxel (el comando del menú, sin abrir el navegador)
         run: |
           nohup pixel --sin-navegador > arranque.txt 2>&1 &
+          PID=$!          # /usr/bin/pixel hace exec del Python: el numero no cambia (buscarlo por nombre fallaba al principio)
           for i in $(seq 1 180); do
             if (echo > /dev/tcp/127.0.0.1/8765) 2>/dev/null; then echo "Píxel escucha al robot tras $((i * 5)) s"; break; fi
-            pgrep -f /opt/pixel/app/iniciar.py > /dev/null || { echo "Píxel se cerró"; exit 1; }
+            kill -0 "$PID" 2> /dev/null || { echo "Píxel se cerró"; cat arranque.txt; exit 1; }
             sleep 5
           done
           (echo > /dev/tcp/127.0.0.1/8765) 2>/dev/null || { echo "Píxel no arrancó en 15 minutos"; exit 1; }
