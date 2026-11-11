@@ -3,8 +3,8 @@
 Píxel es un agente de inteligencia artificial creado por Divergencia IA, con cara de robot, hecho para una feria de tecnología. Vive en una aplicación web que se instala en el celular: oye la palabra **«Píxel»**, piensa con la inteligencia artificial que elijas (cada persona pone su clave), contesta con una voz natural de alta calidad y mueve su cara en 3D. Se entra con la cuenta de Google y cada persona tiene su perfil. Un computador y un ESP32 son opcionales: le dan micrófono y altavoz propios y le dejan manejar los aparatos de la casa.
 
 - **Aplicación:** https://pixelassitance.web.app (en el celular, con Chrome).
-- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.1.1/pixel_2.1.1_amd64.deb) y [Windows (.exe, versión de prueba)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.1.1/Pixel-2.1.1-Setup.exe), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
-- **Versión actual:** 2.1.1, del 11 de noviembre de 2026.
+- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.1.2/pixel_2.1.2_amd64.deb) y [Windows (.exe, versión de prueba)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.1.2/Pixel-2.1.2-Setup.exe), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
+- **Versión actual:** 2.1.2, del 11 de noviembre de 2026.
 - **Cómo está hecho por dentro:** `CLAUDE.md`. **Mediciones y decisiones:** `memoria.md`.
 
 ## Qué puede hacer
@@ -38,6 +38,7 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 
 | Versión | Fecha | Qué trae |
 |---|---|---|
+| **2.1.2** | 11 nov 2026 | Windows: desinstalar con Píxel abierto ya borra el programa entero. Enlace con la cuenta probado con el programa instalado. |
 | **2.1.1** | 11 nov 2026 | Instaladores publicados, con una prueba de punta a punta en Windows y Ubuntu limpios. Página de entrada sin nombres de tecnología y con video de presentación. |
 | **2.1.0** | 11 nov 2026 | Instaladores para Linux y Windows, página de entrada, la IA de cada cuenta (sin Gemini incluido), registro de acciones, el celular como micrófono del computador, confirmaciones estrictas para correos y eventos, destinatarios solo de Contactos (también en WhatsApp) y un botón para traer los contactos de Google (aún sin probar de punta a punta). |
 | **2.0.0** | 10 nov 2026 | Entrada con Google, perfil con foto y archivo Markdown, Píxel se presenta, voz de alta calidad (Supertonic 3), Contactos, la IA con tu propia clave y WhatsApp sin recargar la pestaña. |
@@ -47,6 +48,11 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 | **1.0.0** | 10 nov 2026 | Píxel entero en el celular: Gemini, Calendar, Gmail, Pomodoro, Eisenhower, cerebro, aparatos, música, notas y voz infantil. |
 
 No hay 1.1.0: la segunda fase salió directamente como 1.2.1.
+
+### 2.1.2 · 11 de noviembre de 2026
+
+- **Windows:** al desinstalar (o actualizar) con Píxel abierto, ahora sí lo cierra. El instalador es de 32 bits y buscaba a Píxel con un PowerShell de 32 bits, que no ve la ruta de un programa de 64 bits: nunca lo encontraba, y la carpeta del programa quedaba bloqueada. Ahora lo busca de una forma que sirve en los dos, espera a que suelte sus archivos y reintenta el borrado. Lo encontró la prueba de GitHub en la 2.1.1, donde todo lo demás pasó en Windows y en Ubuntu 22.04 y 24.04.
+- **Enlace con la cuenta probado con el programa instalado:** el `.deb` desempaquetado entra solo a Firebase, abre el modo enlace con su código, una cuenta de prueba lo enlaza, usa «Usar el PC» y el registro muestra lo que hizo. Después se borró de Firebase todo lo del PC de prueba.
 
 ### 2.1.1 · 11 de noviembre de 2026
 

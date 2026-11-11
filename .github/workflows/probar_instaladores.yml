@@ -3,14 +3,14 @@
 # huella, lo instala como una persona (apt / el .exe sin administrador), arranca Pixel como su acceso directo,
 # le dice dos frases grabadas (tools/frase_prueba.wav) y comprueba que contesta con voz. Al final lo desinstala.
 # Sin nube (PIXEL_NUBE_DB=0): no deja Pixeles de prueba en Firebase. Sin IA: la 2a frase dice llm.SIN_IA.
-#   gh workflow run probar_instaladores.yml -f version=2.1.1
+#   gh workflow run probar_instaladores.yml -f version=2.1.2
 name: Probar instaladores
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Versión publicada, sin la v (por ejemplo 2.1.1)"
+        description: "Versión publicada, sin la v (por ejemplo 2.1.2)"
         required: true
   release:
     types: [published]
