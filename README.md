@@ -3,7 +3,7 @@
 Píxel es un agente de inteligencia artificial creado por Divergencia IA, con cara de robot, hecho para una feria de tecnología. Vive en una aplicación web que se instala en el celular: oye la palabra **«Píxel»**, piensa con Gemini (o con el modelo que elijas), contesta con una voz natural de alta calidad y mueve su cara en 3D. Se entra con la cuenta de Google y cada persona tiene su perfil. Un computador y un ESP32 son opcionales: le dan micrófono y altavoz propios y le dejan manejar los aparatos de la casa.
 
 - **Aplicación:** https://pixelassitance.web.app (en el celular, con Chrome).
-- **Versión actual:** 2.0.0, del 10 de noviembre de 2026.
+- **Versión actual:** 2.1.0, del 11 de noviembre de 2026.
 - **Cómo está hecho por dentro:** `CLAUDE.md`. **Mediciones y decisiones:** `memoria.md`.
 
 ## Qué puede hacer
@@ -35,6 +35,7 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 
 | Versión | Fecha | Qué trae |
 |---|---|---|
+| **2.1.0** | 11 nov 2026 | Confirmaciones estrictas para enviar correos y crear eventos, destinatarios sacados solo de Contactos, correos con saltos de línea reales y un botón para traer los contactos de Google (aún sin probar de punta a punta). |
 | **2.0.0** | 10 nov 2026 | Entrada con Google, perfil con foto y archivo Markdown, Píxel se presenta, voz de alta calidad (Supertonic 3), Contactos, la IA con tu propia clave y WhatsApp sin recargar la pestaña. |
 | **1.3.1** | 10 nov 2026 | Sonidos al llamarlo, al pensar y al terminar. WhatsApp en el computador usa la pestaña que ya está abierta. |
 | **1.3.0** | 10 nov 2026 | Pestaña Ajustes: un interruptor por modo y el consumo de Gemini. Consumo bajo por defecto. |
@@ -42,6 +43,18 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 | **1.0.0** | 10 nov 2026 | Píxel entero en el celular: Gemini, Calendar, Gmail, Pomodoro, Eisenhower, cerebro, aparatos, música, notas y voz infantil. |
 
 No hay 1.1.0: la segunda fase salió directamente como 1.2.1.
+
+### 2.1.0 · 11 de noviembre de 2026
+
+Arreglos de seguridad en el correo y los eventos, y una función nueva de contactos.
+
+- **Correo:** solo «sí», «envíalo» o «mándalo» confirman el envío. Una frase cualquiera con «manda» ya no envía el borrador pendiente.
+- **Destinatarios:** un correo sale solo de Contactos o de las notas de personas. Si hay dos contactos que encajan igual, Píxel pregunta cuál. Ya no se busca en el historial de Gmail para adivinar.
+- **Contactos al entrar:** la búsqueda espera a que llegue la lista desde Firebase.
+- **Eventos:** crear un evento pide confirmación («¿Lo agendo…?») antes de llamar a Calendar.
+- **Cuerpo del correo:** los `\n` escritos se convierten en saltos de línea reales.
+- **Computador:** la búsqueda de contactos ya no toma al primero que coincide con el nombre.
+- **Contactos de Google:** el botón «Exportar contactos» trae los contactos de la cuenta (solo lectura). Aún no está probado de punta a punta: falta activar la People API en el proyecto.
 
 ### 2.0.0 · 10 de noviembre de 2026
 

@@ -315,13 +315,26 @@ def detectar_correo(texto):
 
 
 def _contacto(nombre):
-    """(nombre, direccion) de CONTACTOS que coincide con lo que se dijo, o None."""
-    dicho = plano(nombre).split()
+    """(nombre, direccion) del contacto que se dijo, o None. Sin adivinar: si dos contactos
+    encajan (p. ej. "Óscar" con Óscar Mauricio y Óscar Rodríguez) devuelve None."""
+    dicho = [w for w in plano(nombre).split() if w not in ("a", "al", "la", "el", "mi")]
+    if not dicho:
+        return None
+    encajan = []
     for n, direccion in CONTACTOS.items():
         guardado = plano(n).split()
-        if guardado and dicho and (dicho[:len(guardado)] == guardado or dicho[0] == guardado[0]):
-            return n, direccion
-    return None
+        if not guardado:
+            continue
+        exacto = dicho == guardado
+        todas = all(any(g == w or (len(w) >= 4 and g.startswith(w)) for g in guardado) for w in dicho)
+        if exacto or todas:
+            encajan.append((0 if exacto else 1, n, direccion))
+    if not encajan:
+        return None
+    encajan.sort()
+    if len(encajan) > 1 and encajan[0][0] == encajan[1][0]:
+        return None
+    return encajan[0][1], encajan[0][2]
 
 
 @registrar("correo", detectar_correo)

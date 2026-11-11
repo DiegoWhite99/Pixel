@@ -133,6 +133,18 @@
   // Para whatsapp.js y google.js
   const conTelefono = (q) => buscar(ct.lista, q, "telefono");
   const conCorreo = (q) => buscar(ct.lista, q, "correo");
+  // Espera a que llegue la lista de Firebase (al entrar tarda); a los 6 s sigue sin ella
+  const esperar = () => new Promise((ok) => {
+    const t0 = Date.now();
+    const mira = () => (ct.lista || Date.now() - t0 > 6000) ? ok() : setTimeout(mira, 100);
+    mira();
+  });
+  // Todos los contactos que encajan con el nombre dicho, del mejor al peor
+  function candidatos(q, campo) {
+    return (ct.lista || []).filter((c) => !campo || c[campo])
+      .map((c) => ({nombre: c.nombre, correo: c.correo, telefono: c.telefono, score: parecido(q, c.nombre)}))
+      .filter((c) => c.score >= 0.6).sort((a, b) => b.score - a.score);
+  }
 
   // ------------------------------------------------------------------ herramientas (Gemini)
   const herramientas = () => [
@@ -209,6 +221,15 @@
 
   function montar() {
     if (!document.getElementById("v-contactos")) return;
+    $("#ct-google").addEventListener("click", async () => {
+      const b = $("#ct-google"), est = $("#ct-google-estado");
+      b.disabled = true; est.textContent = "Trayendo tus contactos de Google…";
+      try {
+        const r = await window.PixelGoogle.traerContactos();
+        est.textContent = `✓ Listo: guardé ${r.guardados} de ${r.total} contactos de Google.`;
+      } catch (e) { est.textContent = "No pude traerlos: " + ((e && e.message) || e); }
+      finally { b.disabled = false; }
+    });
     $("#f-contacto-app").addEventListener("submit", async (e) => {
       e.preventDefault();
       const b = $("#ct-guardar");
@@ -236,5 +257,5 @@
   }
 
   A.modulo({nombre: "contactos", montar, alUsuario, pintar, herramientas, ejecutar, capacidad});
-  window.PixelContactos = {texto, lista: () => ct.lista || [], conTelefono, conCorreo, guardar};
+  window.PixelContactos = {texto, lista: () => ct.lista || [], conTelefono, conCorreo, guardar, esperar, candidatos};
 })();

@@ -1,0 +1,6 @@
+# Dependencias de ejecucion (.venv de Python 3.10). Las versiones son las que estan instaladas.
+faster-whisper==1.2.1
+piper-tts==1.8.0
+numpy==2.2.6
+yt-dlp==2026.8.19
+androidtvremote2==0.3.3

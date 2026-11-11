@@ -658,6 +658,44 @@ if (ctx.PixelContactos) {
   });
 }
 
+// ------------------------------------------------------------------ 2.1: confirmaciones y destinatarios
+// Lo que paso con el correo (11 nov): "manda" en cualquier frase enviaba el borrador pendiente,
+// el destinatario se adivinaba del historial de Gmail, y el cuerpo salia con \n escritos.
+{
+  const gsrc = fs.readFileSync(path.join(WEB, "google.js"), "utf8");
+  const reEnviar = new RegExp(/const RE_ENVIAR = (\/.*\/);/.exec(gsrc)[1].slice(1, -1));
+  const reCrear = new RegExp(/const RE_CREAR = (\/.*\/);/.exec(gsrc)[1].slice(1, -1));
+  prueba("confirmar envio: solo sí, envíalo, mándalo (no una frase cualquiera)", () => {
+    for (const t of ["si", "si envialo", "envialo", "mandalo ya", "si, envialo.", "si mandalo por favor"]) assert.ok(reEnviar.test(t), "debe confirmar: " + t);
+    for (const t of ["", " ", "manda un correo a ana diciendo hola", "envia otro", "no lo envies", "pero cambia el asunto", "mandame el pdf"]) assert.ok(!reEnviar.test(t), "NO debe confirmar: " + t);
+  });
+  prueba("confirmar agendar: solo sí o agéndalo", () => {
+    assert.ok(reCrear.test("si") && reCrear.test("agendalo") && reCrear.test("si, ya"));
+    assert.ok(!reCrear.test("") && !reCrear.test("crea otro evento") && !reCrear.test("si pero a las 5"));
+  });
+  prueba("crear evento: no llama a Calendar hasta confirmar", () => {
+    const i = gsrc.indexOf("async function crearEvento"), fin = gsrc.indexOf("\n  }\n", i);
+    const cuerpo = gsrc.slice(i, fin);
+    const antes = cuerpo.slice(0, cuerpo.indexOf("N.confirmar("));
+    assert.ok(!/api\(CAL/.test(antes), "Calendar se llama antes de pedir confirmación");
+    assert.ok(/hacer: async \(\) => \{\s*await api\(CAL, \{method: "POST"/.test(cuerpo), "la llamada POST va dentro de hacer");
+  });
+  prueba("correo: el cuerpo con \\n escritos sale con saltos de línea reales", () => {
+    const raw = Buffer.from(ctx.PixelGoogle.texto.armarMime({para: "a@b.co", asunto: "Hola", cuerpo: "Estimado profe,\\n\\nGracias.\\nDiego"}).replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+    const cuerpoB64 = raw.split("\r\n\r\n")[1].replace(/\r\n/g, "");
+    const texto = Buffer.from(cuerpoB64, "base64").toString("utf8");
+    assert.strictEqual(texto, "Estimado profe,\r\n\r\nGracias.\r\nDiego");
+  });
+  prueba("contactos: candidatos y espera (sin Gmail para adivinar)", () => {
+    const PC = ctx.PixelContactos;
+    assert.ok(PC.candidatos && PC.esperar, "exporta candidatos y esperar");
+    const fuente = fs.readFileSync(path.join(WEB, "google.js"), "utf8");
+    const persona = fuente.slice(fuente.indexOf("async function correoDePersona"), fuente.indexOf("\n  }\n", fuente.indexOf("async function correoDePersona")));
+    assert.ok(!/messages\?/.test(persona), "correoDePersona no busca en el historial de Gmail");
+    assert.ok(/await PC\.esperar\(\)/.test(persona), "espera a la lista de contactos");
+  });
+}
+
 Promise.all(esperando).then(() => {
   console.log(fallos ? `${fallos} fallo(s), ${hechas} bien` : `todo bien (${hechas} pruebas)`);
   process.exit(fallos ? 1 : 0);

@@ -14,12 +14,15 @@
   const ALCANCES = {
     calendar: "https://www.googleapis.com/auth/calendar.events",   // ver y cambiar eventos (no los calendarios)
     gmail: "https://www.googleapis.com/auth/gmail.modify",         // leer, borradores, enviar y etiquetas (no borra para siempre)
+    contactos: "https://www.googleapis.com/auth/contacts.readonly", // solo leer los contactos de la cuenta
   };
   const CAL = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
   const GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me";
   const GUARDADO = "pixel.google";              // localStorage: {uid, token, vence, alcances}
   const MAX_LEER = 3000;                        // caracteres de un correo que van a Gemini
-  const RE_ENVIAR = /\b(envialo|mandalo|envia|manda|enviar|mandar|enviarlo|mandarlo|envie|mande)\b/;
+  // Solo la respuesta completa a "¿Lo envío?": "sí", "envíalo", "mándalo" (antes encajaba "manda" en cualquier frase)
+  const RE_ENVIAR = /^(si[ ,.]*(envialo|mandalo)?|envialo|mandalo)( ya| por favor)?[ .!]*$/;
+  const RE_CREAR = /^(si|agendalo|crealo|ponlo)[ ,.]*(ya|por favor)?[ .!]*$/;
   const RE_SI = /^(si|sip|dale|claro|hazlo|borralo|borrala|confirmo|correcto|ok|okay|okey|de una|adelante|por favor)\b/;
 
   // ------------------------------------------------------------------ texto (puro: se prueba en Node)
@@ -44,7 +47,7 @@
     const lineas = [`To: ${cabeceraDireccion(para)}`, `Subject: ${cabecera(asunto || "")}`, "MIME-Version: 1.0",
       "Content-Type: text/plain; charset=UTF-8", "Content-Transfer-Encoding: base64"];
     if (enRespuestaA) lineas.push(`In-Reply-To: ${enRespuestaA}`, `References: ${enRespuestaA}`);
-    const b64 = utf8ABase64(String(cuerpo || "").replace(/\r?\n/g, "\r\n")).replace(/.{1,76}/g, "$&\r\n");
+    const b64 = utf8ABase64(String(cuerpo || "").replace(/\\n/g, "\n").replace(/\r?\n/g, "\r\n")).replace(/.{1,76}/g, "$&\r\n");
     return base64url(utf8ABase64(lineas.join("\r\n") + "\r\n\r\n" + b64));
   }
 
@@ -256,9 +259,17 @@
       start: todoDia ? {date: diaIso(ini)} : {dateTime: isoLocal(ini), timeZone: zona()},
       end: todoDia ? {date: diaIso(fin)} : {dateTime: isoLocal(fin), timeZone: zona()}};
     if (isFinite(Number(a.aviso_min)) && a.aviso_min !== undefined) ev.reminders = {useDefault: false, overrides: [{method: "popup", minutes: Math.max(0, Number(a.aviso_min))}]};
-    await api(CAL, {method: "POST", body: JSON.stringify(ev)});
-    g.eventosT = 0;
-    return `Listo, agendé ${titulo} ${todoDia ? T.cuandoDicho(ini).replace(/\s+a las? .*$/, "") : T.cuandoDicho(ini)}.`;
+    // Antes de crear: pregunta y espera un "sí" (la regla no depende de lo que diga el modelo)
+    const cuando = todoDia ? T.cuandoDicho(ini).replace(/\s+a las? .*$/, "") : T.cuandoDicho(ini);
+    N.confirmar({pregunta: "¿Lo agendo?", titulo: "Nuevo evento: " + titulo, boton: "Agendar",
+      detalle: cuando + (ev.location ? "\n" + ev.location : ""), si: RE_CREAR, seguir: true, dura: 10 * 60000,
+      cancelar: () => "Vale, no lo agendo.",
+      hacer: async () => {
+        await api(CAL, {method: "POST", body: JSON.stringify(ev)});
+        g.eventosT = 0;
+        return `Listo, agendé ${titulo} ${cuando}.`;
+      }});
+    return `¿Lo agendo para ${cuando}: ${titulo}?`;
   }
 
   // ------------------------------------------------------------------ correo
@@ -306,22 +317,25 @@
     return r.lista[0] || null;
   }
 
-  // El correo de una persona: si lo dice, de las notas del cerebro (Personas), o de quien le ha escrito
+  // El correo de una persona: solo de lo guardado (Contactos, y las notas Persona con correo).
+  // Nunca se adivina con el historial de Gmail: asi se invento un "Oscar Rodriguez" distinto.
+  // {ambiguo: [nombres]} si dos o mas contactos encajan igual; null si no hay nadie.
   async function correoDePersona(quien) {
     quien = String(quien || "").trim();
     const d = direccion(quien);
     if (d.correo) return {nombre: d.nombre, correo: d.correo};
-    const c = window.PixelContactos && window.PixelContactos.conCorreo(quien);   // 2.0.0: primero en Contactos
-    if (c) return {nombre: c.nombre, correo: c.correo};
+    const PC = window.PixelContactos;
+    if (PC) {
+      await PC.esperar();                       // al entrar, la lista llega de Firebase tarde
+      const cand = PC.candidatos(quien, "correo");
+      if (cand.length > 1 && cand[0].score === cand[1].score)
+        return {ambiguo: cand.filter((c) => c.score === cand[0].score).map((c) => c.nombre)};
+      if (cand.length) return {nombre: cand[0].nombre, correo: cand[0].correo};
+    }
     const notas = (window.Cerebro && window.Cerebro.notas()) || [];
     for (const n of notas) {
       const m = /[\w.+-]+@[\w-]+(\.[\w-]+)+/.exec(n.texto);
-      if (m && T.parecido(quien, n.titulo + " " + n.texto) >= 0.5) return {nombre: n.titulo.replace(/^(contacto|correo)( de)?\s+/i, ""), correo: m[0]};
-    }
-    const r = await api(`${GMAIL}/messages?${new URLSearchParams({maxResults: "8", q: `from:(${quien}) OR to:(${quien})`})}`);
-    for (const m of r.messages || []) {
-      const md = await metadatos(m.id);
-      if (T.parecido(quien, md.de.nombre + " " + md.de.correo) >= 0.5) return md.de;
+      if (m && T.parecido(quien, n.titulo + " " + n.texto) >= 0.9) return {nombre: n.titulo.replace(/^(contacto|correo)( de)?\s+/i, ""), correo: m[0]};
     }
     return null;
   }
@@ -522,6 +536,7 @@
         } else {
           if (!a.para) return "¿A quién se lo mando?";
           const p = await correoDePersona(a.para);
+          if (p && p.ambiguo) return "Tengo varios parecidos: " + p.ambiguo.join(" o ") + ". ¿A cuál le escribo?";
           if (!p) return `No encuentro el correo de ${a.para}. Dímelo, o guárdalo así: «Píxel, recuerda que el correo de ${a.para} es…».`;
           b = {para: p.correo, nombre: p.nombre, asunto: String(a.asunto || "").trim() || "(sin asunto)", cuerpo};
         }
@@ -532,6 +547,7 @@
         if (!b) return "No tengo ningún borrador abierto. Dime qué correo quieres escribir.";
         if (a.para) {
           const p = await correoDePersona(a.para);
+          if (p && p.ambiguo) return "Tengo varios parecidos: " + p.ambiguo.join(" o ") + ". ¿A cuál le escribo?";
           if (!p) return `No encuentro el correo de ${a.para}.`;
           Object.assign(b, {para: p.correo, nombre: p.nombre});
         }
@@ -666,5 +682,35 @@
     contexto: () => (g.borrador && N.est.pendiente ? `## Borrador abierto\nPara: ${g.borrador.nombre || ""} <${g.borrador.para}>\nAsunto: ${g.borrador.asunto}\n${g.borrador.cuerpo}` : ""),
   });
 
-  window.PixelGoogle = {conectar, conectado, tiene, probar: probarGoogle, texto: {armarMime, textoCorreo, sinCitas, direccion, rangoDia, leerFecha, eventoDicho, sinHtml}};
+  // Contactos de la cuenta de Google (People API, solo lectura). Trae todos y los guarda en Contactos de Píxel.
+  function contactoDeGoogle(p) {
+    const nombre = (((p.names || [])[0]) || {}).displayName || "";
+    const correo = (((p.emailAddresses || [])[0]) || {}).value || "";
+    const telefono = (((p.phoneNumbers || [])[0]) || {}).value || "";
+    return {nombre: String(nombre).trim(), correo: String(correo).trim(), telefono: String(telefono).trim()};
+  }
+
+  async function traerContactos() {
+    if (!tiene("contactos")) {
+      await conectar();
+      if (!tiene("contactos")) throw new Error("Falta el permiso de Contactos. Vuelve a tocar el botón y márcalo.");
+    }
+    const lista = [];
+    let pagina = "";
+    do {
+      const q = new URLSearchParams({personFields: "names,emailAddresses,phoneNumbers", pageSize: "1000"});
+      if (pagina) q.set("pageToken", pagina);
+      const r = await api("https://people.googleapis.com/v1/people/me/connections?" + q.toString());
+      for (const p of r.connections || []) lista.push(contactoDeGoogle(p));
+      pagina = r.nextPageToken || "";
+    } while (pagina);
+    let guardados = 0;
+    for (const c of lista) {
+      if (!c.nombre || (!c.correo && !c.telefono)) continue;
+      try { await window.PixelContactos.guardar(c); guardados++; } catch (e) { /* un dato malo no para la lista */ }
+    }
+    return {total: lista.length, guardados};
+  }
+
+  window.PixelGoogle = {conectar, conectado, tiene, probar: probarGoogle, traerContactos, texto: {armarMime, textoCorreo, sinCitas, direccion, rangoDia, leerFecha, eventoDicho, sinHtml, contactoDeGoogle}};
 })();
