@@ -76,7 +76,8 @@ jobs:
       - name: Registro de Píxel
         if: always()
         run: |
-          tail -n 150 ~/.local/share/pixel/pixel.log || true
+          cp ~/.local/share/pixel/pixel.log pixel_linux.log || true
+          tail -n 150 pixel_linux.log || true
           cat arranque.txt || true
 
       - uses: actions/upload-artifact@v4
@@ -85,7 +86,7 @@ jobs:
           name: linux-${{ matrix.sistema }}
           path: |
             respuesta_*.wav
-            ~/.local/share/pixel/pixel.log
+            pixel_linux.log
           retention-days: 7
           if-no-files-found: ignore
 
@@ -154,17 +155,24 @@ jobs:
           python tools/cliente_prueba.py tools/frase_prueba.wav --espera 60
           python tools/revisar_respuestas.py
 
-      - name: Desinstalar
+      - name: Desinstalar (con Píxel abierto, como quien lo tiene arrancando con Windows)
         run: |
           $dir = "$env:LOCALAPPDATA\Pixel"
+          "abiertos antes:"; Get-Process python, pythonw -ErrorAction SilentlyContinue | Select-Object Id, Path | Format-Table -AutoSize
           Start-Process -Wait -FilePath "$dir\Desinstalar.exe" -ArgumentList "/S", "_?=$dir"
-          if (Test-Path "$dir\python") { throw "No se borró el programa" }
+          "abiertos después:"; Get-Process python, pythonw -ErrorAction SilentlyContinue | Select-Object Id, Path | Format-Table -AutoSize
+          if (Test-Path "$dir\python") {
+            "quedaron:"; Get-ChildItem "$dir\python" -Recurse -File | Select-Object -First 15 -ExpandProperty FullName
+            throw "No se borró el programa"
+          }
           if (Get-Process pythonw -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$dir\*" }) { throw "Píxel sigue abierto" }
           "desinstalado (los datos se quedan, como dice el instalador)"
 
       - name: Registro de Píxel
         if: always()
-        run: Get-Content "$env:LOCALAPPDATA\Pixel\datos\pixel.log" -Tail 150 -ErrorAction SilentlyContinue
+        run: |
+          Copy-Item "$env:LOCALAPPDATA\Pixel\datos\pixel.log" pixel_windows.log -ErrorAction SilentlyContinue
+          Get-Content pixel_windows.log -Tail 150 -ErrorAction SilentlyContinue
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -172,6 +180,6 @@ jobs:
           name: windows
           path: |
             respuesta_*.wav
-            ~/AppData/Local/Pixel/datos/pixel.log
+            pixel_windows.log
           retention-days: 7
           if-no-files-found: ignore
