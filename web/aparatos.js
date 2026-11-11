@@ -506,11 +506,12 @@
 
   A.modulo({
     nombre: "aparatos", montar, alUsuario, pintar, ejecutar,
-    // "Píxel, prueba el ESP32" / "prueba el PC": la misma prueba que el boton, sin Gemini
+    // "Píxel, prueba el ESP32" / "prueba el robot" / "prueba el PC": la misma prueba que el boton, sin Gemini
+    // (11 nov: el lobby dice "robot", sin nombrar la placa)
     atajo: (texto) => {
-      const m = /^(?:prueba|probar|pruebame|verifica|revisa|comprueba|chequea)\s+(?:el\s+|la\s+|los\s+|mis\s+|si\s+funciona\s+el\s+)?(esp ?32|esp|puente|puentes|pc|computador|portatil|laptop|ordenador)\b/.exec(A.texto.plano(String(texto || "")).trim());
+      const m = /^(?:prueba|probar|pruebame|verifica|revisa|comprueba|chequea)\s+(?:el\s+|la\s+|los\s+|mis\s+|si\s+funciona\s+el\s+)?(esp ?32|esp|puente|puentes|robot|pc|computador|portatil|laptop|ordenador)\b/.exec(A.texto.plano(String(texto || "")).trim());
       if (!m || !nube.uid) return undefined;
-      const esp = /esp|puente/.test(m[1]);
+      const esp = /esp|puente|robot/.test(m[1]);
       const pid = Object.keys(ap.puentes).find((id) => (ap.puentes[id].tipo === "puente") === esp);
       if (!pid) return Promise.resolve(esp ? "Aún no tengo el ESP32 enlazado. En Dispositivos, toca «Agregar ESP32 por Bluetooth»." : "El PC no está enlazado a tu cuenta.");
       pintarPrueba(pid, null);

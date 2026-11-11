@@ -680,6 +680,20 @@ prueba("lobby: mismo proyecto de Firebase que la app, y la app solo manda al lob
   assert.ok(/signInWithPopup/.test(lobby) && /select_account/.test(lobby), "el lobby no entra con Google o no deja elegir la cuenta");
 });
 
+// 11 nov (pedido): quien visita el lobby no debe saber con qué tecnología está hecho Píxel
+prueba("lobby: el texto visible no nombra la tecnología por dentro, y el video existe", () => {
+  const lobby = fs.readFileSync(path.join(WEB, "lobby.html"), "utf8");
+  const visible = lobby.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<!--[\s\S]*?-->/g, " ").replace(/<[^>]+>/g, " ");
+  const tecnicas = /esp ?32|wake-on-lan|markdown|tokens?\b|rel[eé]s?\b|infrarroj|sha-?256|firebase|python|whisper|ollama|supertonic|piper|nuitka|servidor|\bapi\b|\bhttp\b/i;
+  const m = tecnicas.exec(visible);
+  assert.ok(!m, "el lobby dice «" + (m && m[0]) + "»");
+  for (const f of ["medios/pixel.mp4", "medios/pixel.jpg"]) {
+    assert.ok(lobby.includes(f) && fs.existsSync(path.join(WEB, f)), "falta " + f);
+  }
+  assert.ok(fs.statSync(path.join(WEB, "medios/pixel.mp4")).size < 2e6, "el video pesa más de 2 MB: el plan gratis de Hosting da ~360 MB al día");
+  assert.ok(/\(esp \?32\|esp\|puente\|puentes\|robot\|/.test(fs.readFileSync(path.join(WEB, "aparatos.js"), "utf8")), "«prueba el robot» (frase del lobby) no se entiende");
+});
+
 // ------------------------------------------------------------------ cerebro: el mapa (Fase 14)
 if (ctx.Cerebro && ctx.Cerebro.texto.enlaces) {
   const C = ctx.Cerebro.texto;
