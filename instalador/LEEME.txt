@@ -1,7 +1,7 @@
 PÍXEL 2.1.0 · el programa del computador
 ========================================
 
-Píxel tiene tres partes: el robot (ESP32-S3), este programa del computador y la
+Píxel tiene tres partes: el robot, este programa del computador y la
 app (https://pixelassitance.web.app, en el celular o en la web). Este programa oye
 al robot por tu WiFi, entiende lo que dices, piensa con la IA y le devuelve la voz.
 
@@ -21,14 +21,15 @@ PRIMERA VEZ
 RED
 - El robot habla con este programa por el puerto 8765 (TCP) y lo encuentra por
   el 8766 (UDP). El panel usa el 8080. Si el sistema pregunta si dejas que
-  Python use la red, di que sí en redes privadas.
+  Píxel use la red (puede salir con el nombre «Python»), di que sí en redes
+  privadas.
 - El panel no pide contraseña: úsalo solo en la red de tu casa.
 
 TUS DATOS
 - Linux:   ~/.local/share/pixel
 - Windows: %LOCALAPPDATA%\Pixel\datos
   Ahí quedan tus ajustes, la vinculación con tu cuenta, las claves que pegues,
-  la voz, Whisper y el registro (pixel.log). Las frases grabadas se borran
+  la voz, el oído y el registro (pixel.log). Las frases grabadas se borran
   solas a los 7 días. Nada de esto sale del equipo salvo lo que va a tu
   cuenta de la app.
 - Opcional: un archivo config.json en esa carpeta con {"nombre": "Píxel de la sala"}

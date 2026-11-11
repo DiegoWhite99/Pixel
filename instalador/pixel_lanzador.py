@@ -14,7 +14,8 @@ este lanzador:
      sola y alli se vincula Pixel con la cuenta (codigo de 6 cifras, como siempre).
 
 Uso:  pixel [--sin-navegador] [--consola]
-Pruebas: PIXEL_DATOS, PIXEL_PUERTO, PIXEL_PANEL, PIXEL_DESCUBRIR, PIXEL_NUBE_DB ("" = sin nube), PIXEL_LLM_HOST.
+Pruebas: PIXEL_DATOS, PIXEL_PUERTO, PIXEL_PANEL, PIXEL_DESCUBRIR, PIXEL_NUBE_DB ("" o "0" = sin nube), PIXEL_LLM_HOST.
+La prueba de punta a punta de los paquetes publicados: .github/workflows/probar_instaladores.yml.
 Opcional, en la carpeta de datos: config.json {"nombre": "Píxel de la sala"} (como sale en la app al buscarlo).
 """
 
@@ -243,7 +244,7 @@ def bajar_lo_que_falte(datos):
             destino = os.path.join(datos, rel)
             os.makedirs(os.path.dirname(destino), exist_ok=True)
             _bajar(url, destino, tam, huella, avance)
-    _estado.update(fase="Bajando el oído de Píxel (Whisper)…", hecho=0, total=0)
+    _estado.update(fase="Bajando el oído de Píxel…", hecho=0, total=0)
     from faster_whisper.utils import download_model
     download_model(WHISPER)                 # en HF_HOME (la carpeta de datos); si ya esta, no baja nada
 
@@ -275,8 +276,8 @@ def configurar(datos):
         servidor.PANEL_PORT = int(env["PIXEL_PANEL"])
     if env.get("PIXEL_DESCUBRIR") is not None:
         servidor.DESCUBRIR_PORT = int(env["PIXEL_DESCUBRIR"] or 0)
-    if "PIXEL_NUBE_DB" in env:
-        servidor.NUBE_DB = env["PIXEL_NUBE_DB"]
+    if "PIXEL_NUBE_DB" in env:              # "" o "0" = sin nube (en Windows una variable no puede quedar vacia)
+        servidor.NUBE_DB = "" if env["PIXEL_NUBE_DB"] in ("", "0") else env["PIXEL_NUBE_DB"]
     if env.get("PIXEL_LLM_HOST"):
         servidor.LLM_HOST = env["PIXEL_LLM_HOST"]
     return servidor, panel
