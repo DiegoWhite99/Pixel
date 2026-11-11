@@ -3,8 +3,8 @@
 Píxel es un agente de inteligencia artificial creado por Divergencia IA, con cara de robot, hecho para una feria de tecnología. Vive en una aplicación web que se instala en el celular: oye la palabra **«Píxel»**, piensa con la inteligencia artificial que elijas (cada persona pone su clave), contesta con una voz natural de alta calidad y mueve su cara en 3D. Se entra con la cuenta de Google y cada persona tiene su perfil. Un computador y un ESP32 son opcionales: le dan micrófono y altavoz propios y le dejan manejar los aparatos de la casa.
 
 - **Aplicación:** https://pixelassitance.web.app (en el celular, con Chrome).
-- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.1.0/pixel_2.1.0_amd64.deb) y [Windows (.exe, versión de prueba)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.1.0/Pixel-2.1.0-Setup.exe), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
-- **Versión actual:** 2.1.0, del 11 de noviembre de 2026.
+- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.1.1/pixel_2.1.1_amd64.deb) y [Windows (.exe, versión de prueba)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.1.1/Pixel-2.1.1-Setup.exe), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
+- **Versión actual:** 2.1.1, del 11 de noviembre de 2026.
 - **Cómo está hecho por dentro:** `CLAUDE.md`. **Mediciones y decisiones:** `memoria.md`.
 
 ## Qué puede hacer
@@ -19,7 +19,7 @@ Píxel es un agente de inteligencia artificial creado por Divergencia IA, con ca
 | Modo enfoque | «Píxel, modo enfoque»: ordena tus tareas con la matriz de Eisenhower y te da un pomodoro para cada una |
 | Notas | «Píxel, toma nota de la clase de física» … «Píxel, termina la nota» |
 | Música | «Píxel, pon salsa» · «pausa» · «cambia de canción». Baila y cambia el fondo según el género. |
-| Aparatos | «Píxel, súbele al volumen del PC» · «Píxel, prueba el ESP32» |
+| Aparatos | «Píxel, súbele al volumen del PC» · «Píxel, prueba el robot» |
 | Su memoria | «Píxel, recuerda que mi hermana se llama Laura». Se ve como un mapa en Personalidad y, en el computador, en Obsidian. |
 | Contactos | «Píxel, guarda el número de Ana: 300 123 4567». Están en la pestaña Contactos, con su celular y su correo. |
 | Tu perfil | Toca tu foto arriba: cómo te llama, si te trata de tú o de usted, tus gustos y en qué te ayuda. También con un archivo Markdown. |
@@ -38,6 +38,7 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 
 | Versión | Fecha | Qué trae |
 |---|---|---|
+| **2.1.1** | 11 nov 2026 | Instaladores publicados, con una prueba de punta a punta en Windows y Ubuntu limpios. Página de entrada sin nombres de tecnología y con video de presentación. |
 | **2.1.0** | 11 nov 2026 | Instaladores para Linux y Windows, página de entrada, la IA de cada cuenta (sin Gemini incluido), registro de acciones, el celular como micrófono del computador, confirmaciones estrictas para correos y eventos, destinatarios solo de Contactos (también en WhatsApp) y un botón para traer los contactos de Google (aún sin probar de punta a punta). |
 | **2.0.0** | 10 nov 2026 | Entrada con Google, perfil con foto y archivo Markdown, Píxel se presenta, voz de alta calidad (Supertonic 3), Contactos, la IA con tu propia clave y WhatsApp sin recargar la pestaña. |
 | **1.3.1** | 10 nov 2026 | Sonidos al llamarlo, al pensar y al terminar. WhatsApp en el computador usa la pestaña que ya está abierta. |
@@ -47,13 +48,22 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 
 No hay 1.1.0: la segunda fase salió directamente como 1.2.1.
 
+### 2.1.1 · 11 de noviembre de 2026
+
+Los instaladores, publicados y probados de verdad.
+
+- **Descargas** en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases/tag/v2.1.1), con los botones del lobby apuntando ahí.
+- **Prueba de punta a punta** (`.github/workflows/probar_instaladores.yml`): en un Windows y dos Ubuntu limpios de GitHub, baja cada instalador del enlace del lobby, lo instala como una persona, arranca Píxel, le dice dos frases grabadas (`tools/frase_prueba.wav`), comprueba que contesta con voz y lo desinstala. Corre sola al publicar una versión.
+- **Lobby:** ya no nombra la tecnología por dentro (la placa, relés, Markdown…) y tiene un video de presentación con música lofi, sin voz.
+- **Paquetes:** su descripción y su LÉEME tampoco nombran la tecnología. «Píxel, prueba el robot» prueba el robot.
+
 ### 2.1.0 · 11 de noviembre de 2026
 
 Píxel se puede instalar, cada persona usa su propia IA, y se ve todo lo que hizo. Además, arreglos de seguridad en el correo y los eventos.
 
-- **Instaladores** (en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases/tag/v2.1.0)):
-  - `pixel_2.1.0_amd64.deb` para Ubuntu y Debian: `sudo apt install ./pixel_2.1.0_amd64.deb`. El código va compilado.
-  - `Pixel-2.1.0-Setup.exe` para Windows, como versión de prueba: aún no se ha probado en un Windows de verdad. En Windows no hay Bluetooth, volumen, música del sistema ni WhatsApp desde el computador.
+- **Instaladores** (se publicaron con la 2.1.1):
+  - `.deb` para Ubuntu y Debian: `sudo apt install ./pixel_<versión>_amd64.deb`. El código va compilado.
+  - `.exe` para Windows, como versión de prueba. En Windows no hay Bluetooth, volumen, música del sistema ni WhatsApp desde el computador.
   - Cada uno lleva su propio Python. La primera vez baja unos 600 MB (voces y reconocimiento de voz, comprobados con su huella) y abre el panel para vincular el computador con la cuenta.
   - Sin Gemini ni Ollama, Píxel dice que le falta la IA en vez de solo sonar el pitido.
 - **Página de entrada:** sin sesión, la app abre una página que explica Píxel, con las descargas y «Entrar con Google». Ya dentro, «Primeros pasos» pide vincular el Píxel y poner la clave de IA.
@@ -162,8 +172,10 @@ Para volver a publicar una versión vieja: `git checkout vX.Y.Z` y luego `npx fi
 1. Pasar las pruebas (abajo).
 2. Escribir la versión en la tabla y en su sección de arriba.
 3. Guardar los cambios en `vinculacion_movil` y fusionarlos en `main`.
-4. `git tag -a vX.Y.Z -m "Píxel X.Y.Z: …"` y `git push origin main vinculacion_movil vX.Y.Z`.
-5. `npx firebase-tools deploy --only hosting`. Si cambiaron las reglas de la base de datos, también `--only database`.
+4. Subir el número en `instalador/construir.sh`, `instalador/pixel_lanzador.py`, `instalador/LEEME.txt` y los botones de `web/lobby.html`, y armar: `instalador/construir.sh todo`.
+5. `git tag -a vX.Y.Z -m "Píxel X.Y.Z: …"` y `git push origin main vinculacion_movil vX.Y.Z`.
+6. `gh release create vX.Y.Z dist/* --prerelease`: al publicarla corre sola la prueba de los instaladores (pestaña Actions). Si pasa, `gh release edit vX.Y.Z --prerelease=false --latest`.
+7. `npx firebase-tools deploy --only hosting`. Si cambiaron las reglas de la base de datos, también `--only database`.
 
 ## Partes del proyecto
 

@@ -1,0 +1,177 @@
+# Prueba de punta a punta de los instaladores PUBLICADOS (11 nov; pedido: "no es decoracion, debe ser funcional").
+# En maquinas limpias de GitHub: baja cada paquete del mismo enlace que el lobby (web/lobby.html), comprueba su
+# huella, lo instala como una persona (apt / el .exe sin administrador), arranca Pixel como su acceso directo,
+# le dice dos frases grabadas (tools/frase_prueba.wav) y comprueba que contesta con voz. Al final lo desinstala.
+# Sin nube (PIXEL_NUBE_DB=0): no deja Pixeles de prueba en Firebase. Sin IA: la 2a frase dice llm.SIN_IA.
+#   gh workflow run probar_instaladores.yml -f version=2.1.1
+name: Probar instaladores
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versión publicada, sin la v (por ejemplo 2.1.1)"
+        required: true
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+env:
+  VERSION: ${{ inputs.version || github.event.release.tag_name }}
+  PIXEL_NUBE_DB: "0"
+
+jobs:
+  linux:
+    name: Linux (${{ matrix.sistema }})
+    strategy:
+      fail-fast: false
+      matrix:
+        sistema: [ubuntu-22.04, ubuntu-24.04]
+    runs-on: ${{ matrix.sistema }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bajar el .deb del enlace del lobby y comprobar su huella
+        run: |
+          V="${VERSION#v}"; echo "V=$V" >> "$GITHUB_ENV"
+          B="https://github.com/${{ github.repository }}/releases/download/v$V"
+          curl -fsSL --retry 3 -o SHA256SUMS "$B/SHA256SUMS"
+          curl -fL --retry 3 -o "pixel_${V}_amd64.deb" "$B/pixel_${V}_amd64.deb"
+          grep " pixel_${V}_amd64.deb$" SHA256SUMS | sha256sum -c
+
+      - name: Instalar como una persona
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y "./pixel_${V}_amd64.deb"
+          dpkg -s pixel | grep -E "^(Status|Version)"
+          test -x /usr/bin/pixel
+          test -f /usr/share/applications/pixel.desktop
+
+      - name: Arrancar Píxel (el comando del menú, sin abrir el navegador)
+        run: |
+          nohup pixel --sin-navegador > arranque.txt 2>&1 &
+          for i in $(seq 1 180); do
+            if (echo > /dev/tcp/127.0.0.1/8765) 2>/dev/null; then echo "Píxel escucha al robot tras $((i * 5)) s"; break; fi
+            pgrep -f /opt/pixel/app/iniciar.py > /dev/null || { echo "Píxel se cerró"; exit 1; }
+            sleep 5
+          done
+          (echo > /dev/tcp/127.0.0.1/8765) 2>/dev/null || { echo "Píxel no arrancó en 15 minutos"; exit 1; }
+          curl -fsS http://127.0.0.1:8080/api/estado | head -c 400; echo
+          curl -fsS http://127.0.0.1:8080/ | grep -qi "<html"
+
+      - name: Decirle dos frases y comprobar que contesta con voz
+        run: |
+          python3 tools/cliente_prueba.py tools/frase_prueba.wav --espera 60
+          python3 tools/revisar_respuestas.py
+
+      - name: Desinstalar
+        run: |
+          pkill -f /opt/pixel/app/iniciar.py || true
+          sudo apt-get remove -y pixel
+          test ! -e /opt/pixel/app && test ! -e /usr/bin/pixel
+
+      - name: Registro de Píxel
+        if: always()
+        run: |
+          tail -n 150 ~/.local/share/pixel/pixel.log || true
+          cat arranque.txt || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-${{ matrix.sistema }}
+          path: |
+            respuesta_*.wav
+            ~/.local/share/pixel/pixel.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      PYTHONUTF8: "1"          # solo para tools/cliente_prueba.py; el Python de Pixel corre con -I y lo ignora
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Bajar el .exe del enlace del lobby y comprobar su huella
+        run: |
+          $V = "$env:VERSION".TrimStart("v"); "V=$V" >> $env:GITHUB_ENV
+          $B = "https://github.com/${{ github.repository }}/releases/download/v$V"
+          curl.exe -fsSL --retry 3 -o SHA256SUMS "$B/SHA256SUMS"
+          curl.exe -fL --retry 3 -o "Pixel-$V-Setup.exe" "$B/Pixel-$V-Setup.exe"
+          $esperada = ((Get-Content SHA256SUMS | Where-Object { $_ -like "* Pixel-$V-Setup.exe" }) -split "\s+")[0]
+          $real = (Get-FileHash "Pixel-$V-Setup.exe" -Algorithm SHA256).Hash.ToLower()
+          "huella: $real"
+          if ($real -ne $esperada) { throw "La huella no coincide: el archivo llegó dañado" }
+
+      - name: Instalar como una persona (sin administrador)
+        run: |
+          $p = Start-Process -Wait -PassThru -FilePath ".\Pixel-$env:V-Setup.exe" -ArgumentList "/S"
+          "el instalador terminó con código $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) { throw "El instalador falló" }
+          $dir = "$env:LOCALAPPDATA\Pixel"
+          foreach ($f in "python\pythonw.exe", "app\iniciar.py", "Desinstalar.exe", "LEEME.txt") {
+            if (-not (Test-Path "$dir\$f")) { throw "Falta $dir\$f" }
+          }
+          Get-ChildItem ([Environment]::GetFolderPath("Programs")) -Recurse -Filter "*.lnk" | Where-Object Name -like "P*xel*" | Select-Object -ExpandProperty FullName
+          Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Pixel" | Select-Object DisplayName, DisplayVersion, Publisher | Format-List
+
+      - name: Arrancar Píxel con su acceso directo de inicio (sin navegador)
+        run: |
+          $lnk = Get-ChildItem ([Environment]::GetFolderPath("Startup")) -Filter "P*xel.lnk" | Select-Object -First 1
+          if (-not $lnk) { throw "No está el acceso directo de inicio de Windows" }
+          $s = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk.FullName)
+          "acceso directo: $($s.TargetPath) $($s.Arguments)"
+          Start-Process -FilePath $s.TargetPath -ArgumentList $s.Arguments -WorkingDirectory "$env:LOCALAPPDATA\Pixel"
+          $listo = $false
+          for ($i = 1; $i -le 180 -and -not $listo; $i++) {
+            try {
+              $c = [System.Net.Sockets.TcpClient]::new("127.0.0.1", 8765); $c.Close(); $listo = $true
+              "Píxel escucha al robot tras $($i * 5) s"
+            } catch {
+              if (-not (Get-Process pythonw -ErrorAction SilentlyContinue)) { throw "Píxel se cerró" }
+              Start-Sleep 5
+            }
+          }
+          if (-not $listo) { throw "Píxel no arrancó en 15 minutos" }
+          $r = Invoke-WebRequest http://127.0.0.1:8080/api/estado -UseBasicParsing
+          "panel: $($r.StatusCode)"
+
+      - name: Decirle dos frases y comprobar que contesta con voz
+        run: |
+          python tools/cliente_prueba.py tools/frase_prueba.wav --espera 60
+          python tools/revisar_respuestas.py
+
+      - name: Desinstalar
+        run: |
+          $dir = "$env:LOCALAPPDATA\Pixel"
+          Start-Process -Wait -FilePath "$dir\Desinstalar.exe" -ArgumentList "/S", "_?=$dir"
+          if (Test-Path "$dir\python") { throw "No se borró el programa" }
+          if (Get-Process pythonw -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$dir\*" }) { throw "Píxel sigue abierto" }
+          "desinstalado (los datos se quedan, como dice el instalador)"
+
+      - name: Registro de Píxel
+        if: always()
+        run: Get-Content "$env:LOCALAPPDATA\Pixel\datos\pixel.log" -Tail 150 -ErrorAction SilentlyContinue
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows
+          path: |
+            respuesta_*.wav
+            ~/AppData/Local/Pixel/datos/pixel.log
+          retention-days: 7
+          if-no-files-found: ignore

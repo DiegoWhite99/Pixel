@@ -97,7 +97,7 @@ Section "Arrancar Píxel al iniciar Windows" SecInicio
 SectionEnd
 
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
-  !insertmacro MUI_DESCRIPTION_TEXT ${SecPixel} "El programa, su Python y la web del panel."
+  !insertmacro MUI_DESCRIPTION_TEXT ${SecPixel} "El programa y su panel."
   !insertmacro MUI_DESCRIPTION_TEXT ${SecEscritorio} "Un acceso directo a Píxel en el escritorio."
   !insertmacro MUI_DESCRIPTION_TEXT ${SecInicio} "Píxel queda escuchando al robot desde que enciendes el computador, sin abrir el navegador."
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
