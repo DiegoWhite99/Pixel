@@ -1,0 +1,15 @@
+# Píxel en segundo plano al entrar en la sesión (opcional). Para activarlo:
+#   systemctl --user enable --now pixel-asistente
+# Registro: ~/.local/share/pixel/pixel.log
+[Unit]
+Description=Píxel, asistente de voz (cerebro del ESP32, panel y nube)
+After=graphical-session.target network-online.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/pixel --sin-navegador
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

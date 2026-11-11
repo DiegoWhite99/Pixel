@@ -1,0 +1,36 @@
+# Instaladores - compilar el codigo de Pixel para Windows con Nuitka (codigo maquina, .pyd), en GitHub Actions.
+# NO esta activo: para usarlo, copialo a .github/workflows/nuitka-windows.yml y lanzalo a mano en GitHub
+# (pestana Actions -> "Pixel: Nuitka para Windows" -> Run workflow). Desde Linux no se puede: Nuitka
+# necesita el compilador de Windows.
+# El resultado (artefacto "pixel-pyd") se baja, se descomprime en una carpeta y se arma el instalador con:
+#   PIXEL_PYD=<esa carpeta> instalador/construir.sh windows
+# Asi el .exe lleva .pyd (compilado) en vez de .pyc.
+name: "Pixel: Nuitka para Windows"
+on:
+  workflow_dispatch:
+
+jobs:
+  compilar:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Nuitka
+        run: python -m pip install nuitka==4.3.5 ordered-set zstandard
+      - name: Compilar cada modulo
+        shell: bash
+        run: |
+          mkdir -p salida fuente
+          cp *.py instalador/pixel_lanzador.py fuente/
+          for f in fuente/*.py; do
+            python -m nuitka --module --nofollow-imports --python-flag=no_docstrings --remove-output \
+              --assume-yes-for-downloads --msvc=latest --output-dir=salida "$f"
+          done
+          rm -f salida/*.pyi
+          ls salida
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pixel-pyd
+          path: salida/*.pyd

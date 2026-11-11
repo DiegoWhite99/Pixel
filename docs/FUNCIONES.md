@@ -24,10 +24,13 @@ Cómo leerla: **Entrada** es la vía por la que llega la orden (voz del ESP32, v
 | Función | Entrada | Código | Ruta / herramienta |
 |---|---|---|---|
 | Oír (reconocimiento continuo) | app | `web/agente.js`: `iniciar`, `oir` | `webkitSpeechRecognition` |
-| Pensar con Gemini (streaming, herramientas) | app | `web/agente.js`: `pensar`, `MODELOS`, `MAX_RONDAS` | Firebase AI Logic |
+| Entrada: lobby y login con Google | web | `web/lobby.html` (login); `web/app.js`: `revisarNube` (sin sesión, manda al lobby) | `signInWithPopup` |
+| Primeros pasos (vincular el Píxel y poner la clave de IA) | app | `web/app.js`: `pintarPasos` | tarjeta `#pasos` |
+| Pensar con la IA de la cuenta (streaming, herramientas) | app | `web/agente.js`: `pensar`, `MAX_RONDAS`; `web/proveedores.js`: `actual`, `motor` | la API del proveedor, con la clave de la cuenta (`pixel.ia:<uid>`) |
+| Elegir proveedor y clave de IA | app | `web/ajustes.js`: `montarIA`, `formularioIA`; `web/proveedores.js`: `guardar`, `probar` | tarjeta `#card-ia` |
 | Hablar frase a frase | app | `web/agente.js`: `decirFrase`, `siguiente`; `web/voz.js`, `web/voz_trabajador.js` | Supertonic 3 (Web Audio) |
 | Confirmar lo irreversible | app | `web/agente.js`: `nucleo.confirmar`, `si` | botón `#ag-confirmar` o "sí" por voz |
-| Contar el consumo de Gemini | app | `web/agente.js`: `contarUso`, `diaDelCupo` | `usuarios/<uid>/uso/<día>` |
+| Contar el consumo de la IA | app | `web/agente.js`: `contarUso`, `diaDelCupo` | `usuarios/<uid>/uso/<día>` |
 | Presentación en el primer contacto | app | `web/agente.js`: `presentacion`; `web/perfil.js` | tarjeta `#bienvenida` |
 | Sonidos de entrada, salida y aviso | app | `web/agente.js`: `sonido`, `sonarPensando` | — |
 | Modo enfoque y cambio de pantalla | app | `web/tiempo.js`: `htmlEnfoque`, `pidoEnfoque` | herramienta `modo_enfoque` |
@@ -80,6 +83,8 @@ Cómo leerla: **Entrada** es la vía por la que llega la orden (voz del ESP32, v
 | Ejecutar órdenes de la app | app | `nube.py`: `_al_orden`, `_trabajar` | `pixeles/<pid>/ordenes` → mismas rutas que `panel.RUTAS_POST` |
 | Escuchar solicitudes de enlace | app | `nube.py`: `_al_solicitud` | `pixeles/<pid>/solicitudes` |
 | Celular que escucha (**Fase 11**) | celular | `nube.py`: `_al_escuchando`, `_movil`, `_limpiar_moviles` | `pixeles/<pid>/escuchando/<uid>` |
+| El celular como micrófono del PC: frases y voz (**Fase 11**, restaurada el 11 nov) | celular | `web/oido.js`: `cortador`, `mandarFrase`, `alHabla`, `tocar`; `nube.py`: `_al_frase`, `_atender_frases`, `_escribir_habla`; `servidor.py`: `SesionMovil` | `pixeles/<pid>/frases`, `pixeles/<pid>/habla/<uid>` |
+| Registro de acciones del PC | voz (ESP32 o celular) | `servidor.py`: `registrar`, `REGISTRAR_ACCIONES`; `nube.py`: `registrar`, `_escribir_registro` | `pixeles/<pid>/registro` |
 
 ## 7. Google (`servicios_google.py` en el PC; `web/google.js` en la app)
 
@@ -126,7 +131,9 @@ Cómo leerla: **Entrada** es la vía por la que llega la orden (voz del ESP32, v
 | Aprender solo de la conversación | `web/cerebro.js`: `aprender` | — |
 | Mapa del cerebro | `web/mapa.js`: `MapaCerebro`; `web/cerebro.js`: `grafo`, `enlaces` | — |
 | Guardar y ver contactos | `web/contactos.js`: `guardar`, `buscar` | `guardar_contacto`, `ver_contactos` |
-| Enviar por WhatsApp (solo con "sí") | `web/whatsapp.js`: `ejecutar`, `abrir`; `puente_pc.py`: `whatsapp` | `escribir_whatsapp`; `POST /api/pc` (`accion: "whatsapp"`) |
+| Traer los contactos de Google (botón «Exportar contactos») | `web/google.js`: `traerContactos`, `contactoDeGoogle`; `web/contactos.js` | People API (`contacts.readonly`) |
+| Enviar por WhatsApp (solo con "sí"; espera los contactos y pregunta si hay dos parecidos) | `web/whatsapp.js`: `buscarPersona`, `ejecutar`, `abrir`; `web/contactos.js`: `esperar`, `candidatosDe`; `puente_pc.py`: `whatsapp` | `escribir_whatsapp`; `POST /api/pc` (`accion: "whatsapp"`) |
+| Registro de acciones (pestaña Registro) | `web/agente.js`: `registrar`; `web/registro.js`: `juntar`, `pintar`, `podar` | `usuarios/<uid>/registro` y `pixeles/<pid>/registro` |
 | Controlar aparatos (Wake-on-LAN, TV, IR, relé, http) | `web/aparatos.js`: `plan`, `ejecutar`, `probarPuente` | `controlar_aparato`, `ver_aparatos` |
 | Aparatos desde el PC | `puente_pc.py`: `aparato`, `wol`, `tv` | `POST /api/aparato`, `/api/tv`, `/api/tv/emparejar`, `/api/tv/codigo` |
 | Perfil y Markdown | `web/perfil.js`: `leerMarkdown`, `aMarkdown`, `paraPrompt` | — |

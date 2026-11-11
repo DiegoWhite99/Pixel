@@ -180,6 +180,7 @@ SESIONES = []            # conexiones abiertas; los recordatorios van a la mas r
 MOVILES = {}             # uid -> SesionMovil: los celulares enlazados que le han hablado o escuchan (Fase 11)
 PIXELES_VISTOS = {}      # ip -> nombre de los ESP32 que buscaron el servidor (la busqueda WiFi los reconoce)
 AL_HABLAR = None         # funcion sin argumentos que se llama con cada trozo de voz nuevo (la nube la publica)
+AL_REGISTRAR = None      # funcion (tipo, texto, detalle): el registro de acciones de la app (nube.registrar)
 _sesiones_lock = threading.Lock()
 
 _print_lock = threading.Lock()
@@ -189,6 +190,20 @@ def log(msg):
     stamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
     with _print_lock:
         print("[%s] %s" % (stamp, msg), flush=True)
+
+
+# Acciones que se anotan en el registro de la app (las de solo mirar, como ver_calendario, no)
+REGISTRAR_ACCIONES = {"recordatorio", "borrar_recordatorio", "crear_evento", "youtube"}
+
+
+def registrar(tipo, texto, detalle=""):
+    """11 nov: anota lo que hizo Pixel (la app lo muestra en Registro, con su hora). Nunca rompe el turno."""
+    if AL_REGISTRAR is None:
+        return
+    try:
+        AL_REGISTRAR(tipo, texto, detalle)
+    except Exception as e:
+        log("registro: no pude anotar: %s" % e)
 
 
 # ------------------------------------------------------------------- utiles
@@ -880,6 +895,8 @@ class Sesion:
         log('%s  RESPUESTA (sin LLM): "%s"  | TTS %.2f s (%.2f s de voz)'
             % (self.peer, res["decir"], t_tts, len(audio) / float(SAMPLE_RATE * SAMPLE_WIDTH)))
         self.debug("ia: " + res["decir"])
+        if res["ok"] and nombre in REGISTRAR_ACCIONES and not res.get("confirmar"):   # lo que espera un "sí", al confirmarse
+            registrar(nombre, res["decir"], self._origen())
         if res.get("confirmar"):
             # la cuenta empieza cuando termina de sonar el borrador en el ESP32
             self.pendiente = dict(res["confirmar"], hasta=self.fin_reproduccion + CONFIRMAR_S)
@@ -892,11 +909,17 @@ class Sesion:
         if _RE_CONFIRMA.search(p) and not _RE_NIEGA.match(p):
             log('%s  CONFIRMADO ("%s"): %s' % (self.peer, texto, pendiente["que"]))
             dicho = pendiente["ejecutar"]()
+            # lo que dijo Pixel ("Listo, correo enviado a..." o el fallo) y que era, tal cual
+            registrar("correo" if pendiente["que"].startswith("correo") else "confirmado", dicho,
+                      "%s · %s" % (pendiente["que"], self._origen()))
         else:
             log('%s  NO CONFIRMADO ("%s"): %s' % (self.peer, texto, pendiente["que"]))
             dicho = pendiente["cancelado"]
         log('%s  RESPUESTA (confirmacion): "%s"' % (self.peer, dicho))
         self._decir(dicho)
+
+    def _origen(self):
+        return "por voz, desde el ESP32"
 
     def _caducar(self):
         """Nadie dijo nada en CONFIRMAR_S: no se ejecuta y se avisa."""
@@ -951,6 +974,9 @@ class SesionMovil(Sesion):
         """Las acciones van igual, pero YouTube no abre el PC: el video se manda al celular."""
         nombre, params, funcion = hallada
         super()._accion((nombre, dict(params, abrir=self._abrir_video), funcion))
+
+    def _origen(self):
+        return "por voz, desde el celular"
 
     def _abrir_video(self, vid, titulo):
         self.escribir("video", None, False, id=vid, titulo=titulo or "")

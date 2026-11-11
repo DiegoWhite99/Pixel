@@ -13,7 +13,7 @@ ctx.self = ctx;
 vm.createContext(ctx);
 // lo que pone app.js: aqui solo lo justo para que los modulos carguen sin pagina
 vm.runInContext("var nube = {uid: '', usuario: null, d: null}; var $ = () => null; var esc = (t) => String(t); var toast = () => {};", ctx);
-for (const f of ["proveedores.js", "proveedor_claude.js", "voz.js", "agente.js", "cerebro.js", "google.js", "tiempo.js", "aparatos.js", "musica.js", "humor.js", "apuntes.js", "contactos.js", "whatsapp.js", "ajustes.js", "perfil.js"]) {
+for (const f of ["proveedores.js", "proveedor_claude.js", "voz.js", "agente.js", "cerebro.js", "google.js", "tiempo.js", "aparatos.js", "musica.js", "humor.js", "apuntes.js", "contactos.js", "whatsapp.js", "ajustes.js", "perfil.js", "registro.js"]) {
   const ruta = path.join(WEB, f);
   if (fs.existsSync(ruta)) vm.runInContext(fs.readFileSync(ruta, "utf8"), ctx, {filename: f});
 }
@@ -437,6 +437,34 @@ if (ctx.PixelWhatsapp) {
     assert.strictEqual(W.urlCelular("573001234567", "hola, ¿cómo vas?"), "https://wa.me/573001234567?text=hola%2C%20%C2%BFc%C3%B3mo%20vas%3F");
   });
 }
+// 11 nov: WhatsApp busca como el correo: espera la lista de Contactos (al entrar llega tarde) y no adivina
+// entre parecidos. Contactos y notas falsos, solo en esta prueba.
+if (ctx.PixelWhatsapp && ctx.PixelContactos && ctx.Cerebro) {
+  prueba("whatsapp: espera los contactos y pregunta si hay dos parecidos", async () => {
+    // se cambian solo esperar y candidatos (las demas pruebas usan PixelContactos.texto a la vez)
+    const PC = ctx.PixelContactos, CT = PC.texto, real = {esperar: PC.esperar, candidatos: PC.candidatos}, notasReal = ctx.Cerebro.notas;
+    let lista = null;                           // como al entrar: la lista aun no ha llegado de Firebase
+    PC.esperar = () => new Promise((ok) => setTimeout(() => {
+      lista = [{nombre: "Ana Prueba", telefono: "573001112233", correo: ""}, {nombre: "Ana Ejemplo", telefono: "573004445566", correo: ""},
+        {nombre: "Luis Prueba", telefono: "", correo: "luis@example.com"}];
+      ok();
+    }, 30));
+    PC.candidatos = (q, campo) => CT.candidatosDe(lista, q, campo);
+    ctx.Cerebro.notas = () => [{titulo: "Marta Prueba", texto: "WhatsApp: +57 300 777 8899", tipo: "persona"}, {titulo: "Marta Ejemplo", texto: "", tipo: "persona"}];
+    try {
+      const B = ctx.PixelWhatsapp.buscarPersona;
+      const a = await B("Ana Prueba");
+      igual([a.titulo, a.texto], ["Ana Prueba", "WhatsApp: +57 300 111 2233"]);
+      igual((await B("Ana")).ambiguo, ["Ana Prueba", "Ana Ejemplo"]);
+      igual(await B("Luis"), {titulo: "Luis Prueba", texto: "", tipo: "persona", contacto: true});   // sin celular: se le guarda a el
+      assert.strictEqual((await B("Marta Prueba")).titulo, "Marta Prueba");
+      igual((await B("Marta")).ambiguo, ["Marta Prueba", "Marta Ejemplo"]);
+      assert.strictEqual(await B("Nadie Prueba"), null);
+    } finally { Object.assign(PC, real); ctx.Cerebro.notas = notasReal; }
+    const w = fs.readFileSync(path.join(WEB, "whatsapp.js"), "utf8");
+    assert.ok(/const nota = await buscarPersona\(para\);\s*if \(nota && nota\.ambiguo\) return/.test(w), "ejecutar pregunta a cuál si hay parecidos");
+  });
+}
 // La misma regla que el correo para WhatsApp: ninguna herramienta envia, y abrir (lo unico que manda
 // algo) solo se usa como "hacer" de una confirmacion
 prueba("whatsapp: nunca se envía sin confirmar", () => {
@@ -448,6 +476,86 @@ prueba("whatsapp: nunca se envía sin confirmar", () => {
   assert.strictEqual((w.match(/window\.open\(/g) || []).length, 1);
   assert.ok(/WhatsApp: igual/.test(fs.readFileSync(path.join(WEB, "agente.md"), "utf8")), "agente.md lo dice");
 });
+
+// ------------------------------------------------------------------ Registro de acciones (2.1.0)
+if (ctx.PixelRegistro) {
+  const R = ctx.PixelRegistro.texto;
+  prueba("registro: junta la cuenta y el PC, de lo más nuevo a lo más viejo", () => {
+    const l = R.juntar({a: {t: 100, tipo: "correo", texto: "Envié un correo", aparato: "Celular"}, b: {t: 300, tipo: "evento", texto: "Creé el evento"}, roto: {t: "x", texto: 1}},
+      {c: {t: 200, tipo: "crear_evento", texto: "Agendé", aparato: "PC", detalle: "por voz"}});
+    igual(l.map((x) => [x.id, x.origen, x.grupo]), [["b", "cuenta", "evento"], ["c", "pc", "evento"], ["a", "cuenta", "correo"]]);
+    assert.strictEqual(l[1].detalle, "por voz");
+    assert.strictEqual(R.grupo("youtube"), "otro");
+    igual(R.juntar(null, undefined), []);
+  });
+  prueba("registro: hoy, ayer y la fecha", () => {
+    const ahora = new Date(2026, 10, 11, 9, 0).getTime();
+    assert.strictEqual(R.dia(new Date(2026, 10, 11, 0, 5).getTime(), ahora), "Hoy");
+    assert.strictEqual(R.dia(new Date(2026, 10, 10, 23, 59).getTime(), ahora), "Ayer");
+    assert.ok(/^Miércoles,? 4 de noviembre$/.test(R.dia(new Date(2026, 10, 4, 12).getTime(), ahora)), R.dia(new Date(2026, 10, 4, 12).getTime(), ahora));
+  });
+}
+// Se anota DESPUES de hacerlo: cada N.registrar va detras de la llamada que lo hace de verdad
+prueba("registro: se anota después de hacerlo, no antes", () => {
+  const g = fs.readFileSync(path.join(WEB, "google.js"), "utf8");
+  const antes = (a, b) => { const i = g.indexOf(a), j = g.indexOf(b); assert.ok(i > 0 && j > i, `${a} antes de ${b}`); };
+  antes("drafts/send", 'N.registrar("correo", `Envié');
+  antes('await api(CAL, {method: "POST"', 'N.registrar("evento", `Creé');
+  antes('{method: "DELETE"}', 'N.registrar("evento", `Borré');
+  antes('{method: "PATCH"', 'N.registrar("evento", `Moví');
+  antes("/trash`", 'N.registrar("correo", `Mandé');
+  const w = fs.readFileSync(path.join(WEB, "whatsapp.js"), "utf8");
+  const ini = w.indexOf("async function abrir("), fin = w.indexOf("herramienta para Gemini");
+  const usos = [...w.matchAll(/N\.registrar\(/g)].map((m) => m.index);
+  assert.ok(usos.length === 2 && usos.every((i) => i > ini && i < fin), "WhatsApp solo se anota dentro de abrir() (tras el «sí»)");
+  const ap = fs.readFileSync(path.join(WEB, "aparatos.js"), "utf8");
+  assert.ok(ap.indexOf("await mandar(pl.puente") < ap.indexOf('N.registrar("aparato"'), "aparatos: tras la respuesta del puente");
+  const ag = fs.readFileSync(path.join(WEB, "agente.js"), "utf8");
+  assert.ok(ag.indexOf("creado: d.serverTimestamp()") < ag.indexOf('registrar("recordatorio", `Creé'), "recordatorio: tras guardarlo");
+});
+
+// ------------------------------------------------------------------ microfono del PC (Fase 11, oido.js)
+{
+  const O = require(path.join(WEB, "oido.js")).texto;
+  // tramas de 20 ms (320 muestras): ruido suave y una "voz" (tono de 300 Hz)
+  const trama = (amp, k) => Int16Array.from({length: 320}, (_, i) => Math.round(amp * Math.sin(2 * Math.PI * 300 * (k * 320 + i) / 16000)));
+  prueba("oido: corta una frase entre silencios y no corta mientras suena Píxel", () => {
+    const frases = [];
+    let suena = false;
+    const c = O.cortador((pcm) => frases.push(pcm), () => suena);
+    let k = 0;
+    for (let i = 0; i < 50; i++) c.trama(trama(60, k++));          // 1 s de fondo: calibra
+    for (let i = 0; i < 50; i++) c.trama(trama(3000, k++));        // 1 s de voz
+    for (let i = 0; i < 50; i++) c.trama(trama(60, k++));          // 1 s de silencio: cierra
+    assert.strictEqual(frases.length, 1);
+    const n = frases[0].length / 320;                               // preroll + voz + silencio de cierre
+    assert.ok(n >= 50 + 35 && n <= 50 + 35 + 15, "tramas: " + n);
+    suena = true;                                                   // Pixel habla: lo que se oye no cuenta
+    for (let i = 0; i < 50; i++) c.trama(trama(3000, k++));
+    suena = false;
+    for (let i = 0; i < 50; i++) c.trama(trama(60, k++));
+    assert.strictEqual(frases.length, 1);
+    for (let i = 0; i < 5; i++) c.trama(trama(3000, k++));         // un golpe corto (100 ms): no es frase
+    for (let i = 0; i < 50; i++) c.trama(trama(60, k++));
+    assert.strictEqual(frases.length, 1);
+  });
+  prueba("oido: remuestreo de 48 kHz a 16 kHz y base64", () => {
+    const r = O.remuestreador(48000);
+    let total = 0;
+    for (let b = 0; b < 10; b++) total += r(Float32Array.from({length: 2048}, (_, i) => 0.5 * Math.sin(2 * Math.PI * 440 * (b * 2048 + i) / 48000))).length;
+    assert.ok(Math.abs(total - 10 * 2048 / 3) <= 2, "muestras: " + total);
+    const bytes = new Uint8Array([0, 1, 254, 255, 128]);
+    assert.strictEqual(Buffer.from(O.aBase64(bytes), "base64").toString("hex"), "0001feff80");
+  });
+  prueba("oido: va en la página y deja la escucha del celular al usar el PC", () => {
+    const html = fs.readFileSync(path.join(WEB, "index.html"), "utf8"), o = fs.readFileSync(path.join(WEB, "oido.js"), "utf8");
+    assert.ok(html.indexOf('<script src="app.js">') < html.indexOf('<script src="oido.js">'), "oido.js después de app.js");
+    assert.ok(/id="oido-btn"/.test(html) && /id="oido-nivel"/.test(html));
+    assert.ok(/dejarDeEscuchar\(\)/.test(o) && /dejarDeEscuchar: parar/.test(fs.readFileSync(path.join(WEB, "agente.js"), "utf8")));
+    const reglas = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "database.rules.json"), "utf8")).rules.pixeles.$pid;
+    assert.ok(reglas.frases && reglas.escuchando && reglas.habla, "las reglas de frases, escuchando y habla");
+  });
+}
 
 // ------------------------------------------------------------------ Ajustes (Fase 14)
 if (ctx.PixelAjustes) {
@@ -465,7 +573,7 @@ if (ctx.PixelAjustes) {
   prueba("ajustes: todos los modos de Píxel tienen su interruptor", () => {
     const ids = new Set(ctx.PixelAjustes.MODOS.map((m) => m.id));
     const ag = fs.readFileSync(path.join(WEB, "agente.js"), "utf8");
-    const modulos = JSON.parse(/const MODULOS = (\[[^\]]*\])/.exec(ag)[1]).map((f) => f.replace(".js", "")).filter((m) => !["ajustes", "perfil", "contactos"].includes(m));   // no son modos: siempre van
+    const modulos = JSON.parse(/const MODULOS = (\[[^\]]*\])/.exec(ag)[1]).map((f) => f.replace(".js", "")).filter((m) => !["ajustes", "perfil", "contactos", "registro"].includes(m));   // no son modos: siempre van (el registro no se apaga)
     for (const m of modulos) assert.ok(ids.has(m), "falta en Ajustes: " + m);
     for (const m of ctx.PixelAjustes.MODOS) assert.ok(["si", "aveces", "no", "ahorra"].includes(m.gasto) && m.que && m.cuanto, m.id);
   });
@@ -525,13 +633,52 @@ if (ctx.PixelAjustes) {
     igual(P.precioDe("gemini-3_5-flash-lite"), {e: 0.30, s: 2.50});
     assert.strictEqual(P.precioDe("propia:modelo-raro"), null);
     assert.ok(P.claveValida("claude", "sk-ant-api03-abcdefghijklmnopqrstuvwxyz") && !P.claveValida("claude", "AIzaXXXXXXXXXXXXXXXXXXXXXXXX") && P.claveValida("openai", "sk-proj-1234567890abcdef"));
-    igual(P.actual(), {proveedor: "pixel", modelo: "", clave: "", base: "", propio: false});   // sin nada guardado: el gratis
+    igual(P.actual(), {proveedor: "", modelo: "", clave: "", base: "", propio: false});   // sin nada guardado: ninguno (11 nov: no hay IA incluida)
     // el panel: lo de la clave propia se cuenta aparte de lo gratis
     const J = ctx.PixelAjustes.texto, dia = {m: {"propia:claude-haiku-5-5": {n: 2, e: 1000000, s: 1000000}, "gemini-3_5-flash-lite": {n: 1, e: 1000000, s: 0}}};
     assert.ok(Math.abs(J.costoDia(dia, "propia") - 0.60) < 1e-9 && Math.abs(J.costoDia(dia, "gratis") - 0.30) < 1e-9);
     igual(J.porModelo({d1: dia}, ["d1"]).map(([k, x]) => [k, x.n]), [["propia:claude-haiku-5-5", 2], ["gemini-3_5-flash-lite", 1]]);
   });
+  // 11 nov: "cada persona paga Gemini o el proveedor que quiera": no hay IA incluida, y la clave es de cada cuenta
+  prueba("IA: no hay Gemini incluido (sin Firebase AI ni proveedor gratis)", () => {
+    assert.ok(!("pixel" in P.LISTA), "el proveedor gratis sigue en la lista");
+    const ag = fs.readFileSync(path.join(WEB, "agente.js"), "utf8");
+    assert.ok(!/firebase-ai\.js|getGenerativeModel|getAI\(/.test(ag), "agente.js todavía carga Firebase AI");
+    assert.ok(ctx.Agente.nucleo.hayIA() === false, "sin clave, hayIA debe ser falso");
+    const aj = fs.readFileSync(path.join(WEB, "ajustes.js"), "utf8");
+    assert.ok(!/Gemini gratis|Píxel gratis|"pixel"/.test(aj), "ajustes.js habla del Gemini gratis");
+  });
+  prueba("IA: la clave se guarda por cuenta (dos cuentas en el mismo navegador no la comparten)", () => {
+    const antes = {ls: ctx.localStorage, uid: ctx.nube.uid}, mem = {};
+    ctx.localStorage = {getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: (k) => { delete mem[k]; }};
+    try {
+      ctx.nube.uid = "";
+      assert.strictEqual(P.guardar({proveedor: "gemini", claves: {gemini: "AIza" + "x".repeat(30)}, modelos: {}}), false, "sin sesión no se guarda");
+      ctx.nube.uid = "cuenta-1";
+      assert.ok(P.guardar({proveedor: "gemini", claves: {gemini: "AIza" + "x".repeat(30)}, modelos: {gemini: "gemini-3.5-flash-lite"}}));
+      igual(Object.keys(mem), ["pixel.ia:cuenta-1"]);
+      assert.ok(P.actual().propio && P.actual().proveedor === "gemini");
+      ctx.nube.uid = "cuenta-2";
+      assert.strictEqual(P.actual().propio, false, "la otra cuenta ve la clave de la primera");
+    } finally {
+      ctx.localStorage = antes.ls;
+      ctx.nube.uid = antes.uid;
+    }
+  });
 }
+
+// ------------------------------------------------------------------ 11 nov: el lobby es la entrada
+prueba("lobby: mismo proyecto de Firebase que la app, y la app solo manda al lobby sin sesión real", () => {
+  const app = fs.readFileSync(path.join(WEB, "app.js"), "utf8"), lobby = fs.readFileSync(path.join(WEB, "lobby.html"), "utf8");
+  for (const campo of ["apiKey", "authDomain", "databaseURL", "projectId", "appId"]) {
+    const re = new RegExp(campo + ':\\s*"([^"]+)"');
+    const a = re.exec(app), l = re.exec(lobby);
+    assert.ok(a && l && a[1] === l[1], `${campo} distinto entre app.js y lobby.html`);
+  }
+  assert.ok(/if \(entrada && !PRUEBA_ANONIMA\) \{ location\.replace\("lobby\.html"/.test(app), "app.js no manda al lobby, o también en las pruebas anónimas");
+  assert.ok(!/onAuthStateChanged[^\n]*location\.(replace|href)/.test(lobby), "el lobby reenvía solo a la app: puede haber vueltas sin fin");
+  assert.ok(/signInWithPopup/.test(lobby) && /select_account/.test(lobby), "el lobby no entra con Google o no deja elegir la cuenta");
+});
 
 // ------------------------------------------------------------------ cerebro: el mapa (Fase 14)
 if (ctx.Cerebro && ctx.Cerebro.texto.enlaces) {

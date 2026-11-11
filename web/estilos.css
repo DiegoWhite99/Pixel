@@ -620,6 +620,16 @@ body.sin-sesion .marca { margin-right: 0; }
 .bienvenida .bv-icono { width: 40px; height: 40px; }
 .bienvenida h2 { margin: 0; }
 .bienvenida p { margin: 10px 0 12px; line-height: 1.55; }
+/* 11 nov: "Primeros pasos" despues de entrar (app.js, pintarPasos) */
+.pasos { margin-bottom: 16px; border-color: var(--green-2); }
+.pasos h2 { margin: 0 0 10px; }
+.pasos-lista { list-style: none; margin: 0 0 8px; padding: 0; counter-reset: paso; display: grid; gap: 10px; }
+.pasos-lista li { counter-increment: paso; display: grid; grid-template-columns: 32px 1fr; gap: 4px 10px; align-items: start; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); }
+.pasos-lista li::before { content: counter(paso); grid-row: span 2; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; color: #fff; background: var(--grad); }
+.pasos-lista li.hecho::before { content: "✓"; background: var(--green); }
+.pasos-lista li .txt { display: grid; gap: 2px; }
+.pasos-lista li small { color: var(--muted); line-height: 1.45; }
+.pasos-lista li .acciones { grid-column: 2; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 #v-perfil > .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .grid.perfil { display: grid; gap: 16px; grid-template-columns: 1fr; margin-top: 12px; }
 @media (min-width: 860px) { .grid.perfil { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: start; } }
@@ -680,3 +690,34 @@ input[type=tel], input[type=search] { width: 100%; border: 1px solid var(--line)
   .voz-px .txt { flex-basis: calc(100% - 32px); }
   .voz-px > .btn { margin-left: 30px; }
 }
+
+/* 2.1.0: Registro de acciones (registro.js) */
+#v-registro > .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.card.registro { display: grid; gap: 12px; margin-top: 12px; }
+.lista-registro { display: grid; gap: 6px; }
+.rg-dia { margin: 8px 0 0; font-size: 13px; color: var(--muted); font-weight: 700; }
+.rg-fila { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 12px; }
+.rg-fila.g-correo { border-left-color: var(--blue); }
+.rg-fila.g-evento { border-left-color: var(--green); }
+.rg-fila.g-whatsapp { border-left-color: var(--green-2); }
+.rg-fila.g-aparato { border-left-color: var(--warn); }
+.rg-fila.g-recordatorio { border-left-color: var(--blue-2); }
+.rg-hora { flex: none; min-width: 64px; font-variant-numeric: tabular-nums; font-weight: 650; color: var(--ink); font-size: 14px; padding-top: 1px; }
+.rg-fila .txt { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.rg-fila .txt b { font-weight: 600; overflow-wrap: anywhere; }
+.rg-fila .txt small { color: var(--muted); font-size: 13px; }
+.rg-tipo { font-weight: 650; }
+.rg-fila details summary { cursor: pointer; color: var(--blue); font-size: 13px; margin-top: 2px; }
+.rg-fila details pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font); font-size: 13.5px; margin: 6px 0 0; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; }
+#rg-estado:empty { display: none; }
+@media (max-width: 480px) { .rg-fila { flex-direction: column; gap: 2px; } .rg-hora { min-width: 0; } }
+
+/* Fase 11 (restaurada el 11 nov): el celular como microfono del Pixel del PC (oido.js) */
+.oido-pc { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; padding: 10px 12px; background: #fff; border: 1px solid #d3e8f7; border-radius: 14px; }
+.oido-pc .ico { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--blue-soft); color: var(--blue); }
+.oido-pc .ico svg { width: 20px; height: 20px; }
+.oido-pc .txt { flex: 1; min-width: 160px; display: grid; gap: 1px; }
+.oido-pc .txt small { color: var(--muted); font-size: 13px; }
+.oido-nivel { flex-basis: 100%; height: 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid #d3e8f7; overflow: hidden; }
+.oido-nivel i { display: block; height: 100%; width: 0; background: var(--grad); transition: width 0.12s linear; }
+@media (max-width: 480px) { .oido-pc .btn { width: 100%; } }

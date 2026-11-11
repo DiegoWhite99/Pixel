@@ -27,6 +27,12 @@ SYSTEM_PROMPT = (
     "Si te piden algo así, di que lo repitan empezando con 'agenda', 'recuérdame' o 'pon'."
 )
 
+# Lo que dice Pixel si no hay ninguna IA que conteste (se lee en voz alta: con tildes)
+SIN_IA = ("Todavía no tengo inteligencia artificial para contestar eso. Pon tu clave de Gemini en el panel, "
+          "en Cuentas, o instala Ollama en este computador.")
+SIN_IA_CON_GEMINI = ("Gemini no me contestó y no tengo Ollama de respaldo. Revisa tu clave de Gemini en el panel, "
+                     "en Cuentas.")
+
 DIAS = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
 MESES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
          "agosto", "septiembre", "octubre", "noviembre", "diciembre")
@@ -127,7 +133,18 @@ class Llm:
             }
             completo = []
             req = self._peticion(cuerpo, "/api/chat")
-            with urllib.request.urlopen(req, timeout=self.timeout) as r:
+            try:
+                r = urllib.request.urlopen(req, timeout=self.timeout)
+            except urllib.error.URLError as e:
+                # 11 nov (instaladores): sin Ollama (o sin su modelo) y sin Gemini no hay quien conteste. Antes el
+                # turno acababa en error y solo sonaba el pitido; ahora se dice que falta. Un 500 o una espera
+                # agotada siguen siendo errores.
+                if isinstance(e, urllib.error.HTTPError) and e.code != 404 or isinstance(e.reason, TimeoutError):
+                    raise
+                self.motor = "ninguno"
+                yield SIN_IA_CON_GEMINI if gemini.activo() else SIN_IA
+                return
+            with r:
                 for linea in r:
                     if not linea.strip():
                         continue

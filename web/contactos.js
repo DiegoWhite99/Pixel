@@ -52,6 +52,13 @@
     }
     return nota >= 0.6 ? mejor : null;
   }
+  // Todos los contactos que encajan con el nombre dicho, del mejor al peor (google.js y whatsapp.js
+  // miran si los dos primeros empatan, para preguntar a cual en vez de adivinar)
+  function candidatosDe(lista, q, campo) {
+    return (lista || []).filter((c) => !campo || c[campo])
+      .map((c) => ({nombre: c.nombre, correo: c.correo, telefono: c.telefono, score: parecido(q, c.nombre)}))
+      .filter((c) => c.score >= 0.6).sort((a, b) => b.score - a.score);
+  }
   // Las personas de la memoria con numero o correo -> contactos que faltan (por nombre)
   function desdeNotas(notas, contactos) {
     const ya = new Set((contactos || []).map((c) => plano(c.nombre)));
@@ -72,7 +79,7 @@
     return {nombre, telefono: tel, correo};
   }
 
-  const texto = {telefono, formato, parecido, buscar, desdeNotas, limpio, correoDe, iniciales};
+  const texto = {telefono, formato, parecido, buscar, candidatosDe, desdeNotas, limpio, correoDe, iniciales};
   if (typeof window === "undefined" || !window.Agente) {
     if (typeof module !== "undefined") module.exports = {texto};
     return;
@@ -139,12 +146,7 @@
     const mira = () => (ct.lista || Date.now() - t0 > 6000) ? ok() : setTimeout(mira, 100);
     mira();
   });
-  // Todos los contactos que encajan con el nombre dicho, del mejor al peor
-  function candidatos(q, campo) {
-    return (ct.lista || []).filter((c) => !campo || c[campo])
-      .map((c) => ({nombre: c.nombre, correo: c.correo, telefono: c.telefono, score: parecido(q, c.nombre)}))
-      .filter((c) => c.score >= 0.6).sort((a, b) => b.score - a.score);
-  }
+  const candidatos = (q, campo) => candidatosDe(ct.lista, q, campo);
 
   // ------------------------------------------------------------------ herramientas (Gemini)
   const herramientas = () => [

@@ -176,8 +176,9 @@
       guardarToken();
       g.falta = false;
       g.eventosT = 0;
-      const faltan = Object.entries(ALCANCES).filter(([, s]) => !g.alcances.includes(s)).map(([k]) => (k === "gmail" ? "Gmail" : "Calendar"));
-      toast(faltan.length ? `Conectado, pero sin permiso para ${faltan.join(" ni ")}. Vuelve a conectar y marca todas las casillas.` : "Google conectado: Calendar y Gmail.", !!faltan.length);
+      const NOMBRES = {calendar: "Calendar", gmail: "Gmail", contactos: "Contactos"};
+      const faltan = Object.entries(ALCANCES).filter(([, s]) => !g.alcances.includes(s)).map(([k]) => NOMBRES[k] || k);
+      toast(faltan.length ? `Conectado, pero sin permiso para ${faltan.join(" ni ")}. Vuelve a conectar y marca todas las casillas.` : "Google conectado: Calendar, Gmail y Contactos.", !!faltan.length);
       N.pintar();
       return true;
     } catch (e) {
@@ -267,6 +268,7 @@
       hacer: async () => {
         await api(CAL, {method: "POST", body: JSON.stringify(ev)});
         g.eventosT = 0;
+        N.registrar("evento", `Creé el evento «${titulo}» en tu Google Calendar`, cuando + (ev.location ? " · " + ev.location : ""));
         return `Listo, agendé ${titulo} ${cuando}.`;
       }});
     return `¿Lo agendo para ${cuando}: ${titulo}?`;
@@ -375,6 +377,7 @@
       return errorDicho(e, {texto: ""});
     }
     g.borrador = null;
+    N.registrar("correo", `Envié un correo a ${b.nombre || b.para}`, `${b.para}\nAsunto: ${b.asunto}\n\n${b.cuerpo}`);
     return `Enviado a ${b.nombre || b.para}.`;
   }
 
@@ -409,7 +412,11 @@
     const n = ids.length === 1 ? "el correo" : `${ids.length} correos`;
     if (a.accion === "papelera") {
       N.confirmar({pregunta: `¿Mando ${n} a la papelera?`, titulo: `Mandar ${n} a la papelera`, boton: "Sí, a la papelera", si: RE_SI,
-        hacer: async () => { for (const id of ids) await api(`${GMAIL}/messages/${id}/trash`, {method: "POST"}); return `Listo, mandé ${n} a la papelera.`; }});
+        hacer: async () => {
+          for (const id of ids) await api(`${GMAIL}/messages/${id}/trash`, {method: "POST"});
+          N.registrar("correo", `Mandé ${n} a la papelera de Gmail`);
+          return `Listo, mandé ${n} a la papelera.`;
+        }});
       return `¿Mando ${n} a la papelera?`;
     }
     let cambio;
@@ -421,6 +428,7 @@
     } else cambio = ACCIONES_CORREO[a.accion];
     if (!cambio) return "No sé hacer eso con el correo.";
     await api(`${GMAIL}/messages/batchModify`, {method: "POST", body: JSON.stringify({ids, addLabelIds: cambio.poner || [], removeLabelIds: cambio.quitar || []})});
+    N.registrar("correo", `En Gmail: ${cambio.dicho} ${n}`);
     return `Listo, ${cambio.dicho} ${n}.`;
   }
 
@@ -495,6 +503,7 @@
         await api(`${CAL}/${ev.id}`, {method: "PATCH", body: JSON.stringify({start: {dateTime: isoLocal(nuevo), timeZone: zona()},
           end: {dateTime: isoLocal(nuevo + dura * 60000), timeZone: zona()}})});
         g.eventosT = 0;
+        N.registrar("evento", `Moví el evento «${d.titulo}»`, `Antes: ${d.cuando} · Ahora: ${T.cuandoDicho(nuevo)}`);
         return `Listo, moví ${d.titulo} a ${T.cuandoDicho(nuevo).replace(/^hoy /, "hoy ")}.`;
       }
       if (nombre === "borrar_evento") {
@@ -502,7 +511,12 @@
         if (!ev) return `No encontré ${a.buscar} en tu calendario.`;
         const d = eventoDicho(ev);
         N.confirmar({pregunta: `¿Borro ${d.titulo}, ${d.cuando}?`, titulo: `Borrar «${d.titulo}»`, detalle: d.cuando, boton: "Sí, borrar", si: RE_SI,
-          hacer: async () => { await api(`${CAL}/${ev.id}`, {method: "DELETE"}); g.eventosT = 0; return `Borré ${d.titulo}.`; }});
+          hacer: async () => {
+            await api(`${CAL}/${ev.id}`, {method: "DELETE"});
+            g.eventosT = 0;
+            N.registrar("evento", `Borré el evento «${d.titulo}»`, d.cuando);
+            return `Borré ${d.titulo}.`;
+          }});
         return `¿Borro ${d.titulo}, ${d.cuando}?`;
       }
       // ---------------------------------------------------------- correo
@@ -709,6 +723,7 @@
       if (!c.nombre || (!c.correo && !c.telefono)) continue;
       try { await window.PixelContactos.guardar(c); guardados++; } catch (e) { /* un dato malo no para la lista */ }
     }
+    N.registrar("contactos", `Traje ${guardados} de ${lista.length} contactos de Google`);
     return {total: lista.length, guardados};
   }
 

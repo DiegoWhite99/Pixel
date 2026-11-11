@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Asistente de voz para una demo de feria. Un ESP32-S3 (micrófono INMP441; su firmware **no** está en este repo) manda audio por TCP. El servidor en Python lo transcribe (faster-whisper), decide la acción (regex, clasificador LLM o respuesta libre del LLM) y devuelve voz (Piper o Supertonic). Palabra de activación: "Píxel". Gemini responde si hay clave; si no, Ollama (`qwen2.5:3b` en `127.0.0.1:11434`).
 
-Repo público: https://github.com/DiegoWhite99/Pixel. No entran claves, grabaciones ni datos personales (ver `.gitignore`). Ramas: `main` (v2.0.0) y `vinculacion_movil` (trabajo nuevo). Versiones `vX.Y.Z` con su historia en `README.md`.
+Repo público: https://github.com/DiegoWhite99/Pixel. No entran claves, grabaciones ni datos personales (ver `.gitignore`). Ramas: `main` (v2.1.0) y `vinculacion_movil` (trabajo nuevo). Versiones `vX.Y.Z` con su historia en `README.md`.
 
 **Detalle y mediciones:** `memoria.md`, con el registro de decisiones y, al final, el apéndice "Referencia detallada" (el detalle por fase que antes estaba aquí). **Funciones, código y rutas:** `docs/FUNCIONES.md`. **Auditoría de esta limpieza:** `docs/AUDITORIA.md`.
 
@@ -24,6 +24,19 @@ tail -f servidor.log
 .venv/bin/python -m pytest                          # todas
 .venv/bin/python -m pytest -k obsidian              # una
 node tools/prueba_modulos.js                        # funciones puras de web/*.js
+
+# Pruebas en Chrome sin pantalla, con Google y la IA SIMULADOS (no envían ni crean nada real, no gastan cupo).
+# Crean cuentas anónimas de prueba en Firebase. Necesitan la web servida en 8099.
+python3 -m http.server 8099 -d web &
+PUPPETEER=<carpeta>/node_modules/puppeteer-core node tools/prueba_entrada.js           # lobby, sin IA incluida, clave por cuenta
+PUPPETEER=<carpeta>/node_modules/puppeteer-core node tools/prueba_correo.js            # confirmaciones y destinatarios
+PUPPETEER=<carpeta>/node_modules/puppeteer-core node tools/prueba_contactos_google.js  # botón «Exportar contactos»
+PUPPETEER=<carpeta>/node_modules/puppeteer-core node tools/prueba_whatsapp_registro.js # WhatsApp sin adivinar, registro de acciones
+
+# Micrófono del celular de punta a punta: un Píxel del PC DE PRUEBA (otra identidad en Firebase, puertos 8799/8081,
+# archivos en <tmp>) y una cuenta anónima que se enlaza con su código. Al acabar borra lo suyo de Firebase.
+.venv/bin/python tools/pc_de_prueba.py <tmp> &     # espera a que escriba <tmp>/pc.json
+PUPPETEER=<carpeta>/node_modules/puppeteer-core node tools/prueba_oido.js <tmp>
 
 # Linter: ruff (reglas en ruff.toml: solo errores reales y pyflakes)
 .venv/bin/ruff check .
@@ -50,7 +63,11 @@ Servidor de prueba aislado (no toca el real ni sus JSON; luego `tools/cliente_pr
 
 Con el servidor real arriba, el panel (8080) está ocupado: la prueba usa 8081. El `ajustes.json` real puede tener `"salida_voz": "pc"`; sin archivo, la salida es `"esp32"`. Para probar la nube, usar otra identidad (`servidor.NUBE_TOKEN`, `servidor.NUBE_NOMBRE`) y borrar los datos al acabar.
 
-Chrome sin pantalla para la web: `puppeteer-core` fuera del repo, con `executablePath: "/usr/bin/google-chrome"` y `args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"]`. Las pruebas de punta a punta (`tools/prueba_app.js`) gastan cupo de Gemini: ver docs/AUDITORIA.md.
+Chrome sin pantalla para la web: `puppeteer-core` fuera del repo, con `executablePath: "/usr/bin/google-chrome"` y `args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"]`. `?nube=anonimo` (solo en localhost) entra con una cuenta anónima. `tools/prueba_app.js` usa la IA de verdad y desde el 11 nov necesita una clave en la cuenta de prueba; no se ha adaptado.
+
+Al simular Google en una prueba de navegador, simular **solo** gmail, calendar, oauth2 (tokeninfo) y people. Si se simula todo `googleapis.com`, también cae la sesión de Firebase (`identitytoolkit`, `securetoken`): tras recargar, la app parece sin permiso de Google. Así falló una prueba el 11 nov. Para la IA: poner la clave en `localStorage` `pixel.ia:<uid>` y simular `generativelanguage.googleapis.com`. Bloquear Hugging Face en las pruebas: la voz son 398 MB.
+
+Los datos de las pruebas (nombres de ejemplo como «Ana Prueba») van solo en cuentas anónimas de prueba. Nunca inventar nombres, correos ni personas para pruebas o instrucciones que toquen la cuenta real del usuario: preguntar.
 
 ## Arquitectura
 
@@ -78,11 +95,19 @@ Chrome sin pantalla para la web: `puppeteer-core` fuera del repo, con `executabl
 
 **Panel local** (`panel.py` + `web/`): `servidor.main()` lo arranca en `PANEL_PORT` (8080). Sirve la misma app que Firebase, pero hablando con `/api/...` (rutas en `panel.RUTAS_POST`). `RUTAS_SOLO_LOCAL` son las que no puede ejecutar la nube (la clave de Gemini). Rechaza POST con cabecera `Origin` ajena (403). Sin autenticación: cualquiera en la red puede usarlo.
 
-**Micrófono del celular (Fase 11):** `servidor.SesionMovil` y `nube.py` (`_atender_frases`, `_escribir_habla`, `celulares()`). El celular corta las frases y la nube las pasa al turno normal; la voz vuelve al celular por `habla/<uid>`. Hoy el servidor lo soporta, pero el cliente de la app que manda las frases se quitó en el commit de "Píxel en la app" (ver `memoria.md`). Para volver a usarlo hay que restaurar ese cliente desde el commit `b51e2cb`. Es clave para el proyecto: no quitar.
+**Micrófono del celular (Fase 11):** `servidor.SesionMovil` y `nube.py` (`_atender_frases`, `_escribir_habla`, `celulares()`). En la app, `web/oido.js` (botón «Usar el PC» en Inicio, solo con un Píxel del PC enlazado): corta las frases (VAD por energía; además pide 160 ms con voz para no subir golpes a Firebase), las deja en `pixeles/<pid>/frases` y toca la voz que vuelve por `habla/<uid>`. Piensa el PC, así que sirve sin clave de IA en la app. Es una cosa u otra: al usar el PC se para la escucha de `agente.js`, y su «Escuchar» para esto. Se quitó en la Fase 12 y se restauró el 11 nov desde `b51e2cb`, con sus reglas (`frases`, `escuchando`, `habla`). Es clave para el proyecto: no quitar.
+
+**Registro de acciones** (11 nov, tras el correo que salió a quien no era): lo que Píxel hizo de verdad, con su hora. La app anota con `Agente.nucleo.registrar(tipo, texto, detalle)` en `usuarios/<uid>/registro` (correo enviado, evento creado/movido/borrado, WhatsApp, orden a un aparato, recordatorio, contactos de Google); el PC, con `servidor.registrar` → `nube.registrar` en `pixeles/<pid>/registro` (acciones de `REGISTRAR_ACCIONES` y el correo al confirmarse; guarda las últimas 300). Se anota **después** de hacerlo, nunca antes (lo comprueba `prueba_modulos.js`). `web/registro.js` junta las dos listas en la pestaña Registro. No es un modo: no se apaga en Ajustes.
 
 **Nube** (`nube.py`, Fases 10 y 12): el servidor entra en Firebase con una cuenta anónima y publica estado y latido en la Realtime Database (`NUBE_DB`). Escucha órdenes y solicitudes por SSE. Las órdenes ejecutan las mismas funciones que `RUTAS_POST`. Las reglas (`database.rules.json`) dejan que cada Píxel escriba solo lo suyo y que solo sus dueños lean su estado o le manden órdenes. El enlace usa un código de 6 cifras que comprueba el servidor (no las reglas), con `MAX_FALLOS` intentos.
 
-**App de internet** (`web/`, Firebase Hosting, proyecto `pixelassitance`): HTML, CSS y JS sin compilar. Modo local y modo internet (`*.web.app`, `*.firebaseapp.com` o `?nube`). En internet, `web/agente.js` es el núcleo: voz (`webkitSpeechRecognition`, `VozPixel` con Supertonic 3), Gemini por Firebase AI Logic (`pensar`), confirmaciones de lo irreversible, y los módulos de `MODULOS` (cerebro, google, tiempo, aparatos, música, humor, apuntes, contactos, whatsapp, ajustes, perfil), que se registran con `Agente.modulo({...})`. `web/agente.md` es el prompt de sistema.
+**App de internet** (`web/`, Firebase Hosting, proyecto `pixelassitance`): HTML, CSS y JS sin compilar. Modo local y modo internet (`*.web.app`, `*.firebaseapp.com` o `?nube`). En internet, `web/agente.js` es el núcleo: voz (`webkitSpeechRecognition`, `VozPixel` con Supertonic 3), la IA (`pensar`), confirmaciones de lo irreversible, y los módulos de `MODULOS` (cerebro, google, tiempo, aparatos, música, humor, apuntes, contactos, whatsapp, ajustes, perfil), que se registran con `Agente.modulo({...})`. `web/agente.md` es el prompt de sistema.
+
+**La IA de la app es de cada cuenta** (11 nov; pedido: "cada persona paga Gemini o el proveedor que quiera"). No hay IA incluida: antes existía el proveedor `pixel`, el Gemini del proyecto por Firebase AI Logic, y se quitó con su carga en `agente.js`. `Proveedores.actual()` sin clave da `{propio: false}`: Píxel dice `SIN_CLAVE` y no llama a nadie; `generarJSON` falla. La clave se guarda en `localStorage` `pixel.ia:<uid>` (por cuenta y por aparato; sin sesión no se guarda). Las dos cuentas de demostración la ponen a mano en Ajustes. Firebase AI Logic sigue activado en el proyecto: la app ya no lo usa, pero el servicio sigue abierto hasta que se desactive en la consola.
+
+**Entrada** (11 nov): sin sesión, `app.js` (`revisarNube`) manda a `web/lobby.html` (salvo `?nube=anonimo`). El lobby explica Píxel, tiene las descargas y hace el login con `signInWithPopup` (siempre `select_account`); después pasa a la app. Nunca reenvía solo a la app, para que no haya vueltas sin fin. Su configuración de Firebase debe ser igual a `NUBE` de `app.js` (lo comprueba `prueba_modulos.js`). Ya dentro, la tarjeta «Primeros pasos» (`pintarPasos`) pide vincular el Píxel y poner la clave de IA, y se va sola cuando están las dos.
+
+**Instaladores** (11 nov, `instalador/`): `instalador/construir.sh [linux|windows|todo]` arma `dist/pixel_<versión>_amd64.deb`, `dist/Pixel-<versión>-Setup.exe` y `dist/SHA256SUMS` (sin sudo; `dist/` está en `.gitignore`). Cada paquete lleva su propio Python 3.10 portátil y las versiones de `instalador/bloqueo.txt`. En Linux el código va compilado con Nuitka (.so); en Windows, como .pyc (el flujo `instalador/windows/nuitka.yml` lo compilaría en GitHub, no está activo). `revisar_secretos` frena el armado si va una clave o un dato personal (`web/claves.js` va vacía). `instalador/pixel_lanzador.py` guarda los datos en `~/.local/share/pixel` (o `%LOCALAPPDATA%\Pixel\datos`), apunta ahí las rutas de `servidor` (como el servidor de prueba aislado), baja ~600 MB de voces y Whisper la primera vez (con su huella SHA-256) y abre el panel para vincular. Descargas y herramientas en `$PIXEL_CACHE` (por defecto `~/.cache/pixel-instalador`). Tras cambiar el servidor o `web/`, rearmar. Se publican como archivos de la versión en GitHub (`releases/download/vX.Y.Z/...`, no en Firebase Hosting: su plan gratis da ~360 MB de descarga al día); los botones de descarga de `web/lobby.html` y el README llevan el número de versión en la dirección. En Windows no hay Bluetooth, volumen, música del sistema ni WhatsApp por xdotool. Sin Ollama ni Gemini, Píxel dice `llm.SIN_IA` en vez de solo el pitido.
 
 **Gemini:** REST `v1beta` desde `gemini.py` (clave en la cabecera `x-goog-api-key`, nunca en la URL ni en logs). Si falla, responde Ollama y pausa Gemini unos segundos (`PAUSA_S`), o 10 min tras un 429 (`PAUSA_CUPO_S`). El plan gratis tiene cupo diario por modelo: las pruebas de punta a punta lo gastan.
 

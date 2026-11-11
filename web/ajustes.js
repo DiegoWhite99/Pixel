@@ -12,8 +12,8 @@
   const A = window.Agente, N = A.nucleo;
 
   // Precios oficiales del plan de pago, en US$ por millon de tokens; la salida incluye los tokens de
-  // "pensar". Fuente: ai.google.dev/gemini-api/docs/pricing (revisado el 10 nov 2026). El plan gratis
-  // (el que usa Pixel) no cobra: tiene un cupo de peticiones por dia y por modelo.
+  // "pensar". Fuente: ai.google.dev/gemini-api/docs/pricing (revisado el 10 nov 2026). Sirven para el uso
+  // de antes del 11 nov, cuando Pixel traia Gemini incluido (gratis); desde entonces cada cuenta pone su clave.
   const PRECIOS = {"gemini-3.5-flash-lite": {e: 0.30, s: 2.50}, "gemini-3.1-flash-lite": {e: 0.25, s: 1.50}};
   const NOMBRE_MODELO = {"gemini-3.5-flash-lite": "Gemini 3.5 Flash-Lite", "gemini-3.1-flash-lite": "Gemini 3.1 Flash-Lite"};
   const MOTIVOS = {charla: "Conversación", herramienta: "Consultas (segunda vuelta)", aprender: "Aprender solo",
@@ -21,24 +21,25 @@
   const DIAS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
   const RETENER_DIAS = 30;
 
-  // gasto: "si" (gasta Gemini), "aveces" (solo cuando...), "no" (sin Gemini), "ahorra"
+  // gasto: "si" (gasta IA), "aveces" (solo cuando...), "no" (sin IA), "ahorra". El id "gemini" se queda
+  // por los interruptores ya guardados en preferencias/modos
   const MODOS = [
-    {id: "gemini", nombre: "Conversación con la IA", que: "Contesta lo que le preguntes y entiende órdenes nuevas, con Gemini gratis o el proveedor que elegiste arriba. Apagado, solo hace lo que no lo necesita.", gasto: "si", cuanto: "1 petición por pregunta; 2 si consulta algo (tus correos, tus tareas)."},
+    {id: "gemini", nombre: "Conversación con la IA", que: "Contesta lo que le preguntes y entiende órdenes nuevas, con el proveedor y la clave que pusiste arriba. Apagado, solo hace lo que no lo necesita.", gasto: "si", cuanto: "1 petición por pregunta; 2 si consulta algo (tus correos, tus tareas)."},
     {id: "ahorro", nombre: "Consumo bajo", que: "Recuerda las 2 últimas preguntas (en vez de 4) y mete menos notas del cerebro en cada una.", gasto: "ahorra", cuanto: "Cada petición lleva menos tokens."},
     {id: "cerebro", nombre: "Cerebro y memoria", que: "Lo que sabe de ti entra en cada pregunta: «Píxel, recuerda que…».", gasto: "aveces", cuanto: "No suma peticiones: hace cada pregunta un poco más grande."},
     {id: "aprender", nombre: "Aprender solo", que: "Al acabar cada conversación, saca datos nuevos sobre ti y los guarda en el cerebro.", gasto: "si", cuanto: "1 petición por conversación.", de: "cerebro"},
     {id: "google", nombre: "Google Calendar y Gmail", que: "Tu calendario y tu correo, por voz.", gasto: "aveces", cuanto: "Va en la misma pregunta; leer correos o eventos suma una vuelta."},
     {id: "whatsapp", nombre: "WhatsApp", que: "Escribir a tus contactos. Enviar siempre lo confirmas tú.", gasto: "aveces", cuanto: "Va en la misma pregunta."},
-    {id: "musica", nombre: "Música, baile y escenarios", que: "YouTube por voz; baila y cambia el fondo según el género.", gasto: "aveces", cuanto: "Pedir una canción: 1 petición. Pausa, sigue, cambia y el volumen: sin Gemini."},
-    {id: "aparatos", nombre: "Aparatos de la casa", que: "El PC, el TV y el ESP32 por voz.", gasto: "aveces", cuanto: "La orden pasa por Gemini; «Píxel, prueba el ESP32» no."},
+    {id: "musica", nombre: "Música, baile y escenarios", que: "YouTube por voz; baila y cambia el fondo según el género.", gasto: "aveces", cuanto: "Pedir una canción: 1 petición. Pausa, sigue, cambia y el volumen: sin IA."},
+    {id: "aparatos", nombre: "Aparatos de la casa", que: "El PC, el TV y el ESP32 por voz.", gasto: "aveces", cuanto: "La orden pasa por la IA; «Píxel, prueba el ESP32» no."},
     {id: "tiempo", nombre: "Modo enfoque", que: "Pomodoro y la matriz de Eisenhower, con guía.", gasto: "no", cuanto: "La guía, los pomodoros y sus atajos son locales."},
-    {id: "apuntes", nombre: "Notas dictadas", que: "«Píxel, toma nota» y la pestaña Notas.", gasto: "no", cuanto: "Dictar no usa Gemini."},
-    {id: "clasificar", nombre: "Asunto automático de las notas", que: "Al guardar una nota, Gemini le pone asunto y lo más importante.", gasto: "si", cuanto: "1 petición por nota. Apagado, lo saca del título.", de: "apuntes"},
+    {id: "apuntes", nombre: "Notas dictadas", que: "«Píxel, toma nota» y la pestaña Notas.", gasto: "no", cuanto: "Dictar no usa la IA."},
+    {id: "clasificar", nombre: "Asunto automático de las notas", que: "Al guardar una nota, la IA le pone asunto y lo más importante.", gasto: "si", cuanto: "1 petición por nota. Apagado, lo saca del título.", de: "apuntes"},
     {id: "analizar", nombre: "Ofrecer analizar cada nota", que: "Al terminar una nota, pregunta si la analiza (resumen, ideas, lo destacado).", gasto: "aveces", cuanto: "1 petición, solo si dices que sí.", de: "apuntes"},
-    {id: "sonidos", nombre: "Sonidos", que: "Una campanita al llamarlo, una melodía suave mientras piensa y otra al terminar.", gasto: "no", cuanto: "Sin Gemini."},
-    {id: "humor", nombre: "Personalidad juguetona", que: "Se ríe si lo tocas, hace cosas al azar y avisa antes de dormirse.", gasto: "no", cuanto: "Sin Gemini."},
+    {id: "sonidos", nombre: "Sonidos", que: "Una campanita al llamarlo, una melodía suave mientras piensa y otra al terminar.", gasto: "no", cuanto: "Sin IA."},
+    {id: "humor", nombre: "Personalidad juguetona", que: "Se ríe si lo tocas, hace cosas al azar y avisa antes de dormirse.", gasto: "no", cuanto: "Sin IA."},
   ];
-  const ETIQUETA = {si: "Gasta Gemini", aveces: "Gemini a veces", no: "Sin Gemini", ahorra: "Ahorra Gemini"};
+  const ETIQUETA = {si: "Gasta IA", aveces: "IA a veces", no: "Sin IA", ahorra: "Ahorra IA"};
 
   // ------------------------------------------------------------------ texto (puro: se prueba en Node)
   // El precio de un modelo (clave del uso, saneada): de proveedores.js, que conoce tambien los de clave propia
@@ -93,6 +94,8 @@
     aj.quitar.forEach((f) => f());
     Object.assign(aj, {quitar: [], uso: {}, aprender: false, pintadoM: "", pintadoU: ""});
     N.modos({});
+    // la clave de IA es de cada cuenta: el formulario muestra la de la cuenta que entro
+    if (typeof Proveedores !== "undefined" && document.getElementById("f-ia")) formularioIA(Proveedores.leer().proveedor);
     if (!u) { pintar(); return; }
     aj.quitar.push(nube.d.onValue(ref("preferencias/modos"), (s) => { N.modos(s.val() || {}); pintar(); }, () => {}));
     aj.quitar.push(nube.d.onValue(ref("preferencias/aprender"), (s) => { aj.aprender = s.val() === true; pintar(); }, () => {}));
@@ -130,22 +133,16 @@
 
   function pintarUso() {
     const hoy = N.diaDelCupo(), dias = ultimosDias(hoy, 7), u = aj.uso[hoy] || {};
-    const modelo = N.modeloDeHoy(), respaldo = N.MODELOS.indexOf(modelo) > 0;
     const prov = typeof Proveedores !== "undefined" ? Proveedores.actual() : {propio: false};
-    const costoHoy = costoDia(u, "gratis"), realHoy = costoDia(u, "propia");
-    const costo7 = dias.reduce((t, k) => t + costoDia(aj.uso[k], "gratis"), 0), real7 = dias.reduce((t, k) => t + costoDia(aj.uso[k], "propia"), 0);
-    // a que hora se renueva el cupo (medianoche del Pacifico, en la hora de aqui)
-    const [y, mo, d] = hoy.split("-").map(Number);
-    const renueva = new Date(Date.UTC(y, mo - 1, d + 1, 8)).toLocaleTimeString("es-CO", {hour: "numeric", minute: "2-digit"});
+    const realHoy = costoDia(u, "propia");
+    const real7 = dias.reduce((t, k) => t + costoDia(aj.uso[k], "propia"), 0);
     const tiles = `<div class="uso-tiles">
       <div class="tile"><small>Peticiones hoy</small><b>${compacto(u.peticiones || 0)}</b></div>
       <div class="tile"><small>Tokens hoy</small><b>${compacto((u.entrada || 0) + (u.salida || 0))}</b><span>${compacto(u.entrada || 0)} de entrada · ${compacto(u.salida || 0)} de salida</span></div>
-      <div class="tile"><small>Costo hoy</small>${realHoy > 0 || prov.propio
-        ? `<b>${dolares(realHoy)}</b><span>Con tu clave (lo cobra tu proveedor). Lo gratis de Píxel, pagando, serían ${dolares(costoHoy)}</span>`
-        : `<b>US$ 0</b><span>Plan gratis. Pagando serían ${dolares(costoHoy)}</span>`}</div>
+      <div class="tile"><small>Costo hoy</small><b>${dolares(realHoy)}</b><span>Lo cobra tu proveedor, con tu clave</span></div>
       <div class="tile"><small>Modelo ahora</small>${prov.propio
         ? `<b class="modelo">${esc(Proveedores.nombreModelo(Proveedores.sanear(prov.modelo)))}</b><span>Con tu clave de ${esc(Proveedores.LISTA[prov.proveedor].nombre)}</span>`
-        : `<b class="modelo">${esc(NOMBRE_MODELO[modelo] || modelo)}</b><span>${respaldo ? "Gratis. El 3.5 gastó su cupo de hoy" : "Gratis, el principal"}</span>`}</div></div>`;
+        : `<b class="modelo">Sin clave</b><span>Ponla arriba, en «Proveedor de IA»: sin ella Píxel no puede pensar</span>`}</div></div>`;
     const ns = dias.map((k) => (aj.uso[k] && aj.uso[k].peticiones) || 0), max = Math.max(1, ...ns), imax = ns.indexOf(Math.max(...ns));
     const columnas = dias.map((k, i) => {
       const n = ns[i], etiqueta = i === dias.length - 1 || (i === imax && n > 0);       // solo hoy y el maximo llevan numero
@@ -168,15 +165,14 @@
       </tbody></table></details>`;
     const h = `${tiles}
       <h3>Peticiones por día</h3>
-      <div class="uso-grafica" role="group" aria-label="Peticiones a Gemini por día, últimos 7 días">${columnas}</div>
+      <div class="uso-grafica" role="group" aria-label="Peticiones a la IA por día, últimos 7 días">${columnas}</div>
       <div class="uso-tip" id="aj-tip" hidden></div>
       <h3>En qué se gastan · 7 días</h3>
       <div class="motivos">${lineasMotivo}</div>
       ${lineasModelo ? `<h3>Por modelo · 7 días</h3><div class="por-modelo">${lineasModelo}</div>` : ""}
       ${tabla}
-      <p class="nota">El plan gratis de Gemini no cobra: tiene un cupo de peticiones por día para cada modelo (se renueva a las ${esc(renueva)}). Si se acaba, Píxel pasa solo al modelo de respaldo.
-        ${real7 > 0 ? `Con tu clave, en 7 días: ${dolares(real7)} (lo cobra tu proveedor). ` : ""}En 7 días, lo gratis con el plan de pago habría sido ${dolares(costo7)} (3.5 Flash-Lite: US$ 0,30 por millón de tokens de entrada y US$ 2,50 de salida;
-        3.1 Flash-Lite: US$ 0,25 y US$ 1,50). <a href="https://ai.google.dev/gemini-api/docs/pricing" target="_blank" rel="noopener">Precios de Google</a></p>`;
+      <p class="nota">Cada cuenta usa su propia clave de IA: lo que gastas lo cobra tu proveedor, según su plan. Con tu clave, en 7 días: ${dolares(real7)}.
+        Los días de antes del 11 de noviembre pueden traer uso del Gemini que Píxel tenía incluido: sale como «gratis».</p>`;
     if (h !== aj.pintadoU) { $("#aj-uso").innerHTML = h; aj.pintadoU = h; }
   }
 
@@ -269,8 +265,8 @@
   function pintarChipIA() {
     if (typeof Proveedores === "undefined") return;
     const a = Proveedores.actual(), chip = $("#ia-chip");
-    const t = a.propio ? `En uso: ${Proveedores.nombreModelo(Proveedores.sanear(a.modelo))}` : "En uso: Píxel gratis";
-    if (chip.textContent !== t) { chip.textContent = t; chip.className = "chip" + (a.propio ? " info" : " ok"); }
+    const t = a.propio ? `En uso: ${Proveedores.nombreModelo(Proveedores.sanear(a.modelo))}` : "Sin clave: Píxel no puede pensar";
+    if (chip.textContent !== t) { chip.textContent = t; chip.className = "chip" + (a.propio ? " ok" : " warn"); }
   }
   function formularioIA(p) {
     const P = Proveedores, L = P.LISTA[p], cfg = P.leer();
@@ -312,7 +308,7 @@
     const clave = $("#ia-clave").value.trim() || cfg.claves[p] || "";
     const modelo = L.modelos ? $("#ia-modelo-fijo").value : $("#ia-modelo").value.trim();
     const base = p === "otro" ? $("#ia-base").value.trim().replace(/\/+$/, "") : P.baseDe(cfg, p);
-    return {p, L, cfg, a: {proveedor: p, modelo, clave, base, propio: p !== "pixel"}};
+    return {p, L, cfg, a: {proveedor: p, modelo, clave, base, propio: true}};
   }
   function resultadoIA(ok, texto) {
     const caja = $("#ia-prueba");
@@ -340,7 +336,6 @@
     });
     $("#ia-probar").addEventListener("click", async (e) => {
       const {a, L} = delFormulario(), b = e.currentTarget;
-      if (a.proveedor === "pixel") { resultadoIA(true, "Píxel gratis no necesita prueba: usa Gemini del proyecto."); return; }
       if (!a.clave) { resultadoIA(false, "Escribe tu clave."); return; }
       if (!a.modelo) { resultadoIA(false, "Elige un modelo."); return; }
       b.disabled = true;
@@ -353,36 +348,36 @@
     $("#ia-borrar").addEventListener("click", () => {
       const p = $("#ia-proveedor").value, cfg = P.leer();
       delete cfg.claves[p];
-      if (cfg.proveedor === p) cfg.proveedor = "pixel";
       P.guardar(cfg);
       formularioIA(p);
       N.pintar();
       pintar();
-      toast("Borré la clave de este aparato. Píxel vuelve a Gemini gratis.");
+      if (window.pintarPasos) window.pintarPasos();
+      toast(P.actual().propio ? "Borré esa clave de esta cuenta en este aparato." : "Borré la clave de esta cuenta en este aparato. Sin clave, Píxel no puede pensar.");
     });
     $("#f-ia").addEventListener("submit", (e) => {
       e.preventDefault();
       const {p, L, cfg, a} = delFormulario();
       const nueva = $("#ia-clave").value.trim();
-      if (p !== "pixel") {
-        if (nueva && !P.claveValida(p, nueva)) { resultadoIA(false, `Esa clave no parece de ${L.nombre}${L.ejemplo ? ` (empieza por ${L.ejemplo.replace("…", "")})` : ""}.`); return; }
-        if (!a.clave) { resultadoIA(false, "Escribe tu clave."); return; }
-        if (!a.modelo) { resultadoIA(false, "Elige un modelo."); return; }
-        if (p === "otro" && !/^https:\/\//.test(a.base)) { resultadoIA(false, "La dirección tiene que empezar por https://"); return; }
-        if (nueva) cfg.claves[p] = nueva;
-        cfg.modelos[p] = a.modelo;
-        if (p === "otro") cfg.bases.otro = a.base;
-        if (!L.modelos) {
-          const pe = parseFloat($("#ia-pe").value), ps = parseFloat($("#ia-ps").value);
-          if (isFinite(pe) && isFinite(ps) && pe >= 0 && ps >= 0) cfg.precios[a.modelo] = {e: pe, s: ps};
-        }
+      if (!nube.uid) { resultadoIA(false, "Entra con tu cuenta para guardar la clave: cada cuenta tiene la suya."); return; }
+      if (nueva && !P.claveValida(p, nueva)) { resultadoIA(false, `Esa clave no parece de ${L.nombre}${L.ejemplo ? ` (empieza por ${L.ejemplo.replace("…", "")})` : ""}.`); return; }
+      if (!a.clave) { resultadoIA(false, "Escribe tu clave."); return; }
+      if (!a.modelo) { resultadoIA(false, "Elige un modelo."); return; }
+      if (p === "otro" && !/^https:\/\//.test(a.base)) { resultadoIA(false, "La dirección tiene que empezar por https://"); return; }
+      if (nueva) cfg.claves[p] = nueva;
+      cfg.modelos[p] = a.modelo;
+      if (p === "otro") cfg.bases.otro = a.base;
+      if (!L.modelos) {
+        const pe = parseFloat($("#ia-pe").value), ps = parseFloat($("#ia-ps").value);
+        if (isFinite(pe) && isFinite(ps) && pe >= 0 && ps >= 0) cfg.precios[a.modelo] = {e: pe, s: ps};
       }
       cfg.proveedor = p;
       if (!P.guardar(cfg)) { resultadoIA(false, "Este navegador no deja guardar la clave (modo privado)."); return; }
       formularioIA(p);
       N.pintar();
       pintar();
-      resultadoIA(true, p === "pixel" ? "Listo: Píxel piensa con Gemini gratis." : `Listo: Píxel piensa con ${P.nombreModelo(P.sanear(a.modelo))}, con tu clave. Toca «Probar» para comprobarla.`);
+      if (window.pintarPasos) window.pintarPasos();
+      resultadoIA(true, `Listo: Píxel piensa con ${P.nombreModelo(P.sanear(a.modelo))}, con tu clave. Toca «Probar» para comprobarla.`);
     });
   }
 

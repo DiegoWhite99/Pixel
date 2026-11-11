@@ -240,8 +240,10 @@
     }
     if (!pl.puente) return `${a.nombre} no tiene puente asignado. Edítalo en Dispositivos.`;
     try {
-      const r = await mandar(pl.puente, pl.ruta, pl.cuerpo);
-      return r.decir || `Listo, ${DICHO[accion] || "hice eso con"} ${conArticulo(a.nombre)}.`;
+      const r = await mandar(pl.puente, pl.ruta, pl.cuerpo);      // solo sigue si el puente contesto que si
+      const dicho = r.decir || `Listo, ${DICHO[accion] || "hice eso con"} ${conArticulo(a.nombre)}.`;
+      N.registrar("aparato", `${a.nombre}: ${accion.replace(/_/g, " ")}${valor ? " (" + String(valor).slice(0, 60) + ")" : ""}`, `Por ${nombrePuente(pl.puente)} · ${dicho}`);
+      return dicho;
     } catch (e) {
       return String(e.message || e).replace(/^Píxel no contestó.*/, `${nombrePuente(pl.puente)} no contestó. ¿Está encendido y con internet?`);
     }

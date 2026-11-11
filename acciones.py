@@ -491,7 +491,15 @@ def _buscar(consulta):
 
 def _abrir(url):
     """xdg-open en el navegador del PC. Devuelve el codigo de salida, o None si
-    a los 3 s sigue vivo (pasa cuando arranca un navegador nuevo)."""
+    a los 3 s sigue vivo (pasa cuando arranca un navegador nuevo).
+    En Windows (instalador .exe) no hay xdg-open: lo abre el navegador predeterminado."""
+    import os
+    if os.name == "nt":
+        try:
+            os.startfile(url)
+            return 0
+        except OSError:
+            return 1
     proc = subprocess.Popen(["xdg-open", url], stdin=subprocess.DEVNULL,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                             start_new_session=True)

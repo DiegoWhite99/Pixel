@@ -1,8 +1,9 @@
 # Píxel, asistente de voz
 
-Píxel es un agente de inteligencia artificial creado por Divergencia IA, con cara de robot, hecho para una feria de tecnología. Vive en una aplicación web que se instala en el celular: oye la palabra **«Píxel»**, piensa con Gemini (o con el modelo que elijas), contesta con una voz natural de alta calidad y mueve su cara en 3D. Se entra con la cuenta de Google y cada persona tiene su perfil. Un computador y un ESP32 son opcionales: le dan micrófono y altavoz propios y le dejan manejar los aparatos de la casa.
+Píxel es un agente de inteligencia artificial creado por Divergencia IA, con cara de robot, hecho para una feria de tecnología. Vive en una aplicación web que se instala en el celular: oye la palabra **«Píxel»**, piensa con la inteligencia artificial que elijas (cada persona pone su clave), contesta con una voz natural de alta calidad y mueve su cara en 3D. Se entra con la cuenta de Google y cada persona tiene su perfil. Un computador y un ESP32 son opcionales: le dan micrófono y altavoz propios y le dejan manejar los aparatos de la casa.
 
 - **Aplicación:** https://pixelassitance.web.app (en el celular, con Chrome).
+- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.1.0/pixel_2.1.0_amd64.deb) y [Windows (.exe, versión de prueba)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.1.0/Pixel-2.1.0-Setup.exe), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
 - **Versión actual:** 2.1.0, del 11 de noviembre de 2026.
 - **Cómo está hecho por dentro:** `CLAUDE.md`. **Mediciones y decisiones:** `memoria.md`.
 
@@ -22,6 +23,8 @@ Píxel es un agente de inteligencia artificial creado por Divergencia IA, con ca
 | Su memoria | «Píxel, recuerda que mi hermana se llama Laura». Se ve como un mapa en Personalidad y, en el computador, en Obsidian. |
 | Contactos | «Píxel, guarda el número de Ana: 300 123 4567». Están en la pestaña Contactos, con su celular y su correo. |
 | Tu perfil | Toca tu foto arriba: cómo te llama, si te trata de tú o de usted, tus gustos y en qué te ayuda. También con un archivo Markdown. |
+| Hablarle al computador | En Inicio, «Usar el PC»: el celular hace de micrófono del Píxel de tu casa, y su voz sale en el celular. |
+| Ver lo que hizo | Pestaña Registro: cada correo enviado, evento, WhatsApp, orden a un aparato o recordatorio, con su hora y desde dónde. |
 
 En **Ajustes** se elige la voz de Píxel y la IA con la que piensa, y cada modo tiene su interruptor, que dice si gasta el cupo gratis de Gemini o no. Ahí también se ve cuánto se ha gastado.
 
@@ -35,7 +38,7 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 
 | Versión | Fecha | Qué trae |
 |---|---|---|
-| **2.1.0** | 11 nov 2026 | Confirmaciones estrictas para enviar correos y crear eventos, destinatarios sacados solo de Contactos, correos con saltos de línea reales y un botón para traer los contactos de Google (aún sin probar de punta a punta). |
+| **2.1.0** | 11 nov 2026 | Instaladores para Linux y Windows, página de entrada, la IA de cada cuenta (sin Gemini incluido), registro de acciones, el celular como micrófono del computador, confirmaciones estrictas para correos y eventos, destinatarios solo de Contactos (también en WhatsApp) y un botón para traer los contactos de Google (aún sin probar de punta a punta). |
 | **2.0.0** | 10 nov 2026 | Entrada con Google, perfil con foto y archivo Markdown, Píxel se presenta, voz de alta calidad (Supertonic 3), Contactos, la IA con tu propia clave y WhatsApp sin recargar la pestaña. |
 | **1.3.1** | 10 nov 2026 | Sonidos al llamarlo, al pensar y al terminar. WhatsApp en el computador usa la pestaña que ya está abierta. |
 | **1.3.0** | 10 nov 2026 | Pestaña Ajustes: un interruptor por modo y el consumo de Gemini. Consumo bajo por defecto. |
@@ -46,8 +49,18 @@ No hay 1.1.0: la segunda fase salió directamente como 1.2.1.
 
 ### 2.1.0 · 11 de noviembre de 2026
 
-Arreglos de seguridad en el correo y los eventos, y una función nueva de contactos.
+Píxel se puede instalar, cada persona usa su propia IA, y se ve todo lo que hizo. Además, arreglos de seguridad en el correo y los eventos.
 
+- **Instaladores** (en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases/tag/v2.1.0)):
+  - `pixel_2.1.0_amd64.deb` para Ubuntu y Debian: `sudo apt install ./pixel_2.1.0_amd64.deb`. El código va compilado.
+  - `Pixel-2.1.0-Setup.exe` para Windows, como versión de prueba: aún no se ha probado en un Windows de verdad. En Windows no hay Bluetooth, volumen, música del sistema ni WhatsApp desde el computador.
+  - Cada uno lleva su propio Python. La primera vez baja unos 600 MB (voces y reconocimiento de voz, comprobados con su huella) y abre el panel para vincular el computador con la cuenta.
+  - Sin Gemini ni Ollama, Píxel dice que le falta la IA en vez de solo sonar el pitido.
+- **Página de entrada:** sin sesión, la app abre una página que explica Píxel, con las descargas y «Entrar con Google». Ya dentro, «Primeros pasos» pide vincular el Píxel y poner la clave de IA.
+- **La IA es de cada cuenta:** ya no hay Gemini incluido. Cada persona pone su clave en Ajustes → Proveedor de IA; sin clave, Píxel lo dice y no llama a ninguna IA.
+- **Registro de acciones:** pestaña nueva con lo que Píxel hizo de verdad (correos, eventos, WhatsApp, aparatos, recordatorios, contactos de Google), con hora y si fue en el celular, el computador o el PC de casa. Se anota después de hacerlo, nunca antes.
+- **El celular como micrófono del computador:** «Usar el PC» en Inicio. El celular corta las frases y las manda al Píxel de la casa; piensa el computador y su voz vuelve al celular. Sirve sin clave de IA en la app.
+- **WhatsApp:** espera a que lleguen los contactos y, si dos se parecen igual, pregunta a cuál escribir.
 - **Correo:** solo «sí», «envíalo» o «mándalo» confirman el envío. Una frase cualquiera con «manda» ya no envía el borrador pendiente.
 - **Destinatarios:** un correo sale solo de Contactos o de las notas de personas. Si hay dos contactos que encajan igual, Píxel pregunta cuál. Ya no se busca en el historial de Gmail para adivinar.
 - **Contactos al entrar:** la búsqueda espera a que llegue la lista desde Firebase.
@@ -163,6 +176,10 @@ Para volver a publicar una versión vieja: `git checkout vX.Y.Z` y luego `npx fi
 | El ESP32 | `~/Arduino/Pixel_portal/` (fuera de este repositorio) | Micrófono y altavoz, y puente de infrarrojo, relé y encendido por red. |
 
 ## Puesta en marcha del computador
+
+Con el instalador (arriba) no hace falta nada de esto: trae su propio Python y baja lo demás la primera vez. Para armar los instaladores: `instalador/construir.sh` (ver `CLAUDE.md`).
+
+Desde el código:
 
 - Python 3.10 en `.venv/` con faster-whisper 1.2.1, piper-tts 1.8.0, numpy, yt-dlp y androidtvremote2.
 - Ollama en `127.0.0.1:11434` con `qwen2.5:3b`, de respaldo de Gemini.
