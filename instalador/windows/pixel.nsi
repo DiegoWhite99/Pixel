@@ -51,10 +51,27 @@ VIAddVersionKey /LANG=0 "LegalCopyright" "${EDITOR}"
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "Spanish"
 
-; Cierra Pixel si esta abierto (una actualizacion o la desinstalacion necesitan sus archivos libres)
+; Cierra Pixel si esta abierto (una actualizacion o la desinstalacion necesitan sus archivos libres) y ESPERA a
+; que suelte sus archivos. Ojo (prueba de GitHub, 11 nov): este instalador es de 32 bits, asi que "powershell"
+; es el de 32 bits, y ahi Get-Process no ve la ruta (.Path) de un proceso de 64 bits: el filtro no encontraba a
+; Pixel, no lo cerraba y la desinstalacion dejaba la carpeta python. Win32_Process (CIM) da ExecutablePath
+; desde 32 o 64 bits. Ver tambien BORRAR_CARPETA.
 !macro CERRAR_PIXEL
-  nsExec::Exec `powershell -NoProfile -NonInteractive -Command "Get-Process python,pythonw -ErrorAction SilentlyContinue | Where-Object { $$_.Path -like '$INSTDIR\python\*' } | Stop-Process -Force"`
+  nsExec::Exec `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$d = '$INSTDIR\python\*'; $$p = @(Get-CimInstance Win32_Process | Where-Object { $$_.ExecutablePath -like $$d }); foreach ($$x in $$p) { Stop-Process -Id $$x.ProcessId -Force -ErrorAction SilentlyContinue }; foreach ($$x in $$p) { Wait-Process -Id $$x.ProcessId -Timeout 20 -ErrorAction SilentlyContinue }"`
   Pop $0
+  Sleep 1000
+!macroend
+
+; RMDir /r con dos reintentos: un archivo que Windows aun no suelta (el antivirus, un proceso que acaba de
+; cerrarse) no debe dejar el programa a medio borrar
+!macro BORRAR_CARPETA CARPETA
+  RMDir /r "${CARPETA}"
+  IfFileExists "${CARPETA}\*.*" 0 +5
+    Sleep 2000
+    RMDir /r "${CARPETA}"
+    IfFileExists "${CARPETA}\*.*" 0 +2
+      Sleep 4000
+  RMDir /r "${CARPETA}"
 !macroend
 
 Function AbrirPixel
@@ -64,8 +81,8 @@ FunctionEnd
 Section "${NOMBRE} (necesario)" SecPixel
   SectionIn RO
   !insertmacro CERRAR_PIXEL
-  RMDir /r "$INSTDIR\python"
-  RMDir /r "$INSTDIR\app"
+  !insertmacro BORRAR_CARPETA "$INSTDIR\python"
+  !insertmacro BORRAR_CARPETA "$INSTDIR\app"
   SetOutPath "$INSTDIR"
   File /r "${ORIGEN}\python"
   File /r "${ORIGEN}\app"
@@ -109,8 +126,8 @@ Section "Uninstall"
   RMDir "$SMPROGRAMS\${NOMBRE}"
   Delete "$DESKTOP\${NOMBRE}.lnk"
   Delete "$SMSTARTUP\${NOMBRE}.lnk"
-  RMDir /r "$INSTDIR\python"
-  RMDir /r "$INSTDIR\app"
+  !insertmacro BORRAR_CARPETA "$INSTDIR\python"
+  !insertmacro BORRAR_CARPETA "$INSTDIR\app"
   Delete "$INSTDIR\pixel.ico"
   Delete "$INSTDIR\LEEME.txt"
   Delete "$INSTDIR\Desinstalar.exe"

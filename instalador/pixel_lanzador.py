@@ -30,7 +30,7 @@ import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "2.1.1"
+VERSION = "2.1.2"
 APP = os.path.dirname(os.path.abspath(__file__))
 WINDOWS = os.name == "nt"
 REGISTRO_MAX = 5 * 1024 * 1024        # pixel.log: al pasar de esto se guarda como pixel.log.1
