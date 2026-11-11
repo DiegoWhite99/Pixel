@@ -1,7 +1,7 @@
 /* Fase 12 - Pixel en la app: el celular es Pixel entero, sin PC ni servidor.
    Oye con el reconocimiento de voz del navegador (Web Speech API: Chrome en Android, Safari en
-   iPhone), piensa con Gemini a traves de Firebase AI Logic (la clave de Gemini la guarda Firebase,
-   no esta en la pagina) y habla con la voz del propio celular (speechSynthesis). Los recordatorios
+   iPhone), piensa con el proveedor de IA y la clave que cada cuenta pone en Ajustes (proveedores.js;
+   desde el 11 nov no hay IA incluida: sin clave no piensa) y habla con su voz. Los recordatorios
    y los ajustes van en usuarios/<uid>/ (database.rules.json).
    Solo en la app de internet: app.js lo carga al iniciar Firebase y llama a Agente.iniciar(app).
    Usa de app.js: nube, cara, $, esc, toast, pill, contar, SDK, dichoHasta y agenteTocado.
@@ -14,15 +14,11 @@
 "use strict";
 (function () {
   // ------------------------------------------------------------------ ajustes
-  // El cupo gratis de Gemini es por modelo y por dia: si uno lo agota (429 PerDay), se sigue con el
-  // siguiente hasta que se renueve (medianoche del Pacifico). gemini-flash-lite-latest es el mismo 3.5.
-  const MODELOS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
-  const MODULOS = ["cerebro.js", "google.js", "tiempo.js", "aparatos.js", "musica.js", "humor.js", "apuntes.js", "contactos.js", "whatsapp.js", "ajustes.js", "perfil.js"];
+  const MODULOS = ["cerebro.js", "google.js", "tiempo.js", "aparatos.js", "musica.js", "humor.js", "apuntes.js", "contactos.js", "whatsapp.js", "ajustes.js", "perfil.js", "registro.js"];
   const MAX_RONDAS = 4;                         // vueltas herramienta -> Gemini en un mismo turno
   const CONFIRMAR_MS = 15000;                   // tras preguntar "¿lo envío?", se contesta sin decir "Píxel"
-  // Firebase App Check (consola > App Check > app web Pixel > reCAPTCHA v3): su clave de sitio. Si en la
-  // consola se "aplica" App Check a Firebase AI Logic, sin esto Gemini contesta 401. Vacia = sin App Check.
-  const APP_CHECK_CLAVE = "";
+  // Sin clave de IA (Ajustes -> Proveedor de IA) Pixel no puede pensar: lo dice y lo deja escrito
+  const SIN_CLAVE = "Para pensar necesito tu clave de inteligencia artificial. Ponla en Ajustes, en «Proveedor de IA».";
   const MAX_TURNOS = 4;                         // pares usuario/Pixel que se recuerdan
   const TURNOS_AHORRO = 2;                      // con "Consumo bajo" (Ajustes): cada pregunta lleva menos historial
   // Fase 14 - Ajustes: un interruptor por modo (usuarios/<uid>/preferencias/modos/<id>, lo escribe ajustes.js).
@@ -667,90 +663,46 @@
     partes.push(Object.assign({}, p));
   }
 
-  // 429 de Gemini: el plan gratis tiene un limite por minuto (unas 15 peticiones) y otro por dia.
-  const textoDe = (e) => String((e && (e.message || e.code)) || e) + " " + JSON.stringify((e && e.customErrorData) || "");
-  const esCupo = (e) => /\b429\b|RESOURCE_EXHAUSTED|quota/i.test(textoDe(e));
-  const cupoDelDia = (e) => /PerDay|per day|daily/i.test(textoDe(e));
-  function esperaCupo(e) {                      // lo que Google dice que hay que esperar, entre 5 y 20 s
-    const m = /retry ?(?:in|Delay)["':\s]*([\d.]+)\s*s/i.exec(textoDe(e));
-    return Math.min(20000, Math.max(5000, m ? Number(m[1]) * 1000 : 12000));
-  }
-
+  // Los errores de la IA, dichos de forma que se entienda de quien es el problema (la clave es del usuario)
   function textoError(e, prov) {
     if (cara) cara.emocion("triste", 2600);
     const s = String((e && (e.message || e.code)) || e);
     console.warn("agente:", e);
-    if (prov && prov.propio) {                  // con la clave del usuario: decir de quien es el problema
-      const quien = (Proveedores.LISTA[prov.proveedor] || {}).nombre || "tu proveedor", st = e && e.status;
-      if (!navigator.onLine || /failed to fetch|network|timeout|timed out/i.test(s)) { est.iaError = "red"; return "No tengo conexión con internet ahora mismo."; }
-      est.iaError = "propia";
-      if (st === 401 || st === 403 || /api key|apikey|authentication|unauthori|invalid.*key|permission/i.test(s)) return `La clave de ${quien} no funciona. Revísala en Ajustes.`;
-      if (st === 402 || /credit|balance|billing|insufficient|quota|payment/i.test(s)) return `Tu cuenta de ${quien} no tiene saldo o se le acabó el cupo. Revísala, o vuelve a Píxel gratis en Ajustes.`;
-      if (st === 429) return `${quien} dice que le estoy preguntando demasiado rápido. Dame un minuto.`;
-      if (st === 404 || /model/i.test(s)) return `${quien} no reconoce el modelo elegido. Elige otro en Ajustes.`;
-      return `${quien} me dio un error. Revisa la clave en Ajustes, o vuelve a Píxel gratis.`;
-    }
-    if (esCupo(e)) {
-      if (!cupoDelDia(e)) { est.iaError = "minuto"; return "Me están haciendo muchas preguntas seguidas. Dame un minuto y vuelve a preguntarme."; }
-      est.iaError = "cupo";
-      return "Se acabó el cupo gratis de Gemini por hoy. Mañana vuelvo a pensar.";
-    }
-    if (/App Check/i.test(s)) {
-      est.iaError = "appcheck";
-      aviso("Firebase pide la verificación de apps (App Check) para usar Gemini y esta app aún no la tiene configurada.");
-      return "Firebase no me deja usar la inteligencia artificial: falta configurar la verificación de apps.";
-    }
-    if (!navigator.onLine || /network|failed to fetch|timeout|timed out|abort/i.test(s)) { est.iaError = "red"; return "No tengo conexión con internet ahora mismo."; }
-    est.iaError = "error";
-    return "Ahora no puedo pensar. Inténtalo otra vez en un momento.";
+    if (!navigator.onLine || /failed to fetch|network|timeout|timed out|abort/i.test(s)) { est.iaError = "red"; return "No tengo conexión con internet ahora mismo."; }
+    if (!prov || !prov.propio) { est.iaError = "sinclave"; return SIN_CLAVE; }
+    const quien = (Proveedores.LISTA[prov.proveedor] || {}).nombre || "tu proveedor", st = e && e.status;
+    est.iaError = "propia";
+    if (st === 401 || st === 403 || /api key|apikey|authentication|unauthori|invalid.*key|permission/i.test(s)) return `La clave de ${quien} no funciona. Revísala en Ajustes.`;
+    if (st === 402 || /credit|balance|billing|insufficient|quota|payment/i.test(s)) return `Tu cuenta de ${quien} no tiene saldo o se le acabó el cupo. Revísala en Ajustes.`;
+    if (st === 429) return `${quien} dice que le estoy preguntando demasiado rápido. Dame un minuto.`;
+    if (st === 404 || /model/i.test(s)) return `${quien} no reconoce el modelo elegido. Elige otro en Ajustes.`;
+    return `${quien} me dio un error. Revisa la clave en Ajustes.`;
   }
 
-  // Un turno con Gemini. Puede dar varias vueltas: si una herramienta devuelve datos ({respuesta}),
-  // se le devuelven a Gemini y lo que conteste se dice. Las que devuelven texto ya lo dijeron.
-  // El proveedor de IA elegido en Ajustes (proveedores.js): {propio: false} = Gemini gratis por Firebase
-  const proveedor = () => (typeof Proveedores !== "undefined" ? Proveedores.actual() : {proveedor: "pixel", propio: false});
-  const modeloUso = (prov) => (prov.propio ? Proveedores.claveUso(prov) : modeloDeHoy());
+  // Un turno con la IA. Puede dar varias vueltas: si una herramienta devuelve datos ({respuesta}),
+  // se le devuelven a la IA y lo que conteste se dice. Las que devuelven texto ya lo dijeron.
+  // El proveedor de IA de esta cuenta (Ajustes, proveedores.js): {propio: false} = sin clave, no se piensa
+  const proveedor = () => (typeof Proveedores !== "undefined" ? Proveedores.actual() : {proveedor: "", propio: false});
+  const modeloUso = (prov) => Proveedores.claveUso(prov);
 
   async function pensar(texto, id) {
     const dicho = [];
     const decir = (f) => { dicho.push(f); decirFrase(f); };
     const prov = proveedor();
-    if (!est.ai && !prov.propio) {
-      decir(est.aviso || "Todavía me estoy despertando. Inténtalo en unos segundos.");
+    if (!prov.propio) {
+      est.iaError = "sinclave";
+      aviso(SIN_CLAVE);
+      decir(SIN_CLAVE);
     } else {
       habla.generando = true;
       try {
         const generationConfig = {maxOutputTokens: 1500, thinkingConfig: {thinkingLevel: "LOW"}};
-        const crear = () => (prov.propio
-          ? Proveedores.motor(prov, {sistema: sistema(texto), herramientas: herramientas(), generationConfig})
-          : est.ia.getGenerativeModel(est.ai, {model: modeloDeHoy(), systemInstruction: sistema(texto), tools: herramientas(), generationConfig}, {timeout: 30000}));
-        let modelo = crear();
+        const modelo = Proveedores.motor(prov, {sistema: sistema(texto), herramientas: herramientas(), generationConfig});
         const contents = est.historial.concat([{role: "user", parts: [{text: texto}]}]);
-        let reintentado = false;
         for (let ronda = 0; ronda < MAX_RONDAS; ronda++) {
           const partes = [], llamadas = [];
           let buf = "", primera = !dicho.length;
-          let r;
-          try {
-            r = await modelo.generateContentStream({contents});
-          } catch (e) {
-            // cupo del dia agotado en este modelo: el siguiente, sin decir nada
-            while (!prov.propio && esCupo(e) && cupoDelDia(e) && siguienteModelo()) {   // con clave propia no se cambia de modelo
-              modelo = crear();
-              try { r = await modelo.generateContentStream({contents}); e = null; break; } catch (e2) { e = e2; }
-            }
-            if (!e) { /* ya respondio otro modelo */ }
-            // limite por minuto: se avisa, se espera lo que pide Google y se intenta una vez mas
-            else if (prov.propio || !esCupo(e) || cupoDelDia(e) || reintentado) throw e;
-            else {
-              reintentado = true;
-              console.warn("agente: limite por minuto de Gemini, reintento", e);
-              decir("Un momento, que tengo muchas preguntas a la vez.");
-              await esperar(esperaCupo(e));
-              if (id !== est.turnoId) return;
-              r = await modelo.generateContentStream({contents});
-            }
-          }
+          const r = await modelo.generateContentStream({contents});
           let gasto = null;                     // los tokens vienen en los trozos (el resumen final del SDK no los trae)
           for await (const trozo of r.stream) {
             if (trozo && trozo.usageMetadata) gasto = trozo.usageMetadata;
@@ -796,7 +748,7 @@
           contents.push({role: "user", parts: llamadas.map((ll, i) => ({functionResponse: Object.assign({name: ll.name, response: resultados[i]}, ll.id ? {id: ll.id} : {})}))});
         }
         est.iaError = "";
-        if (est.aviso.startsWith("Firebase pide")) est.aviso = "";
+        if (est.aviso === SIN_CLAVE) est.aviso = "";
       } catch (e) {
         if (id !== est.turnoId) return;
         decir(textoError(e, prov));
@@ -825,6 +777,19 @@
   function confirmar(p) {
     est.pendiente = Object.assign({hasta: Date.now() + CONFIRMAR_MS, caduca: Date.now() + (p.dura || 60000)}, p);
     pintar();
+  }
+
+  // 11 nov: registro de acciones (registro.js lo muestra). Lo que Pixel hizo de verdad fuera de la charla
+  // (correos, eventos, WhatsApp, aparatos, recordatorios), con su hora, en usuarios/<uid>/registro.
+  // Se llama despues de hacerlo, no antes. Nunca frena ni rompe la accion.
+  const APARATO = typeof navigator !== "undefined" && /Android|iPhone|iPad/i.test(navigator.userAgent || "") ? "Celular" : "Computador";
+  function registrar(tipo, texto, detalle) {
+    try {
+      if (!nube.uid || !nube.d) return;
+      const d = nube.d, datos = {t: d.serverTimestamp(), tipo: String(tipo).slice(0, 20), texto: String(texto || "").slice(0, 200), aparato: APARATO};
+      if (detalle) datos.detalle = String(detalle).slice(0, 500);
+      d.set(d.push(d.ref(nube.db, `usuarios/${nube.uid}/registro`)), datos).catch((e) => console.warn("agente: registro", e));
+    } catch (e) { console.warn("agente: registro", e); }
   }
 
   function caducarPendiente() {
@@ -943,6 +908,7 @@
         console.warn("agente: recordatorio", e);
         return "No pude guardar el recordatorio. Revisa la conexión e inténtalo otra vez.";
       }
+      registrar("recordatorio", `Creé un recordatorio: ${texto}`, "Para el " + new Date(hora).toLocaleString("es", {weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit"}));
       return `Listo, te recuerdo ${texto} ${cuandoDicho(hora)}.`;
     }
     if (nombre === "ver_recordatorios") {
@@ -969,6 +935,7 @@
         console.warn("agente: borrar", e);
         return "No pude borrar el recordatorio. Revisa la conexión.";
       }
+      registrar("recordatorio", todos ? `Borré todos los recordatorios (${elegidos.length})` : `Borré el recordatorio: ${elegidos[0].texto}`);
       return todos ? "Borré todos tus recordatorios." : `Borré el recordatorio de ${elegidos[0].texto}.`;
     }
     return "";
@@ -1158,11 +1125,12 @@
     // o la guia de Eisenhower). Manda el primero de MODULOS que conteste.
     let propio = null;
     for (const m of modulos) { try { if (m.hero && usar(m)) { propio = m.hero(); if (propio) break; } } catch (er) { propio = null; } }
-    pill("#pill-esp", oye.quiere ? "ok" : SR ? "" : "warn", propio && propio.pill ? propio.pill : oye.quiere ? "Escuchando" : SR ? "Micrófono apagado" : "Sin reconocimiento de voz");
-    pill("#pill-ollama", !est.ai ? "" : est.iaError ? "warn" : "ok",
-      !est.ai ? "IA cargando…" : est.iaError === "cupo" ? "Gemini sin cupo hoy" : est.iaError === "red" ? "Sin internet"
-        : est.iaError === "appcheck" ? "Falta App Check" : est.iaError === "minuto" ? "Gemini: espera un minuto"
-        : est.iaError === "propia" ? "IA: error con tu clave" : est.iaError ? "Gemini con error" : nombreIA());
+    const delPc = !!(window.PixelOido && window.PixelOido.activo());     // oido.js: el celular es el microfono del PC
+    pill("#pill-esp", oye.quiere || delPc ? "ok" : SR ? "" : "warn", propio && propio.pill ? propio.pill : oye.quiere ? "Escuchando"
+      : delPc ? "Micrófono: lo oye el PC" : SR ? "Micrófono apagado" : "Sin reconocimiento de voz");
+    const conClave = proveedor().propio;
+    pill("#pill-ollama", !conClave || est.iaError ? "warn" : "ok",
+      !conClave ? "IA: sin clave" : est.iaError === "red" ? "Sin internet" : est.iaError ? "IA: error con tu clave" : nombreIA());
     if (cara) cara.estado(e === "hablando" ? "hablando" : e === "pensando" ? "pensando" : oye.quiere ? "escuchando" : "normal");
     $("#zzz").hidden = true;
     $("#latido").className = "latido" + (e === "hablando" ? " habla" : e === "escuchando" || e === "pensando" ? " ok" : "");
@@ -1173,6 +1141,7 @@
         : e === "escuchando" ? (ventana ? ["Dime…", "Te escucho: ahora no hace falta decir Píxel."]
           : oido ? ["Te oigo…", "Si es para mí, empieza con «Píxel»."]
           : ["Te escucho", `Di «${ACTIVACION}» y tu pregunta. Deja la app abierta en pantalla.`])
+        : delPc ? ["Te escucha el PC", "Lo que digas lo oye tu computador. Para hablar conmigo aquí, toca Escuchar."]
         : ["¡Hola! Soy Píxel", SR ? "Toca Escuchar y háblame, o escríbeme abajo." : "Este navegador no puede oírme: escríbeme abajo, o abre la app en Chrome (Android) o Safari (iPhone)."];
       const enMusica = propio && (e === "escuchando" || e === "listo") && !ventana && !oido;
       $("#hero-estado").textContent = enMusica ? propio.titulo : titulo;
@@ -1274,34 +1243,21 @@
     } catch (e) { console.warn("agente: sin agente.md", e); }
   }
 
-  // Una pregunta suelta a Gemini que devuelve JSON (el cerebro la usa para aprender del usuario).
-  // No pasa por la voz ni por el historial.
+  // Una pregunta suelta a la IA que devuelve JSON (el cerebro la usa para aprender del usuario).
+  // No pasa por la voz ni por el historial. Sin clave de IA no hay pregunta: error.
   //   motivo: para la cuenta del uso (Ajustes): "aprender", "clasificar", "analizar"...
   async function generarJSON(prompt, instrucciones, motivo) {
     const prov = proveedor();
-    if (prov.propio) {
-      const r = await Proveedores.motor(prov, {sistema: instrucciones || "", generationConfig: {maxOutputTokens: 1200, responseMimeType: "application/json"}}).generateContent(prompt);
-      contarUso(motivo || "otro", modeloUso(prov), r.response && r.response.usageMetadata);
-      return JSON.parse(r.response.text());
-    }
-    if (!est.ai) throw new Error("IA sin cargar");
-    for (;;) {
-      const modelo = est.ia.getGenerativeModel(est.ai, {model: modeloDeHoy(), systemInstruction: instrucciones || undefined,
-        generationConfig: {maxOutputTokens: 1200, responseMimeType: "application/json", thinkingConfig: {thinkingLevel: "LOW"}}}, {timeout: 30000});
-      try {
-        const r = await modelo.generateContent(prompt);
-        contarUso(motivo || "otro", modeloDeHoy(), r.response && r.response.usageMetadata);
-        return JSON.parse(r.response.text());
-      } catch (e) {
-        if (!(esCupo(e) && cupoDelDia(e) && siguienteModelo())) throw e;
-      }
-    }
+    if (!prov.propio) throw new Error("Sin clave de IA: ponla en Ajustes.");
+    const r = await Proveedores.motor(prov, {sistema: instrucciones || "", generationConfig: {maxOutputTokens: 1200, responseMimeType: "application/json"}}).generateContent(prompt);
+    contarUso(motivo || "otro", modeloUso(prov), r.response && r.response.usageMetadata);
+    return JSON.parse(r.response.text());
   }
 
-  // Lo que dice la pildora de la IA: el gratis o el modelo de la clave del usuario
+  // Lo que dice la pildora de la IA: el modelo de la clave de esta cuenta, o que falta la clave
   function nombreIA() {
     const prov = proveedor();
-    return prov.propio ? "IA: " + Proveedores.nombreModelo(Proveedores.sanear(prov.modelo)) + " · tu clave" : "IA: Gemini";
+    return prov.propio ? "IA: " + Proveedores.nombreModelo(Proveedores.sanear(prov.modelo)) + " · tu clave" : "IA: sin clave";
   }
 
   // ------------------------------------------------------------------ cuanto se gasta de Gemini (Fase 14)
@@ -1326,22 +1282,10 @@
     }).catch((er) => console.warn("agente: no pude apuntar el uso de Gemini", er));
   }
 
-  // ------------------------------------------------------------------ que modelo usar hoy
-  // El dia del cupo de Google empieza a medianoche del Pacifico (UTC-8; con el horario de verano, 1 h antes)
+  // ------------------------------------------------------------------ el dia del uso
+  // El uso se apunta por dia, cortando a medianoche del Pacifico (UTC-8), como el cupo de Google: asi
+  // los dias de antes (cuando habia Gemini incluido) siguen en la misma cuenta
   const diaDelCupo = () => new Date(Date.now() - 8 * 3600000).toISOString().slice(0, 10);
-  function modeloDeHoy() {
-    let v = null;
-    try { v = JSON.parse(localStorage.getItem("pixel.modelo") || "null"); } catch (e) { v = null; }
-    const i = v && v.dia === diaDelCupo() ? Math.min(v.i, MODELOS.length - 1) : 0;
-    return MODELOS[i];
-  }
-  function siguienteModelo() {
-    const i = MODELOS.indexOf(modeloDeHoy());
-    if (i + 1 >= MODELOS.length) return false;
-    try { localStorage.setItem("pixel.modelo", JSON.stringify({dia: diaDelCupo(), i: i + 1})); } catch (e) { return false; }
-    console.warn("agente: el cupo de hoy de", MODELOS[i], "se acabo; sigo con", MODELOS[i + 1]);
-    return true;
-  }
 
   // ------------------------------------------------------------------ entrada desde app.js
   async function iniciar(app) {
@@ -1349,21 +1293,13 @@
     est.montado = true;
     montarDom();
     usuario(nube.usuario);
-    // las instrucciones y los modulos se cargan mientras llega la IA
-    const piezas = cargarInstrucciones().then(async () => { for (const f of MODULOS) await cargarScript(f); });
+    // las instrucciones y los modulos (con sus herramientas) antes de la primera pregunta
     try {
-      if (APP_CHECK_CLAVE) {
-        const ac = await import(SDK + "firebase-app-check.js");
-        if (location.hostname === "localhost") self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;   // en pruebas: token de depuracion (se registra en la consola)
-        ac.initializeAppCheck(app, {provider: new ac.ReCaptchaV3Provider(APP_CHECK_CLAVE), isTokenAutoRefreshEnabled: true});
-      }
-      const ia = await import(SDK + "firebase-ai.js");
-      await piezas;                            // que Gemini no conteste sin sus instrucciones ni herramientas
-      est.ia = ia;
-      est.ai = ia.getAI(app, {backend: new ia.GoogleAIBackend()});
+      await cargarInstrucciones();
+      for (const f of MODULOS) await cargarScript(f);
     } catch (e) {
-      console.warn("agente: no cargo firebase-ai", e);
-      est.aviso = "No pude cargar la IA de Gemini. Revisa la conexión y recarga la página.";
+      console.warn("agente: no cargaron las piezas", e);
+      est.aviso = "No pude cargar todo. Revisa la conexión y recarga la página.";
     }
     pintar();
   }
@@ -1387,11 +1323,12 @@
   // Lo que usan los modulos (cerebro.js, google.js, tiempo.js, aparatos.js)
   const nucleo = {
     est, oye, decir: decirFrase, finHablar, pararRec, volverAEscuchar, ponerEstado, conversar, pintar, aviso, sonido, beep: () => sonido("aviso"), ocupado,
-    conTiempo, esperar, confirmar, anunciar, generarJSON, desbloquear, orden, mostrarVideo, escuchar: empezar,
-    hayIA: () => !!est.ai || proveedor().propio, ajustes: () => est.ajustes, sistema, herramientas,
+    conTiempo, esperar, confirmar, registrar, anunciar, generarJSON, desbloquear, orden, mostrarVideo, escuchar: empezar,
+    dejarDeEscuchar: parar, callar,              // oido.js: cuando el celular pasa a ser el microfono del PC
+    hayIA: () => proveedor().propio, ajustes: () => est.ajustes, sistema, herramientas,
     voz: {escuchar: escucharVoz, preparar: prepararVoz, actual: () => vozPixel() || "celular", celular: () => voces().map((v) => ({id: idVoz(v), nombre: v.name, lang: v.lang}))},
-    // Ajustes (ajustes.js): los interruptores, el modelo de hoy y el dia del cupo de Google
-    activo, modos: (o) => { modos = Object.assign({}, o || {}); pintar(); }, MODOS_DEFECTO, modeloDeHoy, diaDelCupo, MODELOS, contarUso,
+    // Ajustes (ajustes.js): los interruptores y el dia del uso
+    activo, modos: (o) => { modos = Object.assign({}, o || {}); pintar(); }, MODOS_DEFECTO, diaDelCupo, contarUso,
   };
 
   window.Agente = {iniciar, usuario, nivelBoca, guardarAjustes, probar, pintar, modulo, nucleo,

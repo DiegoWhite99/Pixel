@@ -47,6 +47,30 @@
           "$id": {
             ".read": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid)"
           }
+        },
+        "registro": {
+          ".read": "auth != null && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()"
+        },
+        "frases": {
+          "$id": {
+            ".write": "auth != null && !data.exists() && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()",
+            ".validate": "newData.hasChildren(['uid', 'pcm', 't']) && newData.child('uid').val() === auth.uid && newData.child('pcm').isString() && newData.child('pcm').val().length <= 450000 && newData.child('t').isNumber()"
+          }
+        },
+        "escuchando": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()",
+            ".validate": "newData.isNumber()"
+          }
+        },
+        "habla": {
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()",
+            ".write": "auth != null && auth.uid === $uid && !newData.exists()",
+            "$id": {
+              ".write": "auth != null && auth.uid === $uid && !newData.exists()"
+            }
+          }
         }
       }
     },
@@ -76,6 +100,31 @@
             },
             "creado": {
               ".validate": "newData.isNumber()"
+            },
+            "$otro": {
+              ".validate": false
+            }
+          }
+        },
+        "registro": {
+          ".write": "auth != null && auth.uid === $uid && !newData.exists()",
+          "$id": {
+            ".write": "auth != null && auth.uid === $uid && (!data.exists() || !newData.exists())",
+            ".validate": "newData.hasChildren(['t', 'tipo', 'texto'])",
+            "t": {
+              ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+            },
+            "tipo": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 20"
+            },
+            "texto": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 200"
+            },
+            "detalle": {
+              ".validate": "newData.isString() && newData.val().length <= 500"
+            },
+            "aparato": {
+              ".validate": "newData.isString() && newData.val().length <= 30"
             },
             "$otro": {
               ".validate": false

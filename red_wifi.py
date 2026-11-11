@@ -11,6 +11,7 @@ su progreso y resultado salen en estado().
 
 import concurrent.futures
 import json
+import os
 import re
 import socket
 import struct
@@ -51,6 +52,11 @@ ESPRESSIF = {
 }
 TIPOS = ("luz", "enchufe", "tv", "altavoz", "camara", "impresora", "movil", "ordenador", "router", "pixel", "otro")
 
+# Windows (instalador .exe): no hay "ip" ni /proc/net/arp; "arp -a" y "ping -n" si. Sin ventana de consola.
+WINDOWS = os.name == "nt"
+_SIN_VENTANA = {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)} if WINDOWS else {}
+
+
 def _hay(texto, *palabras):
     """Alguna palabra que empiece por una de estas ("tv" vale en "tv-sala", no en "atv")."""
     return re.search(r"\b(?:%s)" % "|".join(map(re.escape, palabras)), texto) is not None
@@ -66,6 +72,8 @@ _vivos = {}             # mac -> {"ip", "ok", "t"}: ultima comprobacion de los g
 
 def _red():
     """(ip del PC, puerta de enlace, lista de IP a recorrer): la interfaz con ruta por defecto, o la primera con IP."""
+    if WINDOWS:
+        return _red_windows()
     ruta = subprocess.run(["ip", "-o", "route", "get", "1.1.1.1"], capture_output=True, text=True).stdout
     m = re.search(r"via (\S+) .*?src (\S+)", ruta)
     if m:
@@ -82,8 +90,39 @@ def _red():
     return ip, gateway, ips[:MAX_HOSTS]
 
 
+def _red_windows():
+    """Como _red(), sin "ip": la IP de la interfaz que sale a internet (un UDP sin enviar nada). Sin puerta de enlace."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("1.1.1.1", 80))
+        ip = s.getsockname()[0]
+    except OSError:
+        raise RuntimeError("El PC no está conectado a ninguna red.")
+    finally:
+        s.close()
+    base = ip.rsplit(".", 1)[0]
+    ips = ["%s.%d" % (base, i) for i in range(1, 255) if "%s.%d" % (base, i) != ip]
+    return ip, "", ips[:MAX_HOSTS]
+
+
+def _arp_windows():
+    """{ip: mac} de "arp -a" (las MAC vienen con guiones: 00-11-22-33-44-55)."""
+    tabla = {}
+    try:
+        salida = subprocess.run(["arp", "-a"], capture_output=True, text=True, timeout=5, **_SIN_VENTANA).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return tabla
+    for m in re.finditer(r"(\d+\.\d+\.\d+\.\d+)\s+([0-9a-fA-F]{2}(?:-[0-9a-fA-F]{2}){5})", salida):
+        mac = m.group(2).lower().replace("-", ":")
+        if mac not in ("00:00:00:00:00:00", "ff:ff:ff:ff:ff:ff"):
+            tabla[m.group(1)] = mac
+    return tabla
+
+
 def _arp():
     """{ip: mac} de las entradas ARP completas."""
+    if WINDOWS:
+        return _arp_windows()
     tabla = {}
     try:
         with open("/proc/net/arp") as f:
@@ -429,8 +468,11 @@ def comprobar(guardados):
         ip = tabla.get(mac, ip)
         ok = any(_puerto(ip, p) is not None for p in (80, 6668, 9999, 443, 8081))
         if not ok:
-            r = subprocess.run(["ping", "-c", "1", "-W", "1", ip], capture_output=True)
-            ok = r.returncode == 0
+            cmd = ["ping", "-n", "1", "-w", "1000", ip] if WINDOWS else ["ping", "-c", "1", "-W", "1", ip]
+            try:
+                ok = subprocess.run(cmd, capture_output=True, **_SIN_VENTANA).returncode == 0
+            except OSError:
+                ok = False
         _vivos[mac] = {"ip": ip, "ok": ok, "t": time.monotonic()}
 
 

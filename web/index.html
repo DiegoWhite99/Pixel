@@ -36,6 +36,7 @@
       <a href="#agente" data-vista="agente">Personalidad</a>
       <a href="#agenda" data-vista="agenda">Agenda</a>
       <a href="#contactos" data-vista="contactos" id="tab-contactos" hidden>Contactos</a>
+      <a href="#registro" data-vista="registro" id="tab-registro" hidden>Registro</a>
       <a href="#enfoque" data-vista="enfoque" id="tab-enfoque" hidden>Enfoque</a>
       <a href="#notas" data-vista="notas" id="tab-notas" hidden>Notas</a>
       <a href="#ajustes" data-vista="ajustes" id="tab-ajustes" hidden>Ajustes</a>
@@ -85,6 +86,14 @@
             <button class="btn" type="submit">Enviar</button>
           </form>
           <p class="aviso oido-aviso" id="ag-aviso" hidden></p>
+          <!-- Fase 11 (restaurada el 11 nov): este celular como microfono y altavoz del Pixel del PC (oido.js) -->
+          <div class="oido-pc" id="oido" hidden>
+            <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>
+            <div class="txt"><b id="oido-titulo">Hablar con el Píxel del PC</b><small id="oido-sub">Lo oye tu computador: su voz, su inteligencia artificial y sus acciones.</small></div>
+            <button class="btn primario" type="button" id="oido-btn" aria-pressed="false">Usar el PC</button>
+            <span class="oido-nivel" id="oido-nivel" hidden aria-hidden="true"><i></i></span>
+          </div>
+          <p class="aviso oido-aviso" id="oido-aviso" hidden></p>
           <div class="video" id="ag-video" hidden></div>
           <!-- Fase 13: la musica suena aqui mismo (musica.js) -->
           <div class="musica" id="ag-musica" hidden>
@@ -114,6 +123,17 @@
           <div class="titulo"><img src="icono.svg" alt="" class="bv-icono"><h2>Hola, soy Píxel</h2></div>
           <p id="bv-texto"></p>
           <div class="acciones"><button class="btn primario" type="button" id="bv-perfil">Ir a mi perfil</button><button class="btn" type="button" id="bv-luego">Después</button></div>
+        </div>
+        <!-- 11 nov: despues de entrar, lo que falta para usar Pixel: vincular el robot y poner la clave de IA (app.js, pintarPasos) -->
+        <div class="card pasos" id="pasos" hidden aria-live="polite">
+          <h2>Primeros pasos</h2>
+          <ol class="pasos-lista">
+            <li id="paso-vincular"><div class="txt"><b>Vincula tu Píxel</b><small id="paso-vincular-sub">Instala Píxel en tu computador y enlázalo con el código que dice en voz alta.</small></div>
+              <div class="acciones"><button class="btn primario" type="button" data-buscar-pixel>Buscar a Píxel</button><a class="btn" href="lobby.html#instalar">Descargar</a></div></li>
+            <li id="paso-clave"><div class="txt"><b>Pon tu clave de IA</b><small id="paso-clave-sub">Píxel piensa con el proveedor que elijas y tu propia clave.</small></div>
+              <div class="acciones"><a class="btn primario" href="#ajustes">Ir a Ajustes</a></div></li>
+          </ol>
+          <div class="acciones"><button class="btn suave" type="button" id="pasos-luego">Ocultar por ahora</button></div>
         </div>
         <!-- Fase 14: Inicio cambia con el enfoque: el pomodoro en marcha o la guia de Eisenhower (tiempo.js) -->
         <div class="card modo-enfoque" id="modo-enfoque" hidden aria-live="polite"></div>
@@ -390,11 +410,11 @@
       </div>
       <p class="sub">Infantil: la misma voz, más aguda, como en los dibujos animados.</p>
     </div>
-    <!-- Fase 14: el proveedor de IA (proveedores.js): Gemini gratis o el modelo que el usuario quiera con su clave -->
+    <!-- Fase 14: el proveedor de IA (proveedores.js). Desde el 11 nov no hay IA incluida: cada cuenta pone su clave -->
     <div class="card" id="card-ia">
       <div class="head"><div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="3"/><path d="M9 9h6v6H9zM9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg></div><h2>Proveedor de IA</h2></div>
         <span class="chip" id="ia-chip">…</span></div>
-      <p class="sub">Píxel piensa gratis con Gemini. Si quieres más cupo u otro modelo (GPT, Claude, Kimi…), elige el proveedor y pon tu clave. La clave se guarda <b>solo en este aparato</b>: no se sube a la nube ni a GitHub.</p>
+      <p class="sub">Para pensar, Píxel usa la inteligencia artificial que tú elijas, con <b>tu propia clave</b>: Gemini, Claude, GPT, Kimi (por OpenRouter), DeepSeek u otra compatible. Lo que gastes lo cobra tu proveedor. La clave se guarda <b>solo en este aparato y para esta cuenta</b>: no se sube a la nube ni a GitHub.</p>
       <form class="ia-form" id="f-ia" autocomplete="off">
         <label class="campo">Proveedor<select id="ia-proveedor"></select></label>
         <p class="nota" id="ia-ayuda"></p>
@@ -441,8 +461,22 @@
       </form>
       <div class="card">
         <input type="search" id="ct-buscar" placeholder="Buscar por nombre, número o correo" aria-label="Buscar contactos">
+        <div class="acciones"><button class="btn" type="button" id="ct-google">Exportar contactos</button></div>
+        <p class="nota" id="ct-google-estado" aria-live="polite"></p>
         <div class="lista-contactos" id="ct-lista"></div>
       </div>
+    </div>
+  </section>
+
+  <!-- 2.1.0: Registro de acciones (registro.js): lo que Pixel hizo de verdad, con su hora -->
+  <section class="vista" id="v-registro" hidden>
+    <div class="head"><div><h1>Registro</h1><p class="sub">Lo que Píxel hizo de verdad: los correos que envió, los eventos que creó, movió o borró, los WhatsApp, las órdenes a tus aparatos y los recordatorios. Con su hora y desde dónde. Se anota después de hacerlo, nunca antes.</p></div>
+      <span class="chip" id="rg-cuantos">…</span></div>
+    <div class="card registro">
+      <div class="presets filtros" id="rg-filtros" role="group" aria-label="Qué mostrar"></div>
+      <div class="lista-registro" id="rg-lista" aria-live="polite"></div>
+      <div class="acciones"><button class="btn peligro" type="button" id="rg-borrar" hidden>Borrar el registro de esta cuenta</button></div>
+      <p class="nota" id="rg-estado" aria-live="polite"></p>
     </div>
   </section>
 
@@ -637,5 +671,6 @@
 <script src="cara3d.js"></script>
 <script src="claves.js"></script>
 <script src="app.js"></script>
+<script src="oido.js"></script>
 </body>
 </html>

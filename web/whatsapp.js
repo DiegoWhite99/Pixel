@@ -64,21 +64,35 @@
 
   // ------------------------------------------------------------------ contactos (notas de personas)
   const notas = () => (window.Cerebro && window.Cerebro.notas ? window.Cerebro.notas() : []);
-  function buscarPersona(nombre) {
+  // Los que empatan arriba: si son dos o mas, no se adivina (se pregunta a cual)
+  const empatados = (cand) => cand.filter((c) => c.score === cand[0].score).map((c) => c.nombre);
+
+  // A quien se le escribe. Devuelve una nota ({titulo, texto, tipo}), {ambiguo: [nombres]} o null.
+  // 11 nov: como el correo (google.js, correoDePersona): se espera la lista de Contactos (al entrar llega
+  // tarde de Firebase y antes se buscaba en una lista vacia), y si dos encajan igual se pregunta.
+  async function buscarPersona(nombre) {
     const q = String(nombre || "").trim();
     if (!q || /\d{4}/.test(q)) return null;
     // 2.0.0: primero en Contactos (contactos.js); se devuelve con la misma forma que una nota
-    const c = window.PixelContactos && window.PixelContactos.conTelefono(q);
-    if (c) return {titulo: c.nombre, texto: "WhatsApp: " + formato(c.telefono), tipo: "persona", contacto: true};
+    const PC = window.PixelContactos;
+    if (PC) {
+      await PC.esperar();
+      const cand = PC.candidatos(q, "telefono");
+      if (cand.length > 1 && cand[0].score === cand[1].score) return {ambiguo: empatados(cand)};
+      if (cand.length) return {titulo: cand[0].nombre, texto: "WhatsApp: " + formato(cand[0].telefono), tipo: "persona", contacto: true};
+      // esta en Contactos pero sin celular: se usa su nombre, asi el numero se le guarda a el y no a uno nuevo
+      const sin = PC.candidatos(q);
+      if (sin.length > 1 && sin[0].score === sin[1].score) return {ambiguo: empatados(sin)};
+      if (sin.length) return {titulo: sin[0].nombre, texto: "", tipo: "persona", contacto: true};
+    }
     const ns = notas();
     const exacta = ns.find((n) => window.Cerebro.texto.mismoTitulo(n.titulo, q));
     if (exacta) return exacta;
-    let mejor = null, nota = 0;
-    for (const n of ns.filter((x) => x.tipo === "persona")) {
-      const p = T.parecido(q, n.titulo);
-      if (p > nota) { mejor = n; nota = p; }
-    }
-    return nota >= 0.6 ? mejor : null;
+    // notas de personas: solo si el nombre dicho esta entero en el titulo (antes bastaba 0.6) y sin empate
+    const cand = ns.filter((x) => x.tipo === "persona").map((n) => ({nota: n, nombre: n.titulo, score: T.parecido(q, n.titulo)}))
+      .filter((c) => c.score >= 0.9).sort((a, b) => b.score - a.score);
+    if (cand.length > 1 && cand[0].score === cand[1].score) return {ambiguo: empatados(cand)};
+    return cand.length ? cand[0].nota : null;
   }
 
   // Guarda (o cambia) el numero en la nota de la persona; si no hay nota, la crea (tipo persona)
@@ -117,6 +131,7 @@
     if (donde === "pc") {
       try {
         const r = await window.PixelAparatos.mandar(puentePc(), "/api/pc", {accion: "whatsapp", numero, texto: mensaje}, 50000);
+        N.registrar("whatsapp", `Envié un WhatsApp a ${nombre} desde el PC`, `${formato(numero)}\n\n${mensaje}`);
         return r.decir || "Listo: lo escribí en WhatsApp del PC.";
       } catch (e) { console.warn("whatsapp: el PC no pudo", e); }      // si el PC falla, se ofrece en el celular
     }
@@ -125,6 +140,8 @@
     try { w = window.open(url, "_blank"); } catch (e) { w = null; }        // null: el navegador pidio un toque (el "sí" fue por voz)
     if (w) { try { w.opener = null; } catch (e) { /* nada */ } }          // (no "noopener": con el, open() devuelve null siempre)
     tarjeta(nombre, mensaje, url);                                        // y el boton queda por si acaso
+    // en el celular lo envia el usuario en WhatsApp: se anota que se abrio, no que se envio
+    N.registrar("whatsapp", `Abrí WhatsApp con un mensaje para ${nombre} (lo envías tú)`, `${formato(numero)}\n\n${mensaje}`);
     return w ? `Te abrí WhatsApp con el mensaje para ${nombre}: solo toca enviar.` : `Toca «Abrir WhatsApp» y luego enviar.`;
   }
 
@@ -143,7 +160,8 @@
     if (nombre !== "escribir_whatsapp") return undefined;
     a = a || {};
     const para = String(a.para || "").trim().slice(0, 80), mensaje = String(a.mensaje || "").trim().slice(0, 1000);
-    const nota = buscarPersona(para);
+    const nota = await buscarPersona(para);
+    if (nota && nota.ambiguo) return `Tengo varios parecidos: ${nota.ambiguo.join(" o ")}. ¿A cuál le escribo?`;
     let numero = normalizar(a.numero, PAIS) || (/\d{7}/.test(para.replace(/\D/g, "")) ? normalizar(para, PAIS) : "");
     if (!numero && nota) numero = normalizar(numeroDe(nota.texto), PAIS);
     const quien = nota ? nota.titulo : numero && /\d/.test(para) ? formato(numero) : para.replace(/^\s*(?:a|al)\s+/i, "") || "esa persona";
@@ -172,5 +190,5 @@
     capacidad: () => "- Escribir por WhatsApp a sus contactos (escribir_whatsapp). Siempre pregunta antes de enviar.",
   });
 
-  window.PixelWhatsapp = {texto: {numeroDe, normalizar, formato, conNumero, urlCelular}, PAIS};
+  window.PixelWhatsapp = {texto: {numeroDe, normalizar, formato, conNumero, urlCelular}, PAIS, buscarPersona};
 })();

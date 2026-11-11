@@ -52,6 +52,13 @@
     }
     return nota >= 0.6 ? mejor : null;
   }
+  // Todos los contactos que encajan con el nombre dicho, del mejor al peor (google.js y whatsapp.js
+  // miran si los dos primeros empatan, para preguntar a cual en vez de adivinar)
+  function candidatosDe(lista, q, campo) {
+    return (lista || []).filter((c) => !campo || c[campo])
+      .map((c) => ({nombre: c.nombre, correo: c.correo, telefono: c.telefono, score: parecido(q, c.nombre)}))
+      .filter((c) => c.score >= 0.6).sort((a, b) => b.score - a.score);
+  }
   // Las personas de la memoria con numero o correo -> contactos que faltan (por nombre)
   function desdeNotas(notas, contactos) {
     const ya = new Set((contactos || []).map((c) => plano(c.nombre)));
@@ -72,7 +79,7 @@
     return {nombre, telefono: tel, correo};
   }
 
-  const texto = {telefono, formato, parecido, buscar, desdeNotas, limpio, correoDe, iniciales};
+  const texto = {telefono, formato, parecido, buscar, candidatosDe, desdeNotas, limpio, correoDe, iniciales};
   if (typeof window === "undefined" || !window.Agente) {
     if (typeof module !== "undefined") module.exports = {texto};
     return;
@@ -133,6 +140,13 @@
   // Para whatsapp.js y google.js
   const conTelefono = (q) => buscar(ct.lista, q, "telefono");
   const conCorreo = (q) => buscar(ct.lista, q, "correo");
+  // Espera a que llegue la lista de Firebase (al entrar tarda); a los 6 s sigue sin ella
+  const esperar = () => new Promise((ok) => {
+    const t0 = Date.now();
+    const mira = () => (ct.lista || Date.now() - t0 > 6000) ? ok() : setTimeout(mira, 100);
+    mira();
+  });
+  const candidatos = (q, campo) => candidatosDe(ct.lista, q, campo);
 
   // ------------------------------------------------------------------ herramientas (Gemini)
   const herramientas = () => [
@@ -209,6 +223,15 @@
 
   function montar() {
     if (!document.getElementById("v-contactos")) return;
+    $("#ct-google").addEventListener("click", async () => {
+      const b = $("#ct-google"), est = $("#ct-google-estado");
+      b.disabled = true; est.textContent = "Trayendo tus contactos de Google…";
+      try {
+        const r = await window.PixelGoogle.traerContactos();
+        est.textContent = `✓ Listo: guardé ${r.guardados} de ${r.total} contactos de Google.`;
+      } catch (e) { est.textContent = "No pude traerlos: " + ((e && e.message) || e); }
+      finally { b.disabled = false; }
+    });
     $("#f-contacto-app").addEventListener("submit", async (e) => {
       e.preventDefault();
       const b = $("#ct-guardar");
@@ -236,5 +259,5 @@
   }
 
   A.modulo({nombre: "contactos", montar, alUsuario, pintar, herramientas, ejecutar, capacidad});
-  window.PixelContactos = {texto, lista: () => ct.lista || [], conTelefono, conCorreo, guardar};
+  window.PixelContactos = {texto, lista: () => ct.lista || [], conTelefono, conCorreo, guardar, esperar, candidatos};
 })();

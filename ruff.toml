@@ -1,0 +1,6 @@
+# Linter: solo errores reales (E9: sintaxis) y pyflakes (F: nombres sin definir, imports sobrantes).
+# E501 (lineas largas) queda fuera a proposito: el codigo las usa en los textos de voz y el panel.
+exclude = [".venv", "venv", "voces", "voces_prueba", "capturas", "web"]
+
+[lint]
+select = ["E9", "F"]

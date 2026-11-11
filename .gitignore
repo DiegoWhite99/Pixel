@@ -33,3 +33,6 @@ recordatorios.json
 
 # cache del CLI de Firebase
 .firebase/
+
+# instaladores armados (instalador/construir.sh): pesan cientos de MB
+dist/

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Píxel
+GenericName=Asistente de voz
+Comment=Arranca Píxel y abre su panel para vincularlo con tu cuenta
+Exec=pixel
+Icon=pixel
+Terminal=false
+Categories=Utility;AudioVideo;
+Keywords=asistente;voz;robot;pixel;
+StartupNotify=false

@@ -4,8 +4,10 @@
    (visibles), se enlaza con el codigo que el dice y desde entonces la app lee su estado y le
    manda ordenes por la Realtime Database (ver nube.py). El enlace es de la cuenta de Google:
    vale en cualquier movil o PC donde se entre con ella.
-   Fase 12: en la app de internet el propio celular es Pixel (agente.js: oye, piensa con Gemini por
-   Firebase AI Logic y habla). Enlazar el Pixel del PC queda como algo opcional. */
+   Fase 12: en la app de internet el propio celular es Pixel (agente.js: oye, piensa y habla). Enlazar
+   el Pixel del PC queda como algo opcional.
+   11 nov: sin sesion, la entrada es el lobby (lobby.html: que hace Pixel, descargas y "Entrar con
+   Google"). Con sesion, la tarjeta "Primeros pasos" pide vincular el Pixel y poner la clave de IA. */
 "use strict";
 
 const $ = (s) => document.querySelector(s);
@@ -146,6 +148,8 @@ function moverBoca() {
   if (!cara) return;
   const propia = window.Agente ? window.Agente.nivelBoca() : null;
   if (propia !== null) { cara.boca(propia); return; }
+  const delPc = window.PixelOido ? window.PixelOido.nivelBoca() : null;     // la voz del PC que suena en este celular
+  if (delPc !== null) { cara.boca(delPc); return; }
   const t = Date.now() + (EN_INTERNET ? nube.offset : voz.offset);
   let nivel = null;
   for (const s of voz.segmentos) {
@@ -247,9 +251,17 @@ function pintarDispositivos(d) {
     : '<div class="vacio">Aún no hay dispositivos. Pulsa <b>Agregar dispositivo</b> para conectar un altavoz, unos audífonos o un aparato de tu WiFi.</div>';
   $("#lista-mios").innerHTML = h;
 
-  const n = d.dispositivos.length;
-  $("#pixeles-sub").textContent = n ? `${d.activos} activo${d.activos === 1 ? "" : "s"}` : "";
-  $("#lista-disp").innerHTML = n ? d.dispositivos.map((x) => `
+  // Fase 11 (restaurada el 11 nov): los celulares enlazados que hacen de microfono del PC (oido.js)
+  const n = d.dispositivos.length, cels = d.celulares || [], vivos = d.activos + cels.filter((c) => c.escuchando).length;
+  $("#pixeles-sub").textContent = n + cels.length ? `${vivos} activo${vivos === 1 ? "" : "s"}` : "";
+  const tarjetasCel = cels.map((c) => `
+    <div class="card"><div class="head">
+      <div class="titulo"><span class="ico">${icono("movil")}</span><div><h2>${esc(c.nombre)}</h2><span class="sub">Micrófono y altavoz de Píxel, por internet</span></div></div>
+      <span class="chip ${c.estado === "escuchando" ? "ok" : c.estado === "hablando" ? "info" : ""}">${esc(c.estado)}</span></div>
+      <dl class="kv"><dt>Frases oídas</dt><dd>${c.frases}</dd><dt>Último texto</dt><dd>${c.ultimo ? "“" + esc(c.ultimo) + "”" : "–"}</dd></dl>
+      ${c.escuchando ? "" : '<p class="sub">Para que haga de micrófono del PC, abre la app en ese celular y toca <b>Usar el PC</b> en Inicio.</p>'}
+    </div>`).join("");
+  $("#lista-disp").innerHTML = n + cels.length ? d.dispositivos.map((x) => `
     <div class="card"><div class="head">
       <div class="titulo"><span class="ico">${icono("pixel")}</span><div><h2>${esc(x.ble.yo || "Píxel")} · ESP32-S3</h2><span class="sub mono">${esc(x.ip)}</span></div></div>
       <span class="chip ${x.estado === "escuchando" ? "ok" : x.estado === "hablando" ? "info" : ""}">${esc(x.estado)}</span></div>
@@ -260,7 +272,7 @@ function pintarDispositivos(d) {
       ${x.ble.yo ? `<details class="mas"><summary>Bluetooth cerca · ${x.ble.vistos.length} ${hace(x.ble.hace)}</summary><div class="lista">${x.ble.vistos.slice(0, 12).map((v) => `
         <div class="fila"><div class="txt"><b>${v.nombre ? esc(v.nombre) : "Sin nombre"}</b><small class="mono">${esc(v.mac)}</small></div>${v.aceptado ? '<span class="chip ok">Recordado</span>' : ""}${barras(v.rssi)}</div>`).join("")}</div></details>` : ""}
       ${x.estado === "sin datos" ? '<p class="aviso">Esta conexión dejó de mandar audio: el ESP32 se reconectó o se apagó. Se cierra sola en 2 minutos.</p>' : ""}
-    </div>`).join("") : '<div class="vacio">No hay ningún Píxel conectado. Pulsa <b>Agregar dispositivo → Otro Píxel</b> para ver cómo conectarlo.</div>';
+    </div>`).join("") + tarjetasCel : '<div class="vacio">No hay ningún Píxel conectado. Pulsa <b>Agregar dispositivo → Otro Píxel</b> para ver cómo conectarlo.</div>';
   $("#ip-servidor").textContent = d.servidor.ip;
   $("#portal-clave").textContent = d.portal.clave;
   $("#kv-servidor").innerHTML = `<dt>IP</dt><dd class="mono">${esc(d.servidor.ip)}</dd><dt>Puerto ESP32</dt><dd class="mono">${d.servidor.puerto}</dd>
@@ -572,6 +584,7 @@ async function iniciarNube() {
 
 function sesion(u) {
   nube.authListo = true;
+  if (window.PixelOido) window.PixelOido.parar();      // el microfono del PC era de la cuenta anterior
   nube.quitar.forEach((f) => f());
   if (nube.quitarMios) nube.quitarMios();
   Object.assign(nube, {usuario: u, uid: u ? u.uid : "", quitar: [], quitarMios: null, mios: null, pid: null, estado: null, vivo: 0});
@@ -605,6 +618,7 @@ function elegirPixel() {
   try { guardado = localStorage.getItem("pixel.elegido") || ""; } catch (e) { guardado = ""; }
   const pid = ids.includes(guardado) ? guardado : ids[0] || "";
   if (pid === nube.pid) { revisarNube(); return; }
+  if (window.PixelOido) window.PixelOido.parar();      // otro Pixel del PC
   nube.quitar.forEach((f) => f());
   Object.assign(nube, {quitar: [], pid, estado: null, vivo: 0});
   if (!pid) { revisarNube(); return; }      // sin Pixel del PC tambien se puede: este celular es Pixel
@@ -640,6 +654,9 @@ function revisarNube() {
   acciones.hidden = !nube.d || !!nube.usuario;          // con sesion, Inicio es de Pixel en este celular
   // 2.0.0: la pantalla de entrada. Se espera a saber si hay sesion guardada (authListo) para no ensenarla de golpe
   const entrada = !!nube.d && !!nube.authListo && !nube.usuario;
+  // 11 nov: sin sesion se entra por el lobby (alli esta "Entrar con Google"). Las pruebas anonimas no
+  // pasan por aqui: entran solas. El lobby no reenvia solo a la app: asi no hay vueltas sin fin.
+  if (entrada && !PRUEBA_ANONIMA) { location.replace("lobby.html" + location.search); return; }
   if (entrada !== document.body.classList.contains("sin-sesion")) { document.body.classList.toggle("sin-sesion", entrada); vista(); }
   if (!nube.usuario && !acciones.querySelector("[data-entrar]")) acciones.innerHTML = `<button class="btn primario grande google" type="button" data-entrar>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22z"/><path fill="#FBBC05" d="M6.4 14c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2V7.4H3.1a10 10 0 0 0 0 9.2z"/><path fill="#EA4335" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3.1 7.4L6.4 10C7.2 7.8 9.4 6 12 6z"/></svg>Entrar con Google</button>
@@ -654,7 +671,7 @@ function revisarNube() {
   if (!nube.usuario) {
     pill("#pill-servidor", "warn", "Sin sesión");
     pill("#pill-esp", "", "Micrófono apagado");
-    pill("#pill-ollama", "", "IA: Gemini");
+    pill("#pill-ollama", "", "IA");
     if (cara) cara.estado("esperando");
     $("#zzz").hidden = !cara;
     hero("¡Hola! Soy Píxel", "Tu asistente de voz con inteligencia artificial. Entra con Google para empezar.");
@@ -668,7 +685,35 @@ function revisarNube() {
   pill("#pill-servidor", !nube.pid ? "" : nube.enLinea ? "ok" : "warn",
     !nube.pid ? "PC sin enlazar" : nube.enLinea ? "PC · " + ((nube.estado && nube.estado.nube.nombre) || "Píxel") : "PC desconectado");
   pintarNube(nube.estado);
+  pintarPasos();
 }
+
+// 11 nov: "Primeros pasos" en Inicio, despues de entrar: vincular el Pixel (el robot y el programa del
+// computador) y poner la clave de IA de esta cuenta. Se va sola cuando estan las dos; "Ocultar por
+// ahora" la esconde hasta que se cierre el navegador.
+function pintarPasos() {
+  const caja = $("#pasos");
+  if (!caja) return;
+  const u = nube.usuario;
+  let oculto = false;
+  try { oculto = !!u && sessionStorage.getItem("pixel.pasos.oculto") === u.uid; } catch (e) { oculto = false; }
+  const vinculado = !!nube.pid, prov = typeof Proveedores !== "undefined" ? Proveedores.actual() : {propio: false};
+  // nube.mios llega de la base de datos: hasta entonces no se sabe si hay Pixel vinculado
+  caja.hidden = !EN_INTERNET || !u || nube.mios === null || oculto || (vinculado && prov.propio);
+  if (caja.hidden) return;
+  const paso = (id, hecho, sub) => {
+    const li = $("#" + id);
+    li.classList.toggle("hecho", hecho);
+    li.querySelector(".acciones").hidden = hecho;
+    const s = $("#" + id + "-sub");
+    if (!s.dataset.base) s.dataset.base = s.textContent;
+    s.textContent = hecho ? sub : s.dataset.base;
+  };
+  const nombre = (vinculado && nube.mios[nube.pid] && nube.mios[nube.pid].nombre) || "Píxel";
+  paso("paso-vincular", vinculado, `Listo: enlazado con ${nombre}.`);
+  paso("paso-clave", prov.propio, prov.propio ? `Listo: ${Proveedores.nombreModelo(Proveedores.sanear(prov.modelo))}, con tu clave.` : "");
+}
+window.pintarPasos = pintarPasos;
 
 function ordenNube(ruta, cuerpo) {
   if (!nube.pid) return Promise.reject(new Error("Primero enlaza esta app con Píxel."));
@@ -798,6 +843,11 @@ $("#agregar-atras").addEventListener("click", () => irA("elegir"));
 document.addEventListener("click", async (e) => {
   const t = e.target;
   if (t.closest("[data-buscar-pixel]")) { abrirEnlazar(); return; }
+  if (t.closest("#pasos-luego")) {
+    try { sessionStorage.setItem("pixel.pasos.oculto", nube.uid); } catch (er) { /* sin almacenamiento */ }
+    $("#pasos").hidden = true;
+    return;
+  }
   if (t.closest("[data-entrar]")) { entrar(); return; }
   if (t.closest("[data-salir]")) { if (confirm("¿Cerrar sesión en este navegador?")) nube.au.signOut(nube.auth); return; }
   if (t.closest("[data-cambiar-cuenta]")) { entrar(); return; }

@@ -25,6 +25,7 @@ Estructura (las reglas estan en database.rules.json):
     pixeles/<pid>/frases/<id>        {uid, pcm, t}: frase que oyo el celular (PCM 16 kHz en base64)
     pixeles/<pid>/habla/<uid>/<id>   {tipo, pcm, dime, id, titulo}: voz (o video) de Pixel para ese celular
     pixeles/<pid>/escuchando/<uid>   latido del celular con "Escuchar" puesto
+    pixeles/<pid>/registro/<id>      {t, tipo, texto, detalle, aparato}: lo que hizo Pixel (lo leen sus duenos)
     usuarios/<uid>/pixeles/<pid>     {nombre, desde}: los Pixel de cada app
 
 Fase 11: con "Escuchar" en la app, el celular hace de ESP32 remoto. Corta las frases en el
@@ -63,6 +64,8 @@ MOVIL_VIEJA_S = 30      # frases que esperaban mas que esto (Pixel estaba apagad
 MOVIL_INACTIVO_S = 600  # sin frases en este rato, la sesion del celular se cierra
 HABLA_S = 60            # la voz para el celular se borra pasado este tiempo (el la borra al tocarla)
 ESCUCHA_S = 45          # el celular escucha si su latido (cada 15 s) es de hace menos de esto
+REGISTRO_MAX = 300      # el registro de acciones del PC guarda las ultimas (se poda cada REGISTRO_PODA)
+REGISTRO_PODA = 25
 
 S = None                # modulo del servidor
 P = None                # modulo del panel
@@ -81,6 +84,7 @@ _habla = queue.Queue()  # (uid, tipo, pcm, dime, extra) que escribir, en orden
 _hablas = []            # (monotonic, uid, clave) para borrarlas pasado HABLA_S
 _ultima_clave = [0]
 _reloj = {"offset": 0}  # reloj de Firebase - reloj de aqui (ms), de lo que devuelve el latido
+_registro = queue.Queue()  # entradas del registro de acciones que escribir, en orden
 
 
 class SinNube(Exception):
@@ -480,6 +484,31 @@ def _escribir_habla():
             S.log("nube: no pude dejar la voz para el celular: %s" % e)
 
 
+def registrar(tipo, texto, detalle=""):
+    """11 nov: registro de acciones. Lo que hizo Pixel en el PC (correos, eventos, recordatorios...) va a
+    pixeles/<pid>/registro y la app lo muestra con su hora. Solo encola: nunca frena el turno."""
+    datos = {"t": SV, "tipo": str(tipo)[:20], "texto": str(texto)[:200], "aparato": "PC"}
+    if detalle:
+        datos["detalle"] = str(detalle)[:500]
+    _registro.put(datos)
+
+
+def _escribir_registro():
+    """Hilo: escribe el registro y, cada REGISTRO_PODA entradas, borra lo mas viejo (deja REGISTRO_MAX)."""
+    n = 0
+    while True:
+        datos = _registro.get()
+        try:
+            _db("POST", "pixeles/%s/registro" % _pid(), datos)
+            n += 1
+            if n % REGISTRO_PODA == 0:
+                claves = sorted(_db("GET", "pixeles/%s/registro" % _pid()) or {})   # las de push van en orden
+                for clave in claves[:-REGISTRO_MAX]:
+                    _db("DELETE", "pixeles/%s/registro/%s" % (_pid(), clave))
+        except Exception as e:
+            S.log("nube: no pude anotar en el registro: %s" % e)
+
+
 def _limpiar_moviles(ahora):
     """Desde _publicar: borra la voz vieja y cierra las sesiones de celular que ya no hablan."""
     while _hablas and ahora - _hablas[0][0] > HABLA_S:
@@ -558,8 +587,9 @@ def iniciar(modulo_servidor, modulo_panel):
                 S.log("nube: no pude entrar en Firebase: %s (reintento en 30 s)" % e)
                 time.sleep(30)
         S.AL_HABLAR = _hay_voz.set
+        S.AL_REGISTRAR = registrar
         for objetivo, args in ((_publicar, ()), (_trabajar, ()), (_publicar_voz, ()),
-                               (_atender_frases, ()), (_escribir_habla, ()),
+                               (_atender_frases, ()), (_escribir_habla, ()), (_escribir_registro, ()),
                                (_escuchar, ("pixeles/%s/ordenes" % _pid(), _al_orden)),
                                (_escuchar, ("pixeles/%s/solicitudes" % _pid(), _al_solicitud)),
                                (_escuchar, ("pixeles/%s/frases" % _pid(), _al_frase)),

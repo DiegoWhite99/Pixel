@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#ffffff">
+<meta name="description" content="Píxel, el asistente de voz con inteligencia artificial de Divergencia IA: qué hace, cómo se instala y cómo se empieza.">
+<title>Píxel · Asistente de voz</title>
+<link rel="icon" href="icono.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<!-- 11 nov: el lobby es la entrada de la app (app.js manda aqui si no hay sesion). Explica que hace Pixel,
+     tiene las descargas y "Entrar con Google" con un solo toque. Solo tema claro, como la app. -->
+<style>
+  :root {
+    --bg: #ffffff; --surface-2: #f3f8fb; --ink: #0f2a3d; --muted: #587084; --line: #e1eaf0;
+    --blue: #1971c2; --blue-2: #4dabf7; --blue-soft: #e7f3ff; --green: #087f5b; --green-2: #20c997; --green-soft: #e6fcf5;
+    --warn: #a35200; --warn-soft: #fff4e6;
+    --grad: linear-gradient(135deg, #1971c2 0%, #0c8599 55%, #087f5b 100%);
+    --grad-suave: linear-gradient(135deg, #e7f3ff 0%, #e6fcf5 100%);
+    --sombra: 0 1px 2px rgba(15, 42, 61, 0.05), 0 6px 18px rgba(15, 42, 61, 0.06);
+    --radio: 16px;
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", Ubuntu, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 var(--font); -webkit-text-size-adjust: 100%; }
+  a { color: var(--blue); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+  h1, h2, h3 { line-height: 1.2; margin: 0; letter-spacing: -0.01em; }
+  h2 { font-size: clamp(1.4rem, 3.5vw, 1.9rem); }
+  h3 { font-size: 1.05rem; }
+  p { margin: 0; }
+  .muted { color: var(--muted); }
+
+  /* barra de arriba */
+  .top { position: sticky; top: 0; z-index: 5; background: rgba(255, 255, 255, 0.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+  .top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 60px; }
+  .marca { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
+  .marca img { width: 36px; height: 36px; }
+  .marca b { display: block; font-size: 1.05rem; }
+  .marca small { display: block; color: var(--muted); font-size: 12px; }
+  .top nav { display: flex; gap: 18px; }
+  .top nav a { color: var(--muted); text-decoration: none; font-size: 14px; }
+  .top nav a:hover { color: var(--ink); }
+  @media (max-width: 760px) { .top nav { display: none; } }
+
+  /* botones */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 44px; padding: 10px 18px; border-radius: 12px; border: 1px solid var(--line);
+    background: #fff; color: var(--ink); font: 600 15px var(--font); text-decoration: none; cursor: pointer; }
+  .btn:hover { border-color: var(--blue-2); }
+  .btn:focus-visible { outline: 3px solid var(--blue-2); outline-offset: 2px; }
+  .btn.primario { background: var(--grad); color: #fff; border: 0; box-shadow: var(--sombra); }
+  .btn.grande { min-height: 52px; padding: 12px 22px; font-size: 16px; }
+  .btn svg { width: 20px; height: 20px; flex: none; }
+  .btn[disabled] { opacity: .6; cursor: wait; }
+  .top .btn { min-height: 38px; padding: 6px 14px; font-size: 14px; }
+
+  /* portada */
+  .portada { background: var(--grad-suave); border-bottom: 1px solid var(--line); }
+  .portada .wrap { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 32px; align-items: center; padding-top: 48px; padding-bottom: 48px; }
+  .portada h1 { font-size: clamp(2rem, 6vw, 3.1rem); }
+  .portada h1 span { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .portada .lema { margin-top: 14px; font-size: 1.12rem; color: var(--muted); max-width: 560px; }
+  .portada .acciones { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+  .sesion { margin-top: 14px; font-size: 14px; color: var(--muted); min-height: 1.5em; }
+  .sesion.mal { color: var(--warn); }
+  .cara { display: grid; place-items: center; }
+  .cara svg { width: min(300px, 70vw); height: auto; filter: drop-shadow(0 18px 30px rgba(15, 42, 61, 0.12)); animation: flotar 5s ease-in-out infinite; }
+  .cara .parpado { animation: parpadear 6s infinite; transform-origin: center 91px; transform-box: view-box; }
+  @keyframes flotar { 50% { transform: translateY(-8px); } }
+  @keyframes parpadear { 0%, 94%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.1); } }
+  @media (prefers-reduced-motion: reduce) { .cara svg, .cara .parpado { animation: none; } html { scroll-behavior: auto; } }
+  @media (max-width: 760px) { .portada .wrap { grid-template-columns: 1fr; padding-top: 28px; padding-bottom: 32px; gap: 8px; } .cara { order: -1; } .cara svg { width: 190px; } }
+
+  /* secciones */
+  section { padding: 48px 0; scroll-margin-top: 60px; }       /* que la barra fija no tape el titulo al saltar */
+  section + section { border-top: 1px solid var(--line); }
+  .titulo-seccion { max-width: 680px; margin-bottom: 24px; }
+  .titulo-seccion p { margin-top: 8px; color: var(--muted); }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .tarjeta { background: #fff; border: 1px solid var(--line); border-radius: var(--radio); padding: 18px; box-shadow: var(--sombra); }
+  .tarjeta p { margin-top: 6px; color: var(--muted); }
+  .ico { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: var(--blue-soft); color: var(--blue); margin-bottom: 12px; }
+  .ico.verde { background: var(--green-soft); color: var(--green); }
+  .ico svg { width: 22px; height: 22px; }
+
+  /* pasos */
+  .pasos { counter-reset: paso; display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); list-style: none; padding: 0; margin: 0; }
+  .pasos li { counter-increment: paso; position: relative; padding: 18px 18px 18px 64px; background: var(--surface-2); border-radius: var(--radio); }
+  .pasos li::before { content: counter(paso); position: absolute; left: 18px; top: 18px; width: 32px; height: 32px; border-radius: 50%; background: var(--grad); color: #fff; font-weight: 700; display: grid; place-items: center; }
+  .pasos li p { margin-top: 4px; color: var(--muted); font-size: 15px; }
+
+  /* funciones */
+  .funcion h3 { display: flex; align-items: center; gap: 10px; }
+  .funcion ul { margin: 10px 0 0; padding-left: 18px; color: var(--muted); }
+  .funcion li { margin: 3px 0; }
+  .dile { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); font-size: 14.5px; }
+  .dile b { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--green); margin-bottom: 4px; }
+  .dile q { display: block; quotes: "«" "»"; }
+
+  /* seguridad y proveedores */
+  .lista-check { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .lista-check li { padding: 14px 14px 14px 46px; position: relative; background: var(--green-soft); border-radius: 12px; }
+  .lista-check li::before { content: "✓"; position: absolute; left: 14px; top: 13px; width: 22px; height: 22px; border-radius: 50%; background: var(--green); color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+  .proveedores { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .proveedores span { padding: 6px 12px; border-radius: 999px; background: var(--blue-soft); color: var(--blue); font-weight: 600; font-size: 14px; }
+
+  /* descargas */
+  .descargas { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+  .descarga h3 { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .chip { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; background: var(--warn-soft); color: var(--warn); white-space: nowrap; }
+  .chip.luego { background: var(--surface-2); color: var(--muted); }
+  .chip.listo { background: var(--green-soft); color: var(--green); }
+  .descarga .btn { margin-top: 12px; width: 100%; }
+  .descarga .chico { font-size: 13.5px; }
+  .descarga code { display: block; width: fit-content; max-width: 100%; margin-top: 4px; overflow-wrap: anywhere; font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-radius: 6px; color: var(--ink); }
+  .nota { margin-top: 16px; font-size: 14.5px; color: var(--muted); }
+
+  /* preguntas */
+  details { border: 1px solid var(--line); border-radius: 12px; padding: 0 16px; background: #fff; }
+  details + details { margin-top: 10px; }
+  summary { cursor: pointer; padding: 14px 0; font-weight: 600; list-style-position: outside; }
+  details p { padding: 0 0 14px; color: var(--muted); }
+
+  /* final */
+  .final { background: var(--grad-suave); text-align: center; }
+  .final .acciones { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 20px; }
+  footer { padding: 24px 0 32px; color: var(--muted); font-size: 14px; text-align: center; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="marca" href="#arriba"><img src="icono.svg" alt=""><div><b>Píxel</b><small>Tu asistente de voz</small></div></a>
+    <nav aria-label="Secciones">
+      <a href="#como">Cómo funciona</a><a href="#funciones">Funciones</a><a href="#seguridad">Seguridad</a><a href="#instalar">Descargas</a><a href="#preguntas">Preguntas</a>
+    </nav>
+    <button class="btn primario" type="button" data-entrar>Entrar</button>
+  </div>
+</header>
+
+<main id="arriba">
+  <div class="portada">
+    <div class="wrap">
+      <div>
+        <h1>Hola, soy <span>Píxel</span></h1>
+        <p class="lema">Un asistente de voz con inteligencia artificial: un pequeño robot que te escucha en casa, un programa en tu computador y una app en tu celular. Le hablas por su nombre y hace las cosas por ti.</p>
+        <div class="acciones">
+          <button class="btn primario grande" type="button" data-entrar>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3zM12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22zM6.4 14c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2V7.4H3.1a10 10 0 0 0 0 9.2zM12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3.1 7.4L6.4 10C7.2 7.8 9.4 6 12 6z"/></svg>
+            <span id="entrar-texto">Entrar con Google</span></button>
+          <a class="btn grande" href="#instalar">Descargar Píxel</a>
+        </div>
+        <p class="sesion" id="sesion" aria-live="polite">¿Primera vez? Al entrar quedas registrado con tu cuenta de Google.</p>
+      </div>
+      <div class="cara" aria-hidden="true">
+        <svg viewBox="0 0 200 200">
+          <defs>
+            <radialGradient id="l-cara" cx="38%" cy="32%" r="70%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#cfe6f7"/></radialGradient>
+            <radialGradient id="l-ojo" cx="42%" cy="40%" r="60%"><stop offset="0" stop-color="#fffbe0"/><stop offset="0.45" stop-color="#ffd43b"/><stop offset="1" stop-color="#ff8c0a"/></radialGradient>
+            <filter id="l-brillo" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="7"/></filter>
+          </defs>
+          <circle cx="100" cy="100" r="92" fill="url(#l-cara)" stroke="#d3e8f7" stroke-width="2"/>
+          <rect x="34" y="60" width="132" height="62" rx="31" fill="#0e2343" stroke="#4dabf7" stroke-opacity="0.55" stroke-width="2"/>
+          <g class="parpado">
+            <circle cx="72" cy="91" r="20" fill="#ffb02e" opacity="0.75" filter="url(#l-brillo)"/><circle cx="128" cy="91" r="20" fill="#ffb02e" opacity="0.75" filter="url(#l-brillo)"/>
+            <circle cx="72" cy="91" r="16" fill="url(#l-ojo)"/><circle cx="128" cy="91" r="16" fill="url(#l-ojo)"/>
+            <circle cx="66" cy="85" r="4" fill="#fff" opacity="0.85"/><circle cx="122" cy="85" r="4" fill="#fff" opacity="0.85"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <section id="como">
+    <div class="wrap">
+      <div class="titulo-seccion">
+        <h2>Cómo funciona</h2>
+        <p>Píxel tiene tres partes. Con la app ya puedes hablarle; el robot y el programa del computador le dan voz en tu casa y el control de tus equipos.</p>
+      </div>
+      <div class="grid">
+        <div class="tarjeta">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><rect x="7" y="9" width="10" height="5" rx="2.5"/></svg></div>
+          <h3>El robot</h3>
+          <p>Un ESP32-S3 con micrófono y altavoz. Le dices «Píxel» y te escucha; responde con su propia voz. Con un emisor infrarrojo y relés, también maneja aparatos de la casa.</p>
+        </div>
+        <div class="tarjeta">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div>
+          <h3>Tu computador</h3>
+          <p>El programa de Píxel entiende lo que dices, piensa con inteligencia artificial y controla tu computador: volumen, música, YouTube, WhatsApp Web, la pantalla y más.</p>
+        </div>
+        <div class="tarjeta">
+          <div class="ico verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/></svg></div>
+          <h3>Tu celular o la web</h3>
+          <p>Le hablas o le escribes desde donde estés, ves tus notas, tareas y agenda, y administras tus dispositivos. Es la misma app en el celular y en el navegador.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="empezar">
+    <div class="wrap">
+      <div class="titulo-seccion">
+        <h2>Empieza en cuatro pasos</h2>
+      </div>
+      <ol class="pasos">
+        <li><h3>Instala Píxel</h3><p>Descarga el programa para tu computador (Windows o Linux) y ábrelo.</p></li>
+        <li><h3>Entra con Google</h3><p>Un solo toque en «Entrar con Google». Tu cuenta guarda tus notas, contactos y ajustes.</p></li>
+        <li><h3>Vincula tu Píxel</h3><p>Píxel dice en voz alta un código de 6 cifras. En la app toca «Buscar a Píxel» y escríbelo.</p></li>
+        <li><h3>Pon tu clave de IA</h3><p>En Ajustes, elige tu proveedor de inteligencia artificial y pega tu clave. Desde ahí, Píxel piensa.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="funciones">
+    <div class="wrap">
+      <div class="titulo-seccion">
+        <h2>Todo lo que hace Píxel</h2>
+        <p>Cada función se puede encender o apagar en Ajustes, donde también ves cuáles usan la inteligencia artificial.</p>
+      </div>
+      <div class="grid">
+        <article class="tarjeta funcion">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></div>
+          <h3>Conversar</h3>
+          <ul><li>Responde lo que le preguntes, con voz.</li><li>Si solo dices «Píxel», te contesta «Dime» y espera tu frase.</li><li>Recuerda la conversación unos minutos.</li></ul>
+          <div class="dile"><b>Prueba a decir</b><q>Píxel, ¿cuánto mide el Everest?</q></div>
+        </article>
+        <article class="tarjeta funcion">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M5 3 2 6M22 6l-3-3"/></svg></div>
+          <h3>Recordatorios</h3>
+          <ul><li>Te avisa en voz alta a la hora que le digas.</li><li>Te dice cuáles tienes y borra los que ya no necesitas.</li></ul>
+          <div class="dile"><b>Prueba a decir</b><q>Píxel, recuérdame en 10 minutos sacar la ropa</q><q>Píxel, ¿qué recordatorios tengo?</q></div>
+        </article>
+        <article class="tarjeta funcion">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg></div>
+          <h3>Google Calendar</h3>
+          <ul><li>Te lee la agenda del día o de la semana.</li><li>Agenda, mueve y borra eventos. Antes de agendar o borrar, te pregunta.</li></ul>
+          <div class="dile"><b>Prueba a decir</b><q>Píxel, ¿qué tengo mañana?</q><q>Píxel, agenda dentista el viernes a las 4 de la tarde</q></div>
+        </article>
+        <article class="tarjeta funcion">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></div>
+          <h3>Gmail</h3>
+          <ul><li>Busca y lee tus correos.</li><li>Redacta borradores y te los lee antes de enviar.</li><li>Archiva, marca, destaca y pone etiquetas.</li></ul>
+          <div class="dile"><b>Prueba a decir</b><q>Píxel, ¿tengo correos nuevos?</q><q>Píxel, escríbele a Ana que llego tarde</q></div>
+        </article>
+        <article class="tarjeta funcion">
+          <div class="ico verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0M17 11h5M19.5 8.5v5"/></svg></div>
+          <h3>Contactos</h3>
+          <ul><li>Nombre, celular y correo de tus personas.</li><li>Puedes traer los contactos de tu cuenta de Google.</li><li>Los correos van a tus contactos o a la dirección que le dictes: nunca adivina.</li></ul>
+          <div class="dile"><b>Prueba a decir</b><q>Píxel, guarda a Ana con el número 300 123 4567</q></div>
+        </article>
+        <article class="tarjeta funcion">
+          <div class="ico verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21l1.6-4.8A8.5 8.5 0 1 1 8 19.5z"/></svg></div>
+          <h3>WhatsApp</h3>
+          <ul><li>Prepara el mensaje y te pregunta «¿Se lo mando?».</li><li>En el computador lo escribe en la pestaña de WhatsApp Web que ya tengas abierta.</li></ul>
+          <div class="dile"><b>Prueba a decir</b><q>Píxel, escríbele por WhatsApp a Ana que ya voy</q></div>
+        </article>
+        <article class="tarjeta funcion">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+          <h3>Música</h3>
+          <ul><li>Pone música de YouTube en una ventana aparte, en la app o en el computador.</li><li>Pausa, sigue, cambia de canción y sube el volumen al instante.</li><li>Baila al ritmo, con un escenario distinto para cada género.</li></ul>
+          <div class="dile"><b>Prueba a decir</b><q>Píxel, pon salsa</q><q>Píxel, cambia de canción</q></div>
+        </article>
+        <article class="tarjeta funcion">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+          <h3>Enfoque</h3>
+          <ul><li>Pomodoro con descansos, con un pomodoro para cada tarea.</li><li>Te guía para ordenar tus tareas en la matriz de Eisenhower.</li><li>Te dice por dónde empezar.</li></ul>
+          <div class="dile"><b>Prueba a decir</b><q>Píxel, modo enfoque</q><q>Píxel, organiza mis tareas</q></div>
+        </article>
+        <article class="tarjeta funcion">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></div>
+          <h3>Notas dictadas</h3>
+          <ul><li>Escribe lo que dices, con puntos y párrafos.</li><li>Las resume y saca las ideas y los pendientes.</li><li>Se borran solas a los 30 días.</li></ul>
+          <div class="dile"><b>Prueba a decir</b><q>Píxel, toma nota</q><q>Píxel, termina la nota</q></div>
+        </article>
+        <article class="tarjeta funcion">
+          <div class="ico verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="7" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8 7l7.5 0M7.3 8.2l3.6 7.7M16.8 9.2l-3.6 6.7"/></svg></div>
+          <h3>Memoria</h3>
+          <ul><li>Guarda lo que le cuentas de ti, tus gustos y tus personas.</li><li>Lo ves como un mapa de ideas conectadas.</li><li>Se puede sincronizar con Obsidian en tu computador.</li></ul>
+          <div class="dile"><b>Prueba a decir</b><q>Píxel, recuerda que mi color favorito es el azul</q><q>Píxel, ¿qué sabes de mí?</q></div>
+        </article>
+        <article class="tarjeta funcion">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div>
+          <h3>Tu computador</h3>
+          <ul><li>Sube, baja o silencia el volumen.</li><li>Pausa la música y abre YouTube.</li><li>Bloquea la sesión o apaga la pantalla; suspender el equipo lo confirmas tú.</li><li>El robot lo enciende por red (Wake-on-LAN).</li></ul>
+          <div class="dile"><b>Prueba a decir</b><q>Píxel, sube el volumen del computador</q></div>
+        </article>
+        <article class="tarjeta funcion">
+          <div class="ico verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg></div>
+          <h3>Aparatos de la casa</h3>
+          <ul><li>TV Android, aparatos con control infrarrojo, relés y equipos con dirección web.</li><li>Aprende los botones de tus controles remotos.</li><li>Prueba si el robot y el computador responden.</li></ul>
+          <div class="dile"><b>Prueba a decir</b><q>Píxel, prueba el ESP32</q></div>
+        </article>
+        <article class="tarjeta funcion">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></div>
+          <h3>Tu perfil</h3>
+          <ul><li>Tu nombre, tu foto y cómo quieres que te trate.</li><li>Lo llenas en un formulario o subes un archivo Markdown.</li><li>Píxel lo usa para conocerte desde el primer día.</li></ul>
+        </article>
+        <article class="tarjeta funcion">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg></div>
+          <h3>Voz y personalidad</h3>
+          <ul><li>Diez voces de alta calidad, de hombre y de mujer.</li><li>Tono normal o infantil, y respuestas cortas o normales.</li><li>Le describes cómo quieres que hable.</li></ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="seguridad">
+    <div class="wrap">
+      <div class="titulo-seccion">
+        <h2>Tú decides lo importante</h2>
+        <p>Lo que no tiene vuelta atrás, Píxel te lo pregunta antes. Y lo tuyo solo lo ves tú.</p>
+      </div>
+      <ul class="lista-check">
+        <li>Nunca envía un correo sin que digas «sí» o «envíalo».</li>
+        <li>Antes de agendar o borrar un evento, te pregunta.</li>
+        <li>WhatsApp: prepara el mensaje y te pregunta «¿Se lo mando?».</li>
+        <li>Mandar correos a la papelera o suspender el computador también piden tu confirmación.</li>
+        <li>No adivina destinatarios: usa tus contactos o la dirección que tú le des, y si hay dos parecidos te pregunta cuál.</li>
+        <li>Cada cuenta ve solo lo suyo: tus notas, tareas y contactos son privados.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="ia">
+    <div class="wrap">
+      <div class="titulo-seccion">
+        <h2>Tu inteligencia artificial, tu clave</h2>
+        <p>Píxel no trae una inteligencia artificial incluida: cada persona usa la suya, con su propia clave. Lo que gastes lo cobra tu proveedor, y en Ajustes ves cuántas peticiones y tokens usas cada día.</p>
+      </div>
+      <div class="proveedores" aria-label="Proveedores compatibles">
+        <span>Google Gemini</span><span>Anthropic Claude</span><span>OpenAI (GPT)</span><span>OpenRouter (también Kimi)</span><span>DeepSeek</span><span>Otro compatible con OpenAI</span>
+      </div>
+      <p class="nota">Tu clave se guarda solo en tu aparato y para tu cuenta: no se sube a la nube.</p>
+    </div>
+  </section>
+
+  <section id="instalar">
+    <div class="wrap">
+      <div class="titulo-seccion">
+        <h2>Descargas</h2>
+        <p>El programa de Píxel para tu computador, versión 2.1.0.</p>
+      </div>
+      <div class="descargas">
+        <div class="tarjeta descarga"><h3>Windows <span class="chip">Versión de prueba</span></h3><p>Instalador .exe para Windows de 64 bits (101 MB).</p>
+          <a class="btn primario" href="https://github.com/DiegoWhite99/Pixel/releases/download/v2.1.0/Pixel-2.1.0-Setup.exe">Descargar para Windows</a>
+          <p class="chico">Si Windows avisa que no conoce el programa, toca «Más información» y luego «Ejecutar de todas formas».</p></div>
+        <div class="tarjeta descarga"><h3>Linux <span class="chip listo">Disponible</span></h3><p>Paquete .deb para Ubuntu, Debian y derivadas de 64 bits (163 MB).</p>
+          <a class="btn primario" href="https://github.com/DiegoWhite99/Pixel/releases/download/v2.1.0/pixel_2.1.0_amd64.deb">Descargar para Linux</a>
+          <p class="chico">Instálalo con <code>sudo apt install ./pixel_2.1.0_amd64.deb</code></p></div>
+        <div class="tarjeta descarga"><h3>Mac <span class="chip luego">Más adelante</span></h3><p>Todavía en preparación.</p></div>
+      </div>
+      <p class="nota">La primera vez, el programa baja unos 600 MB (las voces y el reconocimiento de voz) y abre su panel para vincularlo con tu cuenta.
+        Para comprobar que el archivo llegó entero, compáralo con sus <a href="https://github.com/DiegoWhite99/Pixel/releases/download/v2.1.0/SHA256SUMS">huellas SHA-256</a>.
+        Para usar la app no hace falta el programa: entra con Google, pon tu clave de IA y háblale.</p>
+    </div>
+  </section>
+
+  <section id="preguntas">
+    <div class="wrap">
+      <div class="titulo-seccion"><h2>Preguntas frecuentes</h2></div>
+      <details><summary>¿Necesito el robot para usar Píxel?</summary>
+        <p>No. La app funciona sola en tu celular o en el navegador. El robot y el programa del computador le dan voz en tu casa y el control de tus equipos.</p></details>
+      <details><summary>¿En qué navegador funciona?</summary>
+        <p>Para hablarle, usa Chrome (en Android o en el computador). En los navegadores que no reconocen la voz, como Firefox, puedes escribirle. Para agregar el robot por Bluetooth hace falta Chrome.</p></details>
+      <details><summary>¿Cuánto cuesta la inteligencia artificial?</summary>
+        <p>Depende de tu proveedor y de tu plan. Píxel te muestra en Ajustes lo que gastas cada día y, si el proveedor publica sus precios, cuánto cuesta.</p></details>
+      <details><summary>¿Quién ve mis datos?</summary>
+        <p>Solo tú. Cada cuenta ve únicamente lo suyo, y tu clave de IA se queda en tu aparato.</p></details>
+      <details><summary>¿Necesita internet?</summary>
+        <p>Sí: para entrar con Google y para pensar con tu inteligencia artificial.</p></details>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap">
+      <h2>¿Listo para conocer a Píxel?</h2>
+      <div class="acciones">
+        <button class="btn primario grande" type="button" data-entrar>Entrar con Google</button>
+        <a class="btn grande" href="#instalar">Ver descargas</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer><div class="wrap">Píxel · creado por Divergencia IA</div></footer>
+
+<script type="module">
+  // Login con un toque. Es el mismo proyecto de Firebase que app.js (NUBE): una prueba de
+  // tools/prueba_modulos.js comprueba que no se separen. La sesion se recuerda en el navegador,
+  // asi que al pasar a la app ya se entra. Este lobby nunca reenvia solo a la app (app.js manda
+  // aqui cuando no hay sesion): asi no hay vueltas sin fin.
+  const NUBE = {apiKey: "AIzaSyAKcuXL3qvNDCUPUlZXjrSOUKW3k4z2hZ8", authDomain: "pixelassitance.firebaseapp.com",
+    databaseURL: "https://pixelassitance-default-rtdb.firebaseio.com", projectId: "pixelassitance",
+    appId: "1:794659517422:web:43c3cb46985a905d0c54ff"};
+  const SDK = "https://www.gstatic.com/firebasejs/13.1.0/";
+  const APP = "index.html" + location.search;          // "?nube" de las pruebas locales se conserva
+  const sesion = document.getElementById("sesion"), entrarTexto = document.getElementById("entrar-texto");
+  const botones = [...document.querySelectorAll("[data-entrar]")];
+  let au = null, auth = null, usuario = null;
+
+  const decir = (texto, mal) => { sesion.textContent = texto; sesion.classList.toggle("mal", !!mal); };
+  function pintar() {
+    if (usuario) {
+      decir(`Entraste como ${usuario.displayName || usuario.email || "tu cuenta"}. `);
+      const otra = document.createElement("button");
+      otra.type = "button"; otra.className = "btn"; otra.textContent = "Usar otra cuenta"; otra.style.marginLeft = "6px";
+      otra.addEventListener("click", () => entrar(true));
+      sesion.append(otra);
+    }
+    entrarTexto.textContent = usuario ? "Abrir Píxel" : "Entrar con Google";
+    botones.forEach((b) => { if (b !== entrarTexto.parentElement) b.textContent = usuario ? "Abrir Píxel" : (b.closest(".top") ? "Entrar" : "Entrar con Google"); });
+  }
+
+  async function entrar(otraCuenta) {
+    if (usuario && !otraCuenta) { location.href = APP; return; }
+    if (!au) { location.href = APP; return; }          // sin Firebase aqui: la app tiene su propio boton
+    botones.forEach((b) => { b.disabled = true; });
+    try {
+      const p = new au.GoogleAuthProvider();
+      p.setCustomParameters({prompt: "select_account"});  // para la feria: siempre se elige la cuenta
+      await au.signInWithPopup(auth, p);
+      location.replace(APP);
+    } catch (e) {
+      const c = (e && e.code) || "";
+      if (c !== "auth/popup-closed-by-user" && c !== "auth/cancelled-popup-request")
+        decir(c === "auth/popup-blocked" ? "El navegador bloqueó la ventana de Google: permítela y toca «Entrar» otra vez."
+          : c === "auth/unauthorized-domain" ? "Desde esta dirección no se puede entrar con Google. Abre Píxel en su página de internet."
+          : "No pude entrar: " + (c || (e && e.message) || e), true);
+    } finally {
+      botones.forEach((b) => { b.disabled = false; });
+    }
+  }
+  botones.forEach((b) => b.addEventListener("click", () => entrar(false)));
+
+  try {
+    const [a, x] = await Promise.all([import(SDK + "firebase-app.js"), import(SDK + "firebase-auth.js")]);
+    au = x;
+    auth = au.getAuth(a.initializeApp(NUBE));
+    au.onAuthStateChanged(auth, (u) => { usuario = u && !u.isAnonymous ? u : null; pintar(); });
+  } catch (e) {
+    console.warn("lobby: sin Firebase", e);            // el boton lleva a la app, que lo intenta otra vez
+  }
+</script>
+</body>
+</html>

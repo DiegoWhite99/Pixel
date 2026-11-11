@@ -265,8 +265,12 @@ def hacer_visible():
     if _agente is not None and _agente.poll() is None:
         _visible_hasta = time.monotonic() + VISIBLE_S
         return
-    _agente = subprocess.Popen(["bluetoothctl"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                               stderr=subprocess.STDOUT, text=True, env=_ENV, bufsize=1)
+    try:
+        _agente = subprocess.Popen(["bluetoothctl"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                   stderr=subprocess.STDOUT, text=True, env=_ENV, bufsize=1)
+    except OSError:             # sin BlueZ (p. ej. Windows): el PC no se hace visible
+        _agente = None
+        return
     proc = _agente
     _visible_hasta = time.monotonic() + VISIBLE_S
 

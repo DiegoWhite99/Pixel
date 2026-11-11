@@ -1,7 +1,7 @@
 // Fase 14 - El proveedor de IA de Pixel (pedido del usuario el 10 nov: "un espacio en Ajustes donde se ponga
 // la API key según el proveedor... que acepten GPT, Kimi, etc. solo con la API key", y que en el panel se vea
-// como se gasta).
-//   pixel      Gemini del proyecto por Firebase AI Logic: gratis, con el cupo del dia (lo de siempre).
+// como se gasta). 11 nov: ya no hay IA incluida ("cada persona paga Gemini o el proveedor que quiera"):
+// sin clave, Pixel no piensa. Antes existia "pixel", el Gemini del proyecto por Firebase AI Logic.
 //   gemini     Google Gemini con la clave del usuario (aistudio.google.com), por su API REST.
 //   claude     Anthropic Claude con la clave del usuario: proveedor_claude.js, con la libreria oficial.
 //   openai     GPT de OpenAI.              deepseek   DeepSeek.
@@ -10,7 +10,8 @@
 // Kimi (Moonshot) no deja que una pagina web llame a su API directamente (sin CORS, comprobado el 10 nov):
 // se usa por OpenRouter. Los modelos de OpenAI, DeepSeek, OpenRouter y "otro" no se inventan: se piden al
 // servicio con la clave (GET /models) o los escribe el usuario.
-// La clave se guarda SOLO en este aparato (localStorage "pixel.ia"): no va a la nube ni a GitHub.
+// La clave se guarda SOLO en este aparato y por cuenta (localStorage "pixel.ia:<uid>"): no va a la nube ni a
+// GitHub, y dos cuentas en el mismo navegador no comparten clave.
 // motor() da el mismo "modelo" que agente.js usa con Firebase: generateContentStream({contents}) -> {stream}
 // con trozos al estilo Gemini (candidates[0].content.parts, usageMetadata), y generateContent(prompt).
 // Asi el bucle de agente.js (voz, herramientas, confirmaciones) es igual con cualquier proveedor.
@@ -22,8 +23,6 @@ const Proveedores = (function () {
   // ai.google.dev/gemini-api/docs/pricing (10 nov 2026). Claude: tabla de modelos de Anthropic (6 oct 2026).
   // Los demas los da OpenRouter con su lista de modelos, o los pone el usuario.
   const LISTA = {
-    pixel: {nombre: "Píxel (gratis)", clave: false,
-      ayuda: "Gemini del proyecto de Píxel, con el cupo gratis de cada día. No necesita clave."},
     gemini: {nombre: "Google Gemini", clave: true, prefijo: /^AIza[\w-]{20,}$/, ejemplo: "AIza…",
       ayuda: "Tu clave de Google AI Studio (aistudio.google.com → «Get API key»). El gasto va a tu cuenta de Google.",
       modelos: [{id: "gemini-3.5-flash-lite", nombre: "Gemini 3.5 Flash-Lite", e: 0.30, s: 2.50},
@@ -45,16 +44,21 @@ const Proveedores = (function () {
   const motores = {};                          // los que viven en otro archivo (claude: proveedor_claude.js)
   const registrar = (id, f) => { motores[id] = f; };
 
-  // ------------------------------------------------------------------ lo guardado (solo en este aparato)
+  // ------------------------------------------------------------------ lo guardado (solo en este aparato, por cuenta)
+  // Sin sesion no hay donde guardar: cada cuenta tiene lo suyo
+  const llave = () => (typeof nube !== "undefined" && nube && nube.uid ? GUARDADO + ":" + nube.uid : "");
   function leer() {
     let v = null;
-    try { v = JSON.parse(localStorage.getItem(GUARDADO) || "null"); } catch (e) { v = null; }
+    const k = llave();
+    try { v = k ? JSON.parse(localStorage.getItem(k) || "null") : null; } catch (e) { v = null; }
     v = v && typeof v === "object" ? v : {};
-    return {proveedor: LISTA[v.proveedor] ? v.proveedor : "pixel", modelos: v.modelos || {}, claves: v.claves || {}, bases: v.bases || {}, precios: v.precios || {}};
+    return {proveedor: LISTA[v.proveedor] ? v.proveedor : "gemini", modelos: v.modelos || {}, claves: v.claves || {}, bases: v.bases || {}, precios: v.precios || {}};
   }
   function guardar(cfg) {
+    const k = llave();
+    if (!k) return false;
     try {
-      localStorage.setItem(GUARDADO, JSON.stringify({proveedor: cfg.proveedor, modelos: cfg.modelos || {}, claves: cfg.claves || {}, bases: cfg.bases || {}, precios: cfg.precios || {}}));
+      localStorage.setItem(k, JSON.stringify({proveedor: cfg.proveedor, modelos: cfg.modelos || {}, claves: cfg.claves || {}, bases: cfg.bases || {}, precios: cfg.precios || {}}));
       return true;
     } catch (e) { return false; }
   }
@@ -64,14 +68,15 @@ const Proveedores = (function () {
     if (fijos) return fijos.some((m) => m.id === cfg.modelos[p]) ? cfg.modelos[p] : fijos[0].id;
     return String(cfg.modelos[p] || "").trim();
   }
-  // El que se usa ahora: {proveedor, modelo, clave, base, propio}. Sin clave o sin modelo, el gratis.
+  // El que se usa ahora: {proveedor, modelo, clave, base, propio}. Sin clave o sin modelo, ninguno
+  // (propio: false): Pixel no puede pensar hasta que el usuario ponga su clave en Ajustes.
   function actual() {
-    const cfg = leer(), p = cfg.proveedor, gratis = {proveedor: "pixel", modelo: "", clave: "", base: "", propio: false};
-    if (p === "pixel" || !cfg.claves[p] || !modeloDe(cfg, p)) return gratis;
-    if (LISTA[p].compatible && !/^https:\/\//.test(baseDe(cfg, p))) return gratis;
+    const cfg = leer(), p = cfg.proveedor, ninguno = {proveedor: "", modelo: "", clave: "", base: "", propio: false};
+    if (!LISTA[p] || !cfg.claves[p] || !modeloDe(cfg, p)) return ninguno;
+    if (LISTA[p].compatible && !/^https:\/\//.test(baseDe(cfg, p))) return ninguno;
     return {proveedor: p, modelo: modeloDe(cfg, p), clave: cfg.claves[p], base: baseDe(cfg, p), propio: true};
   }
-  const claveValida = (p, clave) => !LISTA[p].clave || (LISTA[p].prefijo ? LISTA[p].prefijo.test(String(clave || "").trim()) : String(clave || "").trim().length >= 16);
+  const claveValida = (p, clave) => !!LISTA[p] && (!LISTA[p].clave || (LISTA[p].prefijo ? LISTA[p].prefijo.test(String(clave || "").trim()) : String(clave || "").trim().length >= 16));
   const tapada = (clave) => { const c = String(clave || ""); return c.length > 10 ? c.slice(0, 6) + "…" + c.slice(-4) : c ? "…" : ""; };   // "sk-ant-…a9F2"
 
   // El uso se apunta en la nube por modelo: los de clave propia con "propia:". Las claves de la base de datos
