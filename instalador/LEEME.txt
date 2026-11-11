@@ -1,4 +1,4 @@
-PÍXEL 2.1.0 · el programa del computador
+PÍXEL 2.1.1 · el programa del computador
 ========================================
 
 Píxel tiene tres partes: el robot, este programa del computador y la
