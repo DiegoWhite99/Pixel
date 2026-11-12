@@ -278,7 +278,7 @@
     $("#ia-base").value = cfg.bases.otro || "";
     const clave = $("#ia-clave");
     clave.value = "";
-    clave.placeholder = cfg.claves[p] ? `Guardada: ${P.tapada(cfg.claves[p])} (escribe otra para cambiarla)` : (L.ejemplo || "");
+    clave.placeholder = cfg.claves[p] ? `Guardada: ${P.tapada(cfg.claves[p])} (escribe otra para cambiarla)` : "Pega aquí tu clave";
     const fijo = !!L.modelos;
     $("#ia-modelo-fijo").hidden = !fijo;
     $("#ia-modelo").hidden = fijo;
@@ -355,12 +355,12 @@
       if (window.pintarPasos) window.pintarPasos();
       toast(P.actual().propio ? "Borré esa clave de esta cuenta en este aparato." : "Borré la clave de esta cuenta en este aparato. Sin clave, Píxel no puede pensar.");
     });
-    $("#f-ia").addEventListener("submit", (e) => {
+    $("#f-ia").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const {p, L, cfg, a} = delFormulario();
+      const {p, L, cfg, a} = delFormulario(), antes = P.leer();
       const nueva = $("#ia-clave").value.trim();
       if (!nube.uid) { resultadoIA(false, "Entra con tu cuenta para guardar la clave: cada cuenta tiene la suya."); return; }
-      if (nueva && !P.claveValida(p, nueva)) { resultadoIA(false, `Esa clave no parece de ${L.nombre}${L.ejemplo ? ` (empieza por ${L.ejemplo.replace("…", "")})` : ""}.`); return; }
+      if (nueva && !P.claveValida(p, nueva)) { resultadoIA(false, "Esa clave está incompleta o tiene espacios: cópiala entera, sin espacios."); return; }
       if (!a.clave) { resultadoIA(false, "Escribe tu clave."); return; }
       if (!a.modelo) { resultadoIA(false, "Elige un modelo."); return; }
       if (p === "otro" && !/^https:\/\//.test(a.base)) { resultadoIA(false, "La dirección tiene que empezar por https://"); return; }
@@ -377,7 +377,27 @@
       N.pintar();
       pintar();
       if (window.pintarPasos) window.pintarPasos();
-      resultadoIA(true, `Listo: Píxel piensa con ${P.nombreModelo(P.sanear(a.modelo))}, con tu clave. Toca «Probar» para comprobarla.`);
+      const listo = `Píxel piensa con ${P.nombreModelo(P.sanear(a.modelo))}, con tu clave.`;
+      if (!nueva) { resultadoIA(true, "Listo: " + listo); return; }
+      // una clave nueva se prueba al momento: el servicio dice si vale (no el formato)
+      const boton = e.submitter;
+      if (boton) boton.disabled = true;
+      resultadoIA(true, `Guardada. Probándola con ${L.nombre}…`);
+      const r = await P.probar(P.actual());
+      if (boton) boton.disabled = false;
+      if (r.ok) {
+        if (r.uso) N.contarUso("prueba", P.claveUso(a), r.uso);
+        resultadoIA(true, `Listo: ${L.nombre} aceptó tu clave y contestó «${r.texto}». ${listo}`);
+      } else if ([400, 401, 403].includes(r.status) && /key|clave|auth|permis|invalid|no v[aá]lid/i.test(r.texto)) {
+        P.guardar(antes);                  // la clave que el servicio rechaza no se queda
+        formularioIA(p);
+        N.pintar();
+        pintar();
+        if (window.pintarPasos) window.pintarPasos();
+        resultadoIA(false, `${L.nombre} no aceptó esa clave, así que no la guardé. Lo que dijo: ${r.texto}`);
+      } else {
+        resultadoIA(false, `Guardé la clave, pero la prueba no salió: ${r.texto}. Toca «Probar» en un rato.`);
+      }
     });
   }
 

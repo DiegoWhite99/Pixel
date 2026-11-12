@@ -771,7 +771,7 @@ function pintarVisibles() {
         ${nube.mios && nube.mios[pid] ? '<span class="chip ok">Ya enlazado</span>'
           : `<button class="btn primario" type="button" data-enlazar="${esc(pid)}" data-nombre="${esc(v.nombre)}">Enlazar</button>`}</div>`).join("")}</div>`
     : `<div class="buscando"><span class="giro"></span>Buscando a Píxel…</div>
-       <p class="sub">Su servidor tiene que estar encendido en el PC y con internet. Si ya está enlazado con otra app, en el PC abre el panel → Cuentas → <b>Enlazar otra app</b>.</p>`;
+       <p class="sub">Píxel tiene que estar encendido en el computador y con internet. Si ya está vinculado con otra cuenta, en su panel del computador toca <b>Mostrar código para vincular</b>.</p>`;
 }
 
 async function pedirAPixel(codigo) {

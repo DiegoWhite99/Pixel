@@ -12,7 +12,7 @@ Cómo leerla: **Entrada** es la vía por la que llega la orden (voz del ESP32, v
 | Palabra de activación "Píxel" | ESP32, app | `servidor.py`: `quitar_activacion`, `_RE_ACTIVACION_EN_MEDIO`; `web/agente.js`: `activacion()` | — |
 | Decidir la intención (regex) | ESP32 | `acciones.py`: `detectar` | — |
 | Decidir la intención (clasificador) | ESP32 | `clasificador.py`: `Clasificador` | Gemini o Ollama |
-| Responder con el modelo, en streaming | ESP32, PC | `llm.py`: `Llm.responder`; `gemini.py` | Gemini `:streamGenerateContent` o Ollama `/api/chat` |
+| Responder con el modelo, en streaming | ESP32, PC | `llm.py`: `Llm.responder`, `motores`; `gemini.py`, `groq_ia.py` | Gemini `:streamGenerateContent`, Groq `/chat/completions` o Ollama `/api/chat` |
 | Partir la respuesta en frases para la voz | ESP32 | `servidor.py`: `extraer_frases` | — |
 | Hablar (Piper) | ESP32, PC | `tts.py`: `Tts`; `tts_supertonic.py`: `TtsSupertonic` | `panel.py`: `probar_voz` |
 | Reposo (olvida la conversación) | ESP32 | `servidor.py`: `Sesion._reposo` | — |
@@ -57,7 +57,7 @@ Cómo leerla: **Entrada** es la vía por la que llega la orden (voz del ESP32, v
 | Vigilar aparatos WiFi | tarea del PC | `red_wifi.py`: `vigilar` | cada 30 s |
 | Sincronizar con Obsidian | tarea del PC | `obsidian.py`: `sincronizar` | cada 5 s |
 
-## 5. Panel local (`panel.py`, mismo `web/` que la app)
+## 5. Panel local (`panel.py`, mismo `web/` que la app; en el programa instalado, su ventana `web/escritorio.html`)
 
 | Función | Entrada | Código | Ruta |
 |---|---|---|---|
@@ -71,6 +71,10 @@ Cómo leerla: **Entrada** es la vía por la que llega la orden (voz del ESP32, v
 | Buscar y agregar WiFi | panel | `red_wifi.py`: `buscar`; `panel.py`: `buscar_wifi`, `agregar_wifi` | `POST /api/wifi/buscar`, `/api/wifi/agregar` |
 | Bluetooth del PC (encender, buscar, emparejar, conectar, olvidar, visible, música) | panel | `bluetooth_pc.py`; `panel.py`: `_bt` | `POST /api/bt/...` (8 rutas) |
 | Poner la clave de Gemini y probarla (solo red local) | panel | `panel.py`: `guardar_gemini`, `probar_gemini` | `POST /api/gemini/clave`, `/api/gemini/probar` |
+| Poner la clave de Groq y probarla (elige el modelo) | panel, ventana | `panel.py`: `guardar_groq`, `probar_groq`; `groq_ia.py` | `POST /api/groq/clave`, `/api/groq/probar` |
+| Cuál IA de internet contesta primero (Gemini o Groq) | ventana | `panel.py`: `elegir_ia`; `llm.motores` | `POST /api/ia` |
+| Apagar Píxel (solo el programa instalado) | ventana | `instalador/pixel_lanzador.py`: `configurar` → `apagar` | `POST /api/apagar` |
+| La ventana del programa: bienvenida y panel de control azul | ventana | `web/escritorio.*`; `instalador/pixel_ventana.py`: `mostrar` | `GET /escritorio.html` |
 | Etiquetas de la app | panel | — | `GET /api/tags` |
 
 ## 6. Nube (`nube.py`, Píxel en Firebase)

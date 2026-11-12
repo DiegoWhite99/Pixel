@@ -17,6 +17,7 @@ nube_token.json
 google_cliente.json
 google_token.json
 gemini*.json
+groq*.json
 # Fase 13: el certificado con el que el PC se presenta al TV Android
 tv_cert.pem
 tv_clave.pem

@@ -5,6 +5,8 @@
 //   gemini     Google Gemini con la clave del usuario (aistudio.google.com), por su API REST.
 //   claude     Anthropic Claude con la clave del usuario: proveedor_claude.js, con la libreria oficial.
 //   openai     GPT de OpenAI.              deepseek   DeepSeek.
+//   groq       Groq (12 nov, pedido: "agrega un cliente mas en API como Groq"): Llama, GPT-OSS, Qwen... muy rapido.
+//              Deja que una pagina web llame a su API (CORS comprobado el 12 nov). El programa del PC tambien lo usa.
 //   openrouter Una sola clave para cientos de modelos: GPT, Kimi, DeepSeek, Llama, Mistral, Claude...
 //   otro       Cualquier servicio compatible con la API de OpenAI (su direccion https).
 // Kimi (Moonshot) no deja que una pagina web llame a su API directamente (sin CORS, comprobado el 10 nov):
@@ -23,22 +25,24 @@ const Proveedores = (function () {
   // ai.google.dev/gemini-api/docs/pricing (10 nov 2026). Claude: tabla de modelos de Anthropic (6 oct 2026).
   // Los demas los da OpenRouter con su lista de modelos, o los pone el usuario.
   const LISTA = {
-    gemini: {nombre: "Google Gemini", clave: true, prefijo: /^AIza[\w-]{20,}$/, ejemplo: "AIza…",
+    gemini: {nombre: "Google Gemini", clave: true,
       ayuda: "Tu clave de Google AI Studio (aistudio.google.com → «Get API key»). El gasto va a tu cuenta de Google.",
       modelos: [{id: "gemini-3.5-flash-lite", nombre: "Gemini 3.5 Flash-Lite", e: 0.30, s: 2.50},
         {id: "gemini-3.1-flash-lite", nombre: "Gemini 3.1 Flash-Lite", e: 0.25, s: 1.50}]},
-    claude: {nombre: "Anthropic Claude", clave: true, prefijo: /^sk-ant-[\w-]{20,}$/, ejemplo: "sk-ant-…",
+    claude: {nombre: "Anthropic Claude", clave: true,
       ayuda: "Tu clave de la consola de Anthropic (console.anthropic.com → «API keys»). El gasto va a tu cuenta de Anthropic.",
       modelos: [{id: "claude-opus-5-5", nombre: "Claude Opus 5.5", e: 4.00, s: 20.00},
         {id: "claude-sonnet-5-5", nombre: "Claude Sonnet 5.5", e: 2.00, s: 10.00},
         {id: "claude-haiku-5-5", nombre: "Claude Haiku 5.5", e: 0.10, s: 0.50}]},
-    openai: {nombre: "OpenAI (GPT)", clave: true, compatible: true, base: "https://api.openai.com/v1", ejemplo: "sk-…", maxCampo: "max_completion_tokens", uso: true,
+    openai: {nombre: "OpenAI (GPT)", clave: true, compatible: true, base: "https://api.openai.com/v1", maxCampo: "max_completion_tokens", uso: true,
       ayuda: "Tu clave de OpenAI (platform.openai.com → «API keys»). Toca «Buscar modelos» para elegir uno."},
-    openrouter: {nombre: "OpenRouter (GPT, Kimi, DeepSeek, Llama…)", clave: true, compatible: true, base: "https://openrouter.ai/api/v1", ejemplo: "sk-or-…", uso: true, precios: true,
+    openrouter: {nombre: "OpenRouter (GPT, Kimi, DeepSeek, Llama…)", clave: true, compatible: true, base: "https://openrouter.ai/api/v1", uso: true, precios: true,
       ayuda: "Una sola clave para cientos de modelos, también Kimi (openrouter.ai → «Keys»). Los precios salen solos."},
-    deepseek: {nombre: "DeepSeek", clave: true, compatible: true, base: "https://api.deepseek.com", ejemplo: "sk-…", uso: true,
+    deepseek: {nombre: "DeepSeek", clave: true, compatible: true, base: "https://api.deepseek.com", uso: true,
       ayuda: "Tu clave de DeepSeek (platform.deepseek.com → «API keys»)."},
-    otro: {nombre: "Otro compatible con OpenAI", clave: true, compatible: true, base: "", ejemplo: "tu clave",
+    groq: {nombre: "Groq (Llama, GPT-OSS, Qwen…)", clave: true, compatible: true, base: "https://api.groq.com/openai/v1", uso: true,
+      ayuda: "Tu clave de Groq (console.groq.com → «API Keys»). Responde muy rápido. Toca «Buscar modelos» para elegir uno."},
+    otro: {nombre: "Otro compatible con OpenAI", clave: true, compatible: true, base: "",
       ayuda: "Cualquier servicio con la misma API que OpenAI. Escribe su dirección (https://…/v1). Tiene que dejar que una página web lo llame."},
   };
   const motores = {};                          // los que viven en otro archivo (claude: proveedor_claude.js)
@@ -76,7 +80,10 @@ const Proveedores = (function () {
     if (LISTA[p].compatible && !/^https:\/\//.test(baseDe(cfg, p))) return ninguno;
     return {proveedor: p, modelo: modeloDe(cfg, p), clave: cfg.claves[p], base: baseDe(cfg, p), propio: true};
   }
-  const claveValida = (p, clave) => !!LISTA[p] && (!LISTA[p].clave || (LISTA[p].prefijo ? LISTA[p].prefijo.test(String(clave || "").trim()) : String(clave || "").trim().length >= 16));
+  // 12 nov (el usuario: "dice que la clave empieza por AIza, entonces no deja"): antes cada proveedor exigia su
+  // comienzo de siempre (AIza..., sk-ant-..., gsk_...) y una clave de otro formato no se podia ni guardar. Ahora
+  // solo se mira que este entera (sin espacios, de un largo razonable): si vale o no lo dice el servicio al probarla.
+  const claveValida = (p, clave) => !!LISTA[p] && (!LISTA[p].clave || /^[\x21-\x7e]{16,400}$/.test(String(clave || "").trim()));
   const tapada = (clave) => { const c = String(clave || ""); return c.length > 10 ? c.slice(0, 6) + "…" + c.slice(-4) : c ? "…" : ""; };   // "sk-ant-…a9F2"
 
   // El uso se apunta en la nube por modelo: los de clave propia con "propia:". Las claves de la base de datos
@@ -239,7 +246,7 @@ const Proveedores = (function () {
     const r = await fetch(a.base + "/models", {headers: cabecerasOpenAI(a)});
     if (!r.ok) throw await errorDe(r, (LISTA[a.proveedor] || {}).nombre || "El servicio");
     const j = await r.json(), lista = Array.isArray(j.data) ? j.data : Array.isArray(j) ? j : [];
-    return lista.filter((m) => m && typeof m.id === "string" && !/embed|whisper|tts|dall-e|image|moderation|audio|realtime|transcribe|davinci|babbage|search/i.test(m.id))
+    return lista.filter((m) => m && typeof m.id === "string" && !/embed|whisper|tts|dall-e|image|moderation|audio|realtime|transcribe|davinci|babbage|search|guard|playai|orpheus/i.test(m.id))
       .map((m) => {
         const p = m.pricing || {}, e = Number(p.prompt) * 1e6, s = Number(p.completion) * 1e6;
         return Object.assign({id: m.id, nombre: m.name || m.id}, isFinite(e) && isFinite(s) && (e > 0 || s > 0) ? {e: Math.round(e * 1000) / 1000, s: Math.round(s * 1000) / 1000} : {});

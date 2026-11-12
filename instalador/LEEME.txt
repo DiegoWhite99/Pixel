@@ -1,4 +1,4 @@
-PÍXEL 2.1.2 · el programa del computador
+PÍXEL 2.2.0 · el programa del computador
 ========================================
 
 Píxel tiene tres partes: el robot, este programa del computador y la
@@ -6,24 +6,25 @@ app (https://pixelassitance.web.app, en el celular o en la web). Este programa o
 al robot por tu WiFi, entiende lo que dices, piensa con la IA y le devuelve la voz.
 
 PRIMERA VEZ
-1. Abre «Píxel» desde el menú (o el escritorio). Se abre el navegador con
-   «Preparando a Píxel»: la primera vez baja la voz y el oído (unos 600 MB).
-   Necesitas internet. Después arranca en segundos.
-2. Cuando termina, ves el panel de Píxel (http://localhost:8080).
-3. Vincúlalo con tu cuenta: en la app, entra con Google, toca «Buscar a Píxel»,
-   elige este computador y escribe el código de 6 cifras que dice Píxel. El
-   código también sale aquí, en el panel → Cuentas.
-4. La IA: pega tu clave de Gemini en el panel → Cuentas (cada persona usa la
-   suya). Sin clave, Píxel responde con Ollama si lo tienes instalado
+1. Abre «Píxel» desde el menú (o el escritorio). Se abre su ventana, el panel
+   de control: la primera vez baja la voz y el oído (unos 600 MB) y lo ves
+   avanzar ahí. Necesitas internet. Después arranca en segundos.
+2. Vincúlalo con tu cuenta: en la app, entra con Google, toca «Buscar a Píxel»,
+   elige este computador y escribe el código de 6 cifras que sale en el panel
+   (Inicio o Dispositivos). Píxel también lo dice en voz alta si se lo pides.
+3. La IA, en el panel → Tus APIs: pega tu clave de Gemini o de Groq (cada
+   persona usa la suya) y elige cuál contesta primero; la otra queda de
+   respaldo. Sin clave, Píxel responde con Ollama si lo tienes instalado
    (https://ollama.com, modelo qwen2.5:3b); si no, solo hace las acciones
    (música, recordatorios, aparatos) y no conversa.
+4. Si cierras la ventana, Píxel sigue escuchando al robot. Para apagarlo del
+   todo: «Apagar Píxel», abajo a la izquierda del panel.
 
 RED
 - El robot habla con este programa por el puerto 8765 (TCP) y lo encuentra por
-  el 8766 (UDP). El panel usa el 8080. Si el sistema pregunta si dejas que
-  Píxel use la red (puede salir con el nombre «Python»), di que sí en redes
-  privadas.
-- El panel no pide contraseña: úsalo solo en la red de tu casa.
+  el 8766 (UDP). Si el sistema pregunta si dejas que Píxel use la red (puede
+  salir con el nombre «Python»), di que sí en redes privadas.
+- El panel solo se abre en este computador (puerto 8080, sin salir a la red).
 
 TUS DATOS
 - Linux:   ~/.local/share/pixel
@@ -36,6 +37,8 @@ TUS DATOS
   cambia cómo sale este computador en la app al buscarlo.
 
 LINUX
+- La ventana de Píxel se abre con Chrome, Chromium o Edge si lo tienes (sin
+  barra de direcciones); si no, en tu navegador.
 - Para que Píxel arranque solo al entrar en la sesión:
       systemctl --user enable --now pixel-asistente
 - Para controlar el PC por voz (volumen, música, WhatsApp Web) conviene tener
@@ -43,10 +46,11 @@ LINUX
 - Desinstalar: sudo apt remove pixel (tus datos se quedan en la carpeta de arriba).
 
 WINDOWS
+- La ventana usa el motor de Edge que ya trae Windows.
 - No pide permisos de administrador. Desinstalar: Configuración → Aplicaciones
   → Píxel, o «Desinstalar Píxel» en el menú Inicio.
 - Por ahora en Windows no funcionan: el Bluetooth del PC, el volumen y la
   música del sistema, ni escribir en WhatsApp Web por ti. Sí funcionan la voz,
   la IA, el robot, la app, YouTube en el navegador y los aparatos WiFi.
 
-Píxel · Divergencia IA
+Píxel · un agente creado por Divergency IA

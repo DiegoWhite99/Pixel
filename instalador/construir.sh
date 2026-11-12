@@ -9,12 +9,12 @@
 #   - Windows: .pyc sin los .py (Nuitka para Windows solo se puede en Windows: instalador/windows/nuitka.yml;
 #     con PIXEL_PYD=<carpeta con sus .pyd> el .exe lleva esos en vez de los .pyc).
 # No mete claves ni datos del usuario: lo comprueba revisar_secretos() antes de empaquetar.
-# Necesita internet, gcc, dpkg-deb y fakeroot. Sin sudo. El icono de Windows necesita node y PUPPETEER
-# (puppeteer-core, como las pruebas del navegador); sin ellos, los accesos usan el icono de Python.
+# Necesita internet, gcc, dpkg-deb y fakeroot. Sin sudo. El icono y las imagenes del instalador ya estan hechos en
+# instalador/imagenes/ (los dibuja instalador/imagenes.js; solo hay que repetirlo si cambia el dibujo).
 # Descargas y herramientas: $PIXEL_CACHE (por defecto ~/.cache/pixel-instalador).
 set -euo pipefail
 
-VERSION=2.1.2
+VERSION=2.2.0
 RAIZ=$(cd "$(dirname "$0")/.." && pwd)
 INST=$RAIZ/instalador
 DIST=$RAIZ/dist
@@ -28,8 +28,13 @@ PBS_LIN_SHA=1780de9ddda04e956d2a4a0ad09b7f5667d92f4f12cd0881ec939de5d542903f
 PBS_WIN=cpython-3.10.22+20261009-x86_64-pc-windows-msvc-install_only.tar.gz
 PBS_WIN_SHA=cb023e83e42d8937ba77c7cf83641083c3b81e88e1226e1c694a347ae1924d54
 NUITKA=nuitka==4.3.5
-# Dependencias que solo pide Windows (marcadores sys_platform == "win32" de tqdm y humanfriendly)
-SOLO_WINDOWS="colorama==0.4.6 pyreadline3==3.5.6"
+# Dependencias que solo pide Windows (marcadores sys_platform == "win32" de tqdm y humanfriendly) y, desde la 2.2.0,
+# la ventana de Pixel (instalador/pixel_ventana.py): pywebview con el motor de Edge de Windows, por pythonnet (.NET)
+SOLO_WINDOWS="colorama==0.4.6 pyreadline3==3.5.6 pywebview==6.2.1 pythonnet==3.1.0 clr_loader==0.3.1 bottle==0.13.4 proxy_tools==0.1.0"
+# proxy_tools (de pywebview) solo esta como codigo fuente: se baja con su huella y se arma su rueda (pura Python)
+PROXY_URL=https://files.pythonhosted.org/packages/source/p/proxy_tools/proxy_tools-0.1.0.tar.gz
+PROXY_SHA=ccb3751f529c047e2d8a58440d86b205303cf0fe8146f784d1cbcd94f0a28010
+IMAGENES=$RAIZ/instalador/imagenes
 
 aviso() { printf '\n== %s\n' "$*"; }
 
@@ -71,7 +76,7 @@ revisar_secretos() {
   if grep -rIl --exclude-dir=site-packages -e 'AIza[0-9A-Za-z_-]\{35\}' "$dir" | xargs -r grep -ho 'AIza[0-9A-Za-z_-]\{35\}' | sort -u | grep -v "^$publica\$"; then
     echo "  MAL: hay una clave de Google que no es la publica de Firebase"; malo=1
   fi
-  for n in nube_token.json google_cliente.json google_token.json gemini_clave.json gemini.json tv_cert.pem tv_clave.pem \
+  for n in nube_token.json google_cliente.json google_token.json gemini_clave.json gemini.json groq_clave.json tv_cert.pem tv_clave.pem \
            tv_emparejados.json ajustes.json contactos.json dispositivos.json eventos.json recordatorios.json memoria.md servidor.log; do
     if [ -n "$(find "$dir" -name "$n" -not -path '*/site-packages/*' -print -quit)" ]; then echo "  MAL: va $n"; malo=1; fi
   done
@@ -107,7 +112,7 @@ linux() {
   fi
   local fuente=$OBRA/fuente
   rm -rf "$fuente" && mkdir -p "$fuente" "$opt/app"
-  cp $(modulos) "$INST/pixel_lanzador.py" "$fuente"/
+  cp $(modulos) "$INST/pixel_lanzador.py" "$INST/pixel_ventana.py" "$fuente"/
   ls "$fuente"/*.py | xargs -P "$(nproc)" -I{} "$nk" -m nuitka --module --nofollow-imports --python-flag=no_docstrings \
     --remove-output --assume-yes-for-downloads --quiet --output-dir="$opt/app" {}
   rm -f "$opt/app"/*.pyi
@@ -117,7 +122,8 @@ linux() {
 
   install -Dm755 "$INST/linux/pixel" "$raiz/usr/bin/pixel"
   install -Dm644 "$INST/linux/pixel.desktop" "$raiz/usr/share/applications/pixel.desktop"
-  install -Dm644 "$RAIZ/web/icono.svg" "$raiz/usr/share/icons/hicolor/scalable/apps/pixel.svg"
+  install -Dm644 "$RAIZ/web/icono_programa.svg" "$raiz/usr/share/icons/hicolor/scalable/apps/pixel.svg"
+  install -Dm644 "$IMAGENES/pixel.png" "$raiz/usr/share/icons/hicolor/256x256/apps/pixel.png"
   install -Dm644 "$INST/linux/pixel-asistente.service" "$raiz/usr/lib/systemd/user/pixel-asistente.service"
   install -Dm644 "$INST/LEEME.txt" "$opt/LEEME.txt"
   revisar_secretos "$raiz"
@@ -143,10 +149,16 @@ windows() {
   rm -rf "$org" && mkdir -p "$org"
   tar xzf "$CACHE/$PBS_WIN" -C "$org"
   local sp=$org/python/Lib/site-packages
+  bajar "$PROXY_URL" proxy_tools-0.1.0.tar.gz "$PROXY_SHA"
+  mkdir -p "$CACHE/ruedas"
+  [ -f "$CACHE/ruedas/proxy_tools-0.1.0-py3-none-any.whl" ] || \
+    "$herr" -m pip wheel -q --disable-pip-version-check --no-deps -w "$CACHE/ruedas" "$CACHE/proxy_tools-0.1.0.tar.gz"
   # --platform: pip baja y desempaqueta las ruedas de Windows (cp310, win_amd64) sin ejecutar nada
   "$herr" -m pip install -q --disable-pip-version-check --no-warn-script-location --no-compile --no-deps \
     --only-binary=:all: --platform win_amd64 --python-version 3.10 --implementation cp --abi cp310 \
-    --target "$sp" -r "$INST/bloqueo.txt" $SOLO_WINDOWS
+    --find-links "$CACHE/ruedas" --target "$sp" -r "$INST/bloqueo.txt" $SOLO_WINDOWS
+  # pywebview trae piezas para otros sistemas (Android, Edge en ARM y 32 bits) que aqui no hacen falta
+  rm -rf "$sp/webview/lib/pywebview-android.jar" "$sp/webview/lib/runtimes/win-arm64" "$sp/webview/lib/runtimes/win-x86"
   rm -rf "$sp/bin"
   recortar_python "$org/python/Lib"
   rm -rf "$org/python"/{include,libs,tcl,Scripts}
@@ -157,10 +169,10 @@ windows() {
   if [ -n "${PIXEL_PYD:-}" ]; then
     aviso "Windows: el codigo compilado con Nuitka en GitHub (.pyd de $PIXEL_PYD)"
     cp "$PIXEL_PYD"/*.pyd "$org/app"/
-    [ "$(ls "$org/app"/*.pyd | wc -l)" = "$(( $(modulos | wc -l) + 1 ))" ] || { echo "faltan .pyd en $PIXEL_PYD" >&2; exit 1; }
+    [ "$(ls "$org/app"/*.pyd | wc -l)" = "$(( $(modulos | wc -l) + 2 ))" ] || { echo "faltan .pyd en $PIXEL_PYD" >&2; exit 1; }
   else
     aviso "Windows: el codigo como .pyc (Python 3.10, sin los .py)"
-    cp $(modulos) "$INST/pixel_lanzador.py" "$org/app"/
+    cp $(modulos) "$INST/pixel_lanzador.py" "$INST/pixel_ventana.py" "$org/app"/
     "$herr" -m compileall -q -b -o 2 -s "$org" -p 'C:\Pixel' "$org/app" > /dev/null
     rm -f "$org/app"/*.py
   fi
@@ -174,13 +186,10 @@ windows() {
   if [ ! -x "$nsis/raiz/usr/bin/makensis" ]; then
     mkdir -p "$nsis" && (cd "$nsis" && apt download nsis nsis-common > /dev/null && for d in *.deb; do dpkg -x "$d" raiz; done)
   fi
-  local icono=()
-  if [ -n "${PUPPETEER:-}" ] && command -v node > /dev/null; then
-    node "$INST/icono.js" "$RAIZ/web/icono.svg" "$OBRA/pixel.ico" && icono=(-DICONO="$OBRA/pixel.ico")
-  fi
   mkdir -p "$DIST"
   NSISDIR=$nsis/raiz/usr/share/nsis "$nsis/raiz/usr/bin/makensis" -V2 -DVERSION=$VERSION -DORIGEN="$org" \
-    -DSALIDA="$DIST/Pixel-$VERSION-Setup.exe" "${icono[@]}" "$INST/windows/pixel.nsi"
+    -DSALIDA="$DIST/Pixel-$VERSION-Setup.exe" -DICONO="$IMAGENES/pixel.ico" -DBIENVENIDA="$IMAGENES/bienvenida.bmp" \
+    -DCABECERA="$IMAGENES/cabecera.bmp" "$INST/windows/pixel.nsi"
 }
 
 # Todo en un solo bloque: bash lo lee entero antes de empezar, asi editar este archivo mientras corre no lo rompe

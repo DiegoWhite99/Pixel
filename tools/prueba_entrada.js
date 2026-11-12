@@ -87,6 +87,52 @@ const escribir = (p, t) => p.evaluate((x) => { const i = document.getElementById
     await p.screenshot({path: CAPTURAS + "/inicio_pasos.png"});
     await b.close();
   }
+  // ---- 5 (12 nov, captura del usuario: "Esa clave no parece de Google Gemini (empieza por AIza)"): Ajustes acepta
+  // una clave de Google con otro formato y la prueba al guardarla; la que Google rechaza no se queda.
+  {
+    const b = await lanzar(), p = await b.newPage(), vistas = [];
+    await p.setRequestInterception(true);
+    p.on("request", (r) => {
+      const u = r.url();
+      if (/huggingface|hf\.co|cdn\.jsdelivr\.net\/npm\/onnxruntime/.test(u)) return r.abort();
+      if (!IA.test(u)) return r.continue();
+      const cors = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "GET,POST,OPTIONS"};
+      if (r.method() === "OPTIONS") return r.respond({status: 204, headers: cors, body: ""});
+      const k = r.headers()["x-goog-api-key"] || "";
+      vistas.push(k);
+      if (k.includes("MALA")) {
+        return r.respond({status: 400, headers: cors, contentType: "application/json",
+          body: JSON.stringify({error: {code: 400, message: "API key not valid. Please pass a valid API key.", status: "INVALID_ARGUMENT"}})});
+      }
+      return r.respond({status: 200, headers: cors, contentType: "application/json",
+        body: JSON.stringify({candidates: [{content: {role: "model", parts: [{text: "listo"}]}, finishReason: "STOP"}], usageMetadata: {promptTokenCount: 5, candidatesTokenCount: 1}})});
+    });
+    await p.goto("http://localhost:8099/?nube=anonimo", {waitUntil: "load", timeout: 60000});
+    await esperar(10000);
+    const guardar = (k) => p.evaluate((k) => {
+      const sel = document.getElementById("ia-proveedor");
+      sel.value = "gemini"; sel.dispatchEvent(new Event("change"));
+      document.getElementById("ia-clave").value = k;
+      document.getElementById("f-ia").dispatchEvent(new Event("submit", {cancelable: true, bubbles: true}));
+    }, k);
+    const leer = () => p.evaluate(() => ({texto: document.getElementById("ia-prueba").textContent.trim(),
+      guardada: (JSON.parse(localStorage.getItem("pixel.ia:" + nube.uid) || "{}").claves || {}).gemini || ""}));
+    const NUEVA = "AQ.Ab8RN6" + "PruebaFalsaNoReal0123456789abcdefghijklm";
+    await guardar(NUEVA);
+    await esperar(4000);
+    let e = await leer();
+    ok(vistas.includes(NUEVA), "una clave de Google que no empieza por AIza se prueba con Google");
+    ok(e.guardada === NUEVA && /aceptó tu clave/.test(e.texto), "y si Google la acepta, se guarda: «" + e.texto.slice(0, 90) + "»");
+    await guardar("AIzaMALA" + "x".repeat(31));
+    await esperar(4000);
+    e = await leer();
+    ok(e.guardada === NUEVA && /no aceptó esa clave, así que no la guardé/.test(e.texto), "la que Google rechaza no se guarda: «" + e.texto.slice(0, 110) + "»");
+    await guardar("AIza con espacios en medio 1234567890");
+    await esperar(800);
+    e = await leer();
+    ok(/incompleta o tiene espacios/.test(e.texto), "una clave con espacios se avisa sin llamar a nadie");
+    await b.close();
+  }
   console.log(fallos.length ? fallos.length + " FALLO(S)" : "TODO BIEN");
   process.exit(fallos.length ? 1 : 0);
 })().catch((e) => { console.error("ERROR DE LA PRUEBA", e); process.exit(2); });

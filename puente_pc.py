@@ -62,7 +62,8 @@ def _ruta(nombre):
 def _correr(cmd, timeout=6):
     """Ejecuta un comando de escritorio. Devuelve (codigo, salida). Se sustituye en las pruebas."""
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
+        # errors="replace": en Windows los programas de consola no escriben en UTF-8 (ver red_wifi._TEXTO)
+        p = subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=timeout, stdin=subprocess.DEVNULL)
         return p.returncode, (p.stdout + p.stderr).strip()
     except FileNotFoundError:
         return 127, "no esta instalado: %s" % cmd[0]

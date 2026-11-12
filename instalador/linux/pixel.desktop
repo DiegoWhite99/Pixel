@@ -2,7 +2,7 @@
 Type=Application
 Name=Píxel
 GenericName=Asistente de voz
-Comment=Arranca Píxel y abre su panel para vincularlo con tu cuenta
+Comment=Abre el panel de control de Píxel
 Exec=pixel
 Icon=pixel
 Terminal=false

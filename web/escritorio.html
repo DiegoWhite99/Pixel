@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Píxel · Panel de control</title>
+<meta name="description" content="Panel de control de Píxel en este computador: vincula tus dispositivos y guarda tus APIs.">
+<!-- Fase 15 (12 nov) - La ventana del programa instalado (instalador/pixel_ventana.py). Pedido del usuario: "un
+     entorno como un dashboard todo azul" con Pixel acercandose de atras hacia adelante y su saludo; distinto de la
+     app de internet. Habla con el panel local (/api/estado y RUTAS_POST / RUTAS_SOLO_LOCAL de panel.py); mientras
+     el lanzador baja la voz, /api/estado da 503 y el avance sale en /progreso. Logica: escritorio.js. -->
+<link rel="icon" href="icono_programa.svg" type="image/svg+xml">
+<link rel="stylesheet" href="escritorio.css">
+</head>
+<body class="con-intro">
+
+<!-- ===================== Bienvenida: Pixel llega desde el fondo y saluda ===================== -->
+<div id="intro" class="intro" role="dialog" aria-modal="true" aria-label="Bienvenida de Píxel">
+  <canvas id="estrellas" class="estrellas" aria-hidden="true"></canvas>
+  <div class="suelo" aria-hidden="true"><div class="suelo-rejilla"></div></div>
+  <div class="intro-centro">
+    <div class="intro-escena">
+      <div class="onda" aria-hidden="true"></div>
+      <div class="onda dos" aria-hidden="true"></div>
+      <div id="intro-pixel" class="intro-pixel pixel-figura" aria-hidden="true"></div>
+    </div>
+    <p id="intro-texto" class="intro-texto" aria-live="polite"></p>
+    <button id="intro-entrar" class="btn primario grande intro-entrar" type="button">Entrar al panel</button>
+  </div>
+  <button id="intro-saltar" class="intro-saltar" type="button">Saltar</button>
+</div>
+
+<!-- ===================== El panel ===================== -->
+<div class="app" id="app">
+  <aside class="lateral">
+    <div class="marca">
+      <div id="avatar" class="avatar pixel-figura" aria-hidden="true"></div>
+      <div class="marca-txt"><strong>Píxel</strong><span>Panel de control</span></div>
+    </div>
+    <nav class="menu" aria-label="Secciones">
+      <button type="button" data-vista="inicio" class="activo" aria-current="page">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.6"/><rect x="14" y="3" width="7" height="5" rx="1.6"/><rect x="14" y="12" width="7" height="9" rx="1.6"/><rect x="3" y="16" width="7" height="5" rx="1.6"/></svg>
+        <span>Inicio</span></button>
+      <button type="button" data-vista="dispositivos">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="14" height="10" rx="2"/><path d="M6 18h6M9 14v4"/><rect x="17.5" y="8" width="4.5" height="12" rx="1.4"/></svg>
+        <span>Dispositivos</span></button>
+      <button type="button" data-vista="apis">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.8-9.8M17 6l3 3M14.5 8.5l2 2"/></svg>
+        <span>Tus APIs</span></button>
+      <button type="button" data-vista="voz">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg>
+        <span>Voz</span></button>
+    </nav>
+    <div class="lateral-pie">
+      <div class="estado-mini"><i id="punto" class="punto"></i><span id="estado-mini">Conectando…</span></div>
+      <button id="apagar" class="btn fantasma apagar" type="button" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>
+        Apagar Píxel</button>
+      <small class="firma">Píxel <span id="version"></span> · Divergency IA</small>
+    </div>
+  </aside>
+
+  <main class="principal" id="principal">
+    <header class="cabecera">
+      <div>
+        <h1 id="titulo">Inicio</h1>
+        <p id="saludo" class="sub"></p>
+      </div>
+      <div class="pildoras" id="pildoras" aria-live="polite"></div>
+    </header>
+
+    <!-- Preparando: la primera vez baja la voz y el oido -->
+    <section id="preparando" class="tarjeta preparando" hidden aria-live="polite">
+      <div class="prep-cab">
+        <div class="prep-icono" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg></div>
+        <div><h2>Preparando a Píxel</h2><p id="prep-fase" class="sub">Un momento…</p></div>
+        <strong id="prep-cifra" class="prep-cifra"></strong>
+      </div>
+      <div class="barra" id="prep-barra"><i></i></div>
+      <p class="sub">La primera vez bajo la voz y el oído de Píxel (unos 600 MB). Después arranca en segundos.</p>
+      <p id="prep-error" class="error" hidden></p>
+    </section>
+
+    <!-- INICIO -->
+    <section class="vista" id="v-inicio" aria-labelledby="titulo">
+      <div class="mosaico">
+        <div class="dato" id="d-pixel"><div class="dato-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M8 12h.01M16 12h.01M12 5V2"/></svg></div><div><span class="et">Píxel</span><strong>…</strong><small></small></div></div>
+        <div class="dato" id="d-nube"><div class="dato-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18a5 5 0 0 1-.6-9.96A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z"/></svg></div><div><span class="et">Internet</span><strong>…</strong><small></small></div></div>
+        <div class="dato" id="d-robot"><div class="dato-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4"/></svg></div><div><span class="et">Robot</span><strong>…</strong><small></small></div></div>
+        <div class="dato" id="d-ia"><div class="dato-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c.6 4.6 3.4 7.4 8 8-4.6.6-7.4 3.4-8 8-.6-4.6-3.4-7.4-8-8 4.6-.6 7.4-3.4 8-8Z"/></svg></div><div><span class="et">Inteligencia</span><strong>…</strong><small></small></div></div>
+      </div>
+      <div class="rejilla">
+        <article class="tarjeta vincular ancha" data-vincular></article>
+        <article class="tarjeta">
+          <div class="t-cab"><h2>Apps vinculadas</h2><button class="enlace-btn" type="button" data-ir="dispositivos">Ver todo</button></div>
+          <div data-lista-apps></div>
+        </article>
+        <article class="tarjeta">
+          <div class="t-cab"><h2>Tus APIs</h2><button class="enlace-btn" type="button" data-ir="apis">Administrar</button></div>
+          <div id="resumen-apis" class="resumen-apis"></div>
+        </article>
+      </div>
+    </section>
+
+    <!-- DISPOSITIVOS -->
+    <section class="vista" id="v-dispositivos" hidden>
+      <div class="rejilla">
+        <article class="tarjeta vincular ancha" data-vincular></article>
+        <article class="tarjeta">
+          <div class="t-cab"><h2>Apps vinculadas</h2></div>
+          <p class="sub">Las cuentas que manejan a este Píxel desde la app.</p>
+          <div data-lista-apps data-con-quitar></div>
+        </article>
+        <article class="tarjeta">
+          <div class="t-cab"><h2>Robot Píxel</h2></div>
+          <div id="lista-robots"></div>
+        </article>
+        <article class="tarjeta ancha">
+          <div class="t-cab"><h2>Aparatos de tu red</h2><button class="btn suave" type="button" id="buscar-red">Buscar en la red</button></div>
+          <p class="sub">Enchufes, luces, televisores y otros equipos conectados a tu WiFi.</p>
+          <p id="red-fase" class="nota" hidden></p>
+          <div id="lista-red"></div>
+          <h3 class="sub-titulo">Guardados</h3>
+          <div id="lista-guardados"></div>
+        </article>
+      </div>
+    </section>
+
+    <!-- TUS APIS -->
+    <section class="vista" id="v-apis" hidden>
+      <article class="tarjeta preferida">
+        <div>
+          <h2>¿Quién contesta primero?</h2>
+          <p class="sub">Si tienes las dos claves, la otra queda de respaldo. Sin claves, contesta la IA de este computador si está instalada.</p>
+        </div>
+        <div class="segmentos" role="radiogroup" aria-label="IA que contesta primero">
+          <button type="button" role="radio" data-ia="gemini">Gemini</button>
+          <button type="button" role="radio" data-ia="groq">Groq</button>
+        </div>
+      </article>
+      <div class="rejilla">
+        <article class="tarjeta api" data-api="gemini">
+          <div class="api-cab">
+            <div class="api-logo gemini" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2c.7 5.4 4.6 9.3 10 10-5.4.7-9.3 4.6-10 10-.7-5.4-4.6-9.3-10-10 5.4-.7 9.3-4.6 10-10Z"/></svg></div>
+            <div><h2>Google Gemini</h2><span class="chip" data-chip>…</span></div>
+          </div>
+          <p class="sub" data-detalle></p>
+          <form class="api-form" data-form>
+            <label class="campo">Clave de Gemini
+              <input type="password" name="clave" autocomplete="off" spellcheck="false" placeholder="Pega aquí tu clave de Gemini" aria-describedby="ayuda-gemini">
+            </label>
+            <div class="acciones">
+              <button class="btn primario" type="submit">Guardar y probar</button>
+              <button class="btn suave" type="button" data-probar>Probar</button>
+              <button class="btn fantasma" type="button" data-quitar>Quitar</button>
+            </div>
+          </form>
+          <p class="ayuda" id="ayuda-gemini">Consíguela gratis en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com</a> → «Get API key». Se guarda solo en este computador.</p>
+        </article>
+        <article class="tarjeta api" data-api="groq">
+          <div class="api-cab">
+            <div class="api-logo groq" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></div>
+            <div><h2>Groq</h2><span class="chip" data-chip>…</span></div>
+          </div>
+          <p class="sub" data-detalle></p>
+          <form class="api-form" data-form>
+            <label class="campo">Clave de Groq
+              <input type="password" name="clave" autocomplete="off" spellcheck="false" placeholder="Pega aquí tu clave de Groq" aria-describedby="ayuda-groq">
+            </label>
+            <div class="acciones">
+              <button class="btn primario" type="submit">Guardar y probar</button>
+              <button class="btn suave" type="button" data-probar>Probar</button>
+              <button class="btn fantasma" type="button" data-quitar>Quitar</button>
+            </div>
+          </form>
+          <p class="ayuda" id="ayuda-groq">Créala en <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com</a> → «API Keys». Muy rápida para conversar. Se guarda solo en este computador.</p>
+        </article>
+        <article class="tarjeta ancha local">
+          <div class="api-cab">
+            <div class="api-logo local" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div>
+            <div><h2>IA de este computador</h2><span class="chip" id="chip-local">…</span></div>
+          </div>
+          <p class="sub">Opcional: con Ollama instalado, Píxel también contesta sin internet (más lento).</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- VOZ -->
+    <section class="vista" id="v-voz" hidden>
+      <form id="f-voz" class="rejilla">
+        <article class="tarjeta">
+          <h2>Por dónde habla</h2>
+          <div class="opciones" id="op-salida">
+            <label class="opcion"><input type="radio" name="salida_voz" value="esp32"><span><b>El robot</b><small>Por el altavoz de Píxel</small></span></label>
+            <label class="opcion"><input type="radio" name="salida_voz" value="pc"><span><b>Este computador</b><small>Por sus altavoces</small></span></label>
+          </div>
+        </article>
+        <article class="tarjeta">
+          <h2>Largo de las respuestas</h2>
+          <div class="opciones">
+            <label class="opcion"><input type="radio" name="respuesta" value="corta"><span><b>Cortas</b><small>1 o 2 frases</small></span></label>
+            <label class="opcion"><input type="radio" name="respuesta" value="normal"><span><b>Normales</b><small>2 a 4 frases</small></span></label>
+          </div>
+        </article>
+        <article class="tarjeta">
+          <h2>Voz</h2>
+          <label class="campo">Elige la voz<select name="voz" id="sel-voz"></select></label>
+          <label class="campo">Tipo de voz
+            <select name="tono">
+              <option value="normal">Normal</option>
+              <option value="infantil">Infantil</option>
+              <option value="muy_infantil">Muy infantil</option>
+            </select>
+          </label>
+        </article>
+        <article class="tarjeta">
+          <h2>Personalidad</h2>
+          <label class="campo">Cómo quieres que hable Píxel
+            <textarea name="personalidad" id="personalidad" rows="4" placeholder="Por ejemplo: amable y cercano, con frases sencillas."></textarea>
+          </label>
+          <small class="sub" id="personalidad-cuenta"></small>
+        </article>
+        <div class="acciones ancha">
+          <button class="btn primario grande" type="submit">Guardar</button>
+          <button class="btn suave grande" type="button" id="probar-voz">Guardar y probar la voz</button>
+        </div>
+      </form>
+    </section>
+  </main>
+</div>
+
+<!-- Pixel se apago (o se apago desde aqui) -->
+<div id="apagado" class="apagado" hidden role="alertdialog" aria-modal="true" aria-labelledby="apagado-titulo">
+  <div class="apagado-caja">
+    <div class="pixel-figura dormido" id="pixel-dormido" aria-hidden="true"></div>
+    <h2 id="apagado-titulo">Píxel está apagado</h2>
+    <p class="sub" id="apagado-texto">Esta ventana no encuentra a Píxel en este computador.</p>
+    <div class="acciones centro">
+      <button class="btn primario grande" type="button" id="encender" hidden>Encender Píxel</button>
+      <button class="btn suave grande" type="button" id="cerrar-ventana" hidden>Cerrar la ventana</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="escritorio.js"></script>
+</body>
+</html>

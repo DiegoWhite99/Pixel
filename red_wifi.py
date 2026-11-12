@@ -55,6 +55,10 @@ TIPOS = ("luz", "enchufe", "tv", "altavoz", "camara", "impresora", "movil", "ord
 # Windows (instalador .exe): no hay "ip" ni /proc/net/arp; "arp -a" y "ping -n" si. Sin ventana de consola.
 WINDOWS = os.name == "nt"
 _SIN_VENTANA = {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)} if WINDOWS else {}
+# 12 nov (Windows en espanol): "arp -a" escribe "Dirección" en la pagina de codigos de la consola (oem), no en
+# UTF-8. Con text=True y -X utf8 la lectura fallaba en el hilo de subprocess, stdout quedaba en None y re.finditer
+# daba "No pude buscar: expected string or bytes-like object". Solo hacen falta las IP y las MAC (ASCII).
+_TEXTO = {"encoding": "oem" if WINDOWS else "utf-8", "errors": "replace"}
 
 
 def _hay(texto, *palabras):
@@ -109,10 +113,10 @@ def _arp_windows():
     """{ip: mac} de "arp -a" (las MAC vienen con guiones: 00-11-22-33-44-55)."""
     tabla = {}
     try:
-        salida = subprocess.run(["arp", "-a"], capture_output=True, text=True, timeout=5, **_SIN_VENTANA).stdout
+        salida = subprocess.run(["arp", "-a"], capture_output=True, timeout=5, **_TEXTO, **_SIN_VENTANA).stdout
     except (OSError, subprocess.TimeoutExpired):
         return tabla
-    for m in re.finditer(r"(\d+\.\d+\.\d+\.\d+)\s+([0-9a-fA-F]{2}(?:-[0-9a-fA-F]{2}){5})", salida):
+    for m in re.finditer(r"(\d+\.\d+\.\d+\.\d+)\s+([0-9a-fA-F]{2}(?:-[0-9a-fA-F]{2}){5})", salida or ""):
         mac = m.group(2).lower().replace("-", ":")
         if mac not in ("00:00:00:00:00:00", "ff:ff:ff:ff:ff:ff"):
             tabla[m.group(1)] = mac

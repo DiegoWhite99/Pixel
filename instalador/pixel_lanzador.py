@@ -7,13 +7,16 @@ este lanzador:
   1. usa una carpeta de datos del usuario (Linux ~/.local/share/pixel, Windows %LOCALAPPDATA%\\Pixel\\datos):
      ahi van los ajustes, la identidad en la nube, las claves que pegue en el panel, las voces y Whisper.
      Nunca escribe en la carpeta del programa (en Linux, /opt/pixel es de solo lectura);
-  2. abre el navegador en el panel (http://localhost:8080) con una pagina de "Preparando a Pixel" mientras
-     baja la voz y el oido la primera vez (unos 600 MB, con su huella SHA-256 comprobada);
+  2. abre la ventana de Pixel (pixel_ventana.py, en otro proceso; 12 nov: "no desplegar un servidor web, necesito
+     una ventana") con su panel de control (web/escritorio.html). Mientras baja la voz y el oido la primera vez
+     (unos 600 MB, con su huella SHA-256 comprobada), una pagina de espera en el puerto del panel sirve ese mismo
+     panel y su avance (/progreso);
   3. arranca el servidor (servidor.main) con sus rutas en esa carpeta, como el "servidor de prueba aislado"
-     de CLAUDE.md: no hace falta tocar servidor.py. Cuando el panel de verdad arranca, la pagina se recarga
-     sola y alli se vincula Pixel con la cuenta (codigo de 6 cifras, como siempre).
+     de CLAUDE.md: no hace falta tocar servidor.py. El panel escucha solo en este PC (127.0.0.1). Cuando el de
+     verdad arranca, la ventana sigue sola y alli se vincula Pixel con la cuenta (codigo de 6 cifras).
 
-Uso:  pixel [--sin-navegador] [--consola]
+Uso:  pixel [--sin-ventana] [--consola]        (--sin-navegador = --sin-ventana: el acceso de inicio de Windows)
+      pixel --ventana [url]                    solo la ventana (la abre el propio lanzador)
 Pruebas: PIXEL_DATOS, PIXEL_PUERTO, PIXEL_PANEL, PIXEL_DESCUBRIR, PIXEL_NUBE_DB ("" o "0" = sin nube), PIXEL_LLM_HOST.
 La prueba de punta a punta de los paquetes publicados: .github/workflows/probar_instaladores.yml.
 Opcional, en la carpeta de datos: config.json {"nombre": "Píxel de la sala"} (como sale en la app al buscarlo).
@@ -22,15 +25,17 @@ Opcional, en la carpeta de datos: config.json {"nombre": "Píxel de la sala"} (c
 import hashlib
 import json
 import os
+import subprocess
 import sys
 import threading
 import time
 import traceback
+import urllib.error
 import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "2.1.2"
+VERSION = "2.2.0"
 APP = os.path.dirname(os.path.abspath(__file__))
 WINDOWS = os.name == "nt"
 REGISTRO_MAX = 5 * 1024 * 1024        # pixel.log: al pasar de esto se guarda como pixel.log.1
@@ -88,11 +93,12 @@ def log(texto):
     print("%s lanzador: %s" % (time.strftime("%H:%M:%S"), texto), flush=True)
 
 
-def abrir_registro(datos):
-    """Con pythonw (Windows) o desde el menu no hay consola: todo va a pixel.log en la carpeta de datos."""
+def abrir_registro(datos, rotar=True):
+    """Con pythonw (Windows) o desde el menu no hay consola: todo va a pixel.log en la carpeta de datos.
+    La ventana (otro proceso) escribe en el mismo, sin rotarlo: el de Pixel lo tiene abierto."""
     ruta = os.path.join(datos, "pixel.log")
     try:
-        if os.path.getsize(ruta) > REGISTRO_MAX:
+        if rotar and os.path.getsize(ruta) > REGISTRO_MAX:
             os.replace(ruta, ruta + ".1")
     except OSError:
         pass
@@ -112,59 +118,35 @@ def borrar_capturas_viejas(carpeta):
         pass
 
 
-# ------------------------------------------------------------------ pagina de "Preparando a Pixel"
-PAGINA = """<!doctype html><html lang="es"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><title>Preparando a Píxel</title>
-<style>
-:root{--azul:#1971c2;--verde:#087f5b;--texto:#0f2a3d;--suave:#5b7083;--fondo:#f4f9fd}
-@media (prefers-color-scheme:dark){:root{--texto:#e7f1fa;--suave:#9fb3c4;--fondo:#0e1b26}}
-body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--fondo);color:var(--texto);
-font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px;box-sizing:border-box}
-main{max-width:460px;width:100%;text-align:center}
-h1{font-size:24px;margin:0 0 6px}p{margin:6px 0;color:var(--suave)}
-.barra{height:12px;border-radius:999px;background:rgba(25,113,194,.15);overflow:hidden;margin:18px 0 8px}
-.barra i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--azul),var(--verde));transition:width .4s}
-.barra.sin i{width:30%;animation:ir 1.4s ease-in-out infinite}
-@keyframes ir{0%{margin-left:-30%}100%{margin-left:100%}}
-@media (prefers-reduced-motion:reduce){.barra.sin i{animation:none;width:100%;opacity:.5}}
-.error{color:#c92a2a;font-weight:600}code{font-size:13px;word-break:break-all}
-</style></head><body><main>
-<h1>Preparando a Píxel</h1>
-<p id="fase">Un momento…</p>
-<div class="barra sin" id="barra"><i></i></div>
-<p id="cifras"></p>
-<p>La primera vez bajo la voz y el oído de Píxel (unos 600 MB). Después arranca en segundos.</p>
-<p id="error" class="error" hidden></p>
-</main><script>
-const $ = (s) => document.querySelector(s);
-const mb = (b) => (b / 1048576).toFixed(0) + " MB";
-async function mirar() {
-  try {
-    const r = await fetch("/api/estado", {cache: "no-store"});
-    if (r.ok) { location.reload(); return; }            // ya responde el panel de verdad
-    const p = await (await fetch("/progreso", {cache: "no-store"})).json();
-    $("#fase").textContent = p.fase;
-    const hay = p.total > 0;
-    $("#barra").classList.toggle("sin", !hay);
-    $("#barra i").style.width = hay ? Math.round(p.hecho / p.total * 100) + "%" : "";
-    $("#cifras").textContent = hay ? mb(p.hecho) + " de " + mb(p.total) : "";
-    $("#error").hidden = !p.error;
-    if (p.error) $("#error").textContent = p.error + " Detalles en " + p.registro;
-  } catch (e) { $("#fase").textContent = "Arrancando a Píxel…"; }
-  setTimeout(mirar, 1500);
-}
-mirar();
-</script></body></html>"""
+# ------------------------------------------------------------------ pagina de espera
+# Mientras se prepara Pixel, el puerto del panel lo atiende esto: el mismo panel de la ventana (web/escritorio.*),
+# /api/estado con 503 (el panel lo entiende como "preparando") y el avance en /progreso.
+TIPOS = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
+         ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon"}
+PREPARANDO = "Píxel todavía se está preparando: espera a que termine."
 
 
 class _Pagina(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path.startswith("/progreso"):
-            self._mandar(200, "application/json; charset=utf-8", json.dumps(_estado).encode("utf-8"))
-        elif self.path.startswith("/api/"):
+        ruta = self.path.split("?", 1)[0]
+        if ruta == "/progreso":
+            self._mandar(200, "application/json; charset=utf-8", json.dumps(dict(_estado, version=VERSION)).encode("utf-8"))
+            return
+        if ruta.startswith("/api/"):
             self._mandar(503, "application/json; charset=utf-8", b'{"preparando": true}')
-        else:
-            self._mandar(200, "text/html; charset=utf-8", PAGINA.encode("utf-8"))
+            return
+        nombre = "escritorio.html" if ruta == "/" else ruta[1:]
+        carpeta = os.path.join(APP, "web")
+        tipo = TIPOS.get(os.path.splitext(nombre)[1])
+        if "/" in nombre or "\\" in nombre or tipo is None or nombre not in os.listdir(carpeta):
+            self._mandar(404, "text/plain; charset=utf-8", b"No existe.")
+            return
+        with open(os.path.join(carpeta, nombre), "rb") as f:
+            self._mandar(200, tipo, f.read())
+
+    def do_POST(self):
+        cuerpo = json.dumps({"error": PREPARANDO}, ensure_ascii=False).encode("utf-8")
+        self._mandar(503, "application/json; charset=utf-8", cuerpo)
 
     def _mandar(self, codigo, tipo, cuerpo):
         self.send_response(codigo)
@@ -179,7 +161,7 @@ class _Pagina(BaseHTTPRequestHandler):
 
 
 def pagina_de_espera(puerto):
-    """Sirve "Preparando a Pixel" en el puerto del panel hasta que arranque el de verdad. None si esta ocupado."""
+    """Atiende el puerto del panel hasta que arranque el de verdad. None si esta ocupado."""
     try:
         srv = ThreadingHTTPServer(("127.0.0.1", puerto), _Pagina)
     except OSError as e:
@@ -190,12 +172,30 @@ def pagina_de_espera(puerto):
     return srv
 
 
-def ya_esta_en_marcha(puerto):
+def en_marcha(puerto):
+    """"listo" si el panel de Pixel responde, "preparando" si otro lanzador lo esta preparando, "" si no hay nadie."""
     try:
         with urllib.request.urlopen("http://127.0.0.1:%d/api/estado" % puerto, timeout=1.5) as r:
-            return r.status == 200
+            return "listo" if r.status == 200 else ""
+    except urllib.error.HTTPError as e:
+        return "preparando" if e.code == 503 else ""
     except Exception:
-        return False
+        return ""
+
+
+def abrir_ventana(url):
+    """La ventana de Pixel en otro proceso (pixel_ventana.py): cerrarla no apaga a Pixel."""
+    cmd = [sys.executable, "-I", "-X", "utf8", os.path.join(APP, "iniciar.py"), "--ventana", url]
+    kw = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL, "close_fds": True}
+    if WINDOWS:
+        kw["creationflags"] = 0x00000008 | 0x00000200       # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+    else:
+        kw["start_new_session"] = True
+    try:
+        subprocess.Popen(cmd, **kw)
+    except OSError as e:
+        log("no pude abrir la ventana (%s): abro el panel en el navegador" % e)
+        webbrowser.open(url)
 
 
 # ------------------------------------------------------------------ descargas
@@ -280,6 +280,15 @@ def configurar(datos):
         servidor.NUBE_DB = "" if env["PIXEL_NUBE_DB"] in ("", "0") else env["PIXEL_NUBE_DB"]
     if env.get("PIXEL_LLM_HOST"):
         servidor.LLM_HOST = env["PIXEL_LLM_HOST"]
+    # 12 nov: el panel es la ventana de este PC, no una pagina para toda la red; y desde ella se puede apagar
+    panel.DIRECCION = "127.0.0.1"
+    panel.PROGRAMA = {"version": VERSION, "apagar": True}
+
+    def apagar(d):
+        servidor.log("panel: Píxel apagado desde su ventana")
+        threading.Timer(0.6, lambda: os._exit(0)).start()
+        return {"mensaje": "Píxel se apaga."}
+    panel.RUTAS_SOLO_LOCAL["/api/apagar"] = apagar
     return servidor, panel
 
 
@@ -291,22 +300,29 @@ def main(argv=None):
     os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
     os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
     if "--consola" not in argv or sys.stdout is None:
-        _estado["registro"] = abrir_registro(datos)
+        _estado["registro"] = abrir_registro(datos, rotar="--ventana" not in argv)
     else:
         _estado["registro"] = "la consola"
-    log("Píxel %s | programa en %s | datos en %s" % (VERSION, APP, datos))
     sys.path.insert(0, APP)
     puerto = int(os.environ.get("PIXEL_PANEL") or 8080)
-    url = "http://localhost:%d/" % puerto
-    navegador = "--sin-navegador" not in argv
-    if ya_esta_en_marcha(puerto):
-        log("Píxel ya está en marcha: abro el panel")
-        if navegador:
-            webbrowser.open(url)
+    url = "http://127.0.0.1:%d/escritorio.html" % puerto
+    if "--ventana" in argv:                 # este proceso es solo la ventana (lo abre abrir_ventana)
+        i = argv.index("--ventana")
+        if len(argv) > i + 1 and argv[i + 1].startswith("http://127.0.0.1:"):
+            url = argv[i + 1]
+        import pixel_ventana
+        return pixel_ventana.mostrar(url, datos, APP, log)
+    log("Píxel %s | programa en %s | datos en %s" % (VERSION, APP, datos))
+    ventana = "--sin-navegador" not in argv and "--sin-ventana" not in argv
+    ya = en_marcha(puerto)
+    if ya:
+        log("Píxel ya está en marcha (%s): abro su ventana" % ya)
+        if ventana:
+            abrir_ventana(url)
         return 0
     espera = pagina_de_espera(puerto)
-    if navegador:
-        webbrowser.open(url)
+    if ventana:
+        abrir_ventana(url)
     borrar_capturas_viejas(os.path.join(datos, "capturas"))
     try:
         bajar_lo_que_falte(datos)
