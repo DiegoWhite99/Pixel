@@ -433,12 +433,15 @@ def guardar_gemini(d):
     gemini.guardar(clave)
     if not clave:
         S.log("panel: clave de Gemini quitada; responde Ollama")
+        nube.publicar_ia()
         return {"mensaje": "Clave quitada. Píxel vuelve a usar la IA local."}
     S.log("panel: clave de Gemini guardada")
     ok, texto = gemini.probar()
     S.log("panel: prueba de Gemini: %s" % texto)
+    nube.publicar_ia()                          # 12 nov: que la app de las cuentas vinculadas la tenga
     if not ok and gemini.clave_rechazada():       # 12 nov: una clave que Google no acepta no se queda
         gemini.guardar("")
+        nube.publicar_ia()
         raise ErrorPanel(texto)
     if not ok:
         raise ErrorPanel("Clave guardada, pero falla. " + texto)
@@ -461,12 +464,15 @@ def guardar_groq(d):
     groq_ia.guardar(clave)
     if not clave:
         S.log("panel: clave de Groq quitada")
+        nube.publicar_ia()
         return {"mensaje": "Clave de Groq quitada."}
     S.log("panel: clave de Groq guardada")
     ok, texto = groq_ia.probar()
     S.log("panel: prueba de Groq: %s" % texto)
+    nube.publicar_ia()
     if not ok and groq_ia.clave_rechazada():      # una clave que Groq no acepta no se queda
         groq_ia.guardar("")
+        nube.publicar_ia()
         raise ErrorPanel(texto)
     if not ok:
         raise ErrorPanel("Clave guardada, pero falla. " + texto)
@@ -490,6 +496,7 @@ def elegir_ia(d):
         AJUSTES["ia"] = ia
         _guardar_json(_ruta(S.AJUSTES_ARCHIVO), AJUSTES)
         aplicar_ajustes()
+    nube.publicar_ia()
     return {"mensaje": "Primero contesta %s." % ("Gemini" if ia == "gemini" else "Groq")}
 
 

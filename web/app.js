@@ -51,7 +51,7 @@ const ICONOS = {
 };
 const icono = (n) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONOS[n] || ICONOS.otro}</svg>`;
 const TIPO = {audio: "Altavoz o audífonos", movil: "Móvil", control: "Mando o teclado", ordenador: "Ordenador", otro: "Otro aparato", "": "Aparato",
-  luz: "Luz", enchufe: "Enchufe", tv: "Pantalla o TV", altavoz: "Altavoz", camara: "Cámara", impresora: "Impresora", router: "Router", pixel: "Píxel (ESP32)"};
+  luz: "Luz", enchufe: "Enchufe", tv: "Pantalla o TV", altavoz: "Altavoz", camara: "Cámara", impresora: "Impresora", router: "Router", pixel: "Píxel (robot)"};
 const TIPOS_WIFI = ["luz", "enchufe", "tv", "altavoz", "camara", "impresora", "movil", "ordenador", "otro"];
 const ICONO_TIPO = (t) => (ICONOS[t] ? t : "otro");
 document.querySelectorAll("[data-icono]").forEach((e) => { e.innerHTML = icono(e.dataset.icono); });
@@ -175,8 +175,8 @@ function pintarInicio(d) {
   $("#hero-acciones").hidden = true;
   if (Date.now() > dichoHasta) {
     $("#hero-estado").textContent = !activos ? "Estoy dormido" : hablando ? "Estoy hablando…" : "¡Hola! Te escucho";
-    $("#hero-sub").textContent = !activos ? "Espero a que se conecte el ESP32. Enciéndelo o revisa su WiFi."
-      : hablando ? (d.agente.ajustes.salida_voz === "pc" ? "Sueno por el altavoz del PC." : "Sueno por el ESP32.")
+    $("#hero-sub").textContent = !activos ? "Espero a que se conecte el robot Píxel. Enciéndelo o revisa su WiFi."
+      : hablando ? (d.agente.ajustes.salida_voz === "pc" ? "Sueno por el altavoz del PC." : "Sueno por el robot Píxel.")
       : `Di "${d.agente.activacion}" y tu orden.`;
   }
   const nr = d.agenda.recordatorios.length, ne = d.agenda.eventos.length;
@@ -184,7 +184,7 @@ function pintarInicio(d) {
   $("#r-agenda-sub").textContent = `${nr} recordatorio${nr === 1 ? "" : "s"} · ${ne} evento${ne === 1 ? "" : "s"}`;
   const voz = d.agente.voces.find((v) => v.id === d.agente.ajustes.voz);
   $("#r-voz").textContent = voz ? voz.nombre.split(" · ")[0] : "–";
-  $("#r-voz-sub").textContent = d.agente.ajustes.salida_voz === "pc" ? "por el altavoz del PC (" + d.bt_pc.musica_en + ")" : "por el ESP32";
+  $("#r-voz-sub").textContent = d.agente.ajustes.salida_voz === "pc" ? "por el altavoz del PC (" + d.bt_pc.musica_en + ")" : "por el robot Píxel";
   $("#palabra").textContent = d.agente.activacion;
   const g = d.cuentas.google;
   $("#r-cuentas").textContent = g.vinculada ? "Vinculada" : "Sin vincular";
@@ -241,7 +241,7 @@ function pintarDispositivos(d) {
   const habla = (aqui, donde) => aqui ? '<span class="chip ok">Habla por aquí</span>'
     : `<button class="btn suave" type="button" data-voz="${donde}">Que hable por aquí</button>`;
   let h = `<div class="fila"><span class="ico">${icono("pixel")}</span>
-    <div class="txt"><b>Altavoz de Píxel</b><small>En el ESP32${d.activos ? "" : " · sin conectar"}</small></div>
+    <div class="txt"><b>Altavoz de Píxel</b><small>En el robot Píxel${d.activos ? "" : " · sin conectar"}</small></div>
     ${habla(!vozEnPc, "esp32")}<button class="btn" type="button" data-probar-en="esp32">Probar</button></div>
     <div class="fila"><span class="ico">${icono("ordenador")}</span>
     <div class="txt"><b>Altavoces del PC</b><small>${musicaEnPc ? "Aquí suena la música del PC" : "La música suena ahora por " + esc(b.musica_en)}</small></div>
@@ -263,7 +263,7 @@ function pintarDispositivos(d) {
     </div>`).join("");
   $("#lista-disp").innerHTML = n + cels.length ? d.dispositivos.map((x) => `
     <div class="card"><div class="head">
-      <div class="titulo"><span class="ico">${icono("pixel")}</span><div><h2>${esc(x.ble.yo || "Píxel")} · ESP32-S3</h2><span class="sub mono">${esc(x.ip)}</span></div></div>
+      <div class="titulo"><span class="ico">${icono("pixel")}</span><div><h2>${esc(x.ble.yo || "Píxel")} · robot</h2><span class="sub mono">${esc(x.ip)}</span></div></div>
       <span class="chip ${x.estado === "escuchando" ? "ok" : x.estado === "hablando" ? "info" : ""}">${esc(x.estado)}</span></div>
       <dl class="kv"><dt>Conectado</dt><dd>desde las ${esc(x.desde)} (${x.minutos} min)</dd>
       <dt>Frases oídas</dt><dd>${x.frases}</dd>
@@ -271,11 +271,11 @@ function pintarDispositivos(d) {
       <dt>Último texto</dt><dd>${x.ultimo ? "“" + esc(x.ultimo) + "”" : "–"}</dd></dl>
       ${x.ble.yo ? `<details class="mas"><summary>Bluetooth cerca · ${x.ble.vistos.length} ${hace(x.ble.hace)}</summary><div class="lista">${x.ble.vistos.slice(0, 12).map((v) => `
         <div class="fila"><div class="txt"><b>${v.nombre ? esc(v.nombre) : "Sin nombre"}</b><small class="mono">${esc(v.mac)}</small></div>${v.aceptado ? '<span class="chip ok">Recordado</span>' : ""}${barras(v.rssi)}</div>`).join("")}</div></details>` : ""}
-      ${x.estado === "sin datos" ? '<p class="aviso">Esta conexión dejó de mandar audio: el ESP32 se reconectó o se apagó. Se cierra sola en 2 minutos.</p>' : ""}
+      ${x.estado === "sin datos" ? '<p class="aviso">Esta conexión dejó de mandar audio: el robot Píxel se reconectó o se apagó. Se cierra sola en 2 minutos.</p>' : ""}
     </div>`).join("") + tarjetasCel : '<div class="vacio">No hay ningún Píxel conectado. Pulsa <b>Agregar dispositivo → Otro Píxel</b> para ver cómo conectarlo.</div>';
   $("#ip-servidor").textContent = d.servidor.ip;
   $("#portal-clave").textContent = d.portal.clave;
-  $("#kv-servidor").innerHTML = `<dt>IP</dt><dd class="mono">${esc(d.servidor.ip)}</dd><dt>Puerto ESP32</dt><dd class="mono">${d.servidor.puerto}</dd>
+  $("#kv-servidor").innerHTML = `<dt>IP</dt><dd class="mono">${esc(d.servidor.ip)}</dd><dt>Puerto del robot</dt><dd class="mono">${d.servidor.puerto}</dd>
     <dt>Este panel</dt><dd class="mono">http://${esc(d.servidor.ip)}:${d.servidor.panel}</dd>
     <dt>Reconocimiento</dt><dd>Whisper ${esc(d.servidor.stt)}</dd><dt>IA</dt><dd>${d.cuentas.gemini && d.cuentas.gemini.configurada ? "Gemini " + esc(d.cuentas.gemini.modelo) + " · respaldo " : ""}${esc(d.servidor.llm)} ${d.servidor.ollama ? "· lista" : "· apagada"}</dd>`;
 }
@@ -483,8 +483,8 @@ function pintarNube(d) {
     if (u) h += `<div class="fila"><span class="ico">${icono("pixel")}</span><div class="txt"><small>Sesión iniciada como</small><b>${esc(u.displayName || u.email || "anónimo")}</b>${u.email && u.displayName ? `<small>${esc(u.email)}</small>` : ""}</div>
       <button class="btn" type="button" data-cambiar-cuenta>Cambiar de cuenta</button><button class="btn" type="button" data-salir>Cerrar sesión</button></div>`;
     h += nube.pid
-      ? `<p class="sub">Este celular ya es Píxel. Además, esta cuenta maneja <b>${esc(n.nombre || "el Píxel del PC")}</b> (ESP32 y panel) desde cualquier sitio con internet.</p>`
-      : '<p class="sub">Este celular ya es Píxel: no necesita el PC. Si también tienes el Píxel del PC, con el ESP32, puedes enlazarlo para manejarlo desde aquí.</p>';
+      ? `<p class="sub">Este celular ya es Píxel. Además, esta cuenta maneja <b>${esc(n.nombre || "el Píxel del PC")}</b> (el robot y el panel) desde cualquier sitio con internet.</p>`
+      : '<p class="sub">Este celular ya es Píxel: no necesita el PC. Si también tienes el Píxel del PC, con el robot Píxel, puedes enlazarlo para manejarlo desde aquí.</p>';
     if (u && !nube.pid) h += '<div class="acciones"><button class="btn suave" type="button" data-buscar-pixel>Enlazar el Píxel del PC</button></div>';
   } else {
     chip.textContent = !n.activa ? "Desactivada" : n.conectada ? "Conectada" : "Sin conexión";
@@ -519,7 +519,7 @@ function pintar(d) {
   ultimaOp = clave;
   pill("#pill-servidor", "ok", EN_INTERNET ? "PC · " + (d.nube.nombre || "Píxel") : "Servidor · " + d.servidor.ip);
   if (!EN_INTERNET) {                     // en la app de internet, las de microfono e IA son de agente.js
-    pill("#pill-esp", d.activos ? "ok" : "warn", d.activos ? (d.activos === 1 ? "ESP32 conectado" : d.activos + " ESP32") : "ESP32 sin conectar");
+    pill("#pill-esp", d.activos ? "ok" : "warn", d.activos ? (d.activos === 1 ? "Robot conectado" : d.activos + " robots") : "Robot sin conectar");
     const gm = d.cuentas.gemini;
     if (gm && gm.configurada) pill("#pill-ollama", geminiConError(gm) ? "warn" : "ok", geminiConError(gm) ? "Gemini con error" : "IA: Gemini");
     else pill("#pill-ollama", d.servidor.ollama ? "ok" : "warn", d.servidor.ollama ? "IA local lista" : "IA local apagada");
@@ -630,6 +630,15 @@ function elegirPixel() {
     pintar(nube.estado);
   }, errorNube));
   nube.quitar.push(d.onValue(d.ref(nube.db, `pixeles/${pid}/vivo`), (s) => { nube.vivo = s.val() || 0; revisarNube(); }, errorNube));
+  // 12 nov: las claves de IA que se pusieron en el programa del PC (proveedores.js las usa sin clave propia)
+  if (typeof Proveedores !== "undefined") {
+    nube.quitar.push(d.onValue(d.ref(nube.db, `pixeles/${pid}/ia`), (s) => {
+      Proveedores.ponerDelPc(s.val());
+      if (window.PixelAjustes && window.PixelAjustes.pintarIA) window.PixelAjustes.pintarIA();
+      if (window.pintarPasos) window.pintarPasos();
+    }, () => Proveedores.ponerDelPc(null)));
+    nube.quitar.push(() => Proveedores.ponerDelPc(null));
+  }
   nube.quitar.push(d.onValue(d.ref(nube.db, `pixeles/${pid}/voz`), (s) => {
     const v = s.val();
     if (!v || !v.json) return;

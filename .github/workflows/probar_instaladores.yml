@@ -211,6 +211,35 @@ jobs:
           if ($n -ne 1) { throw "Esperaba una sola ventana de Píxel y hay $n" }
           Select-String -Path "$env:LOCALAPPDATA\Pixel\datos\pixel.log" -Pattern "ventana:" | Select-Object -Last 5 | ForEach-Object { $_.Line }
 
+      - name: El PC desde la app en Windows (MAC, volumen) y la musica en una sola ventana
+        if: ${{ !cancelled() }}
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          function Foto($n) { $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds; $m = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            $g = [System.Drawing.Graphics]::FromImage($m); $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $m.Save("$PWD\$n.png", [System.Drawing.Imaging.ImageFormat]::Png); $g.Dispose(); $m.Dispose() }
+          $codigo = @'
+          import sys, json, time
+          sys.path.insert(0, sys.argv[1])
+          import puente_pc, navegador
+          d = puente_pc.diagnostico()
+          print("diagnostico:", json.dumps(d, ensure_ascii=False))
+          assert d["mac"], "no encontre la MAC del PC"
+          puente_pc.control({"accion": "subir_volumen"}); puente_pc.control({"accion": "bajar_volumen"})
+          navegador.PERFIL = sys.argv[2]
+          for v in ("dQw4w9WgXcQ", "kJQP7kiw5Fk", "9bZkp7q19f0"):
+              navegador.abrir("https://www.youtube.com/watch?v=" + v)
+              time.sleep(5)
+          p = navegador._paginas()
+          print("pestanas de musica:", [x["url"] for x in p])
+          assert len(p) == 1 and "9bZkp7q19f0" in p[0]["url"], "la musica no quedo en una sola pestana"
+          print("BIEN: MAC, volumen y una sola ventana de musica")
+          '@
+          & "$env:LOCALAPPDATA\Pixel\python\python.exe" -I -X utf8 -c $codigo "$env:LOCALAPPDATA\Pixel\app" "$env:RUNNER_TEMP\musica"
+          $r = $LASTEXITCODE
+          Foto musica_youtube
+          if ($r -ne 0) { throw "Falló el PC desde la app o la música" }
+
       - name: Desinstalar (con Píxel abierto, como quien lo tiene arrancando con Windows)
         if: ${{ !cancelled() }}         # aunque falle una revision anterior: que se vea todo
         run: |

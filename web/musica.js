@@ -13,6 +13,11 @@
          YouTube manda Cross-Origin-Opener-Policy y la pagina que lo abre pierde la ventana (no podria
          pararla ni cambiarla). Esta es del mismo origen: se maneja entera y se reutiliza. Hace falta
          permitir una vez las ventanas emergentes de la pagina; si no, suena aqui y lo dice.
+         12 nov (el usuario: "le digo pon en YouTube tal cosa y aparece debajo de Pixel una pantallita con
+         la musica, y no! quiero que se abra una pestana en el navegador y suene la musica", "que use la
+         misma"): es una PESTANA (no una ventana aparte), siempre la misma ("pixel-musica"), tambien en el
+         celular. Si el navegador no la deja abrir sola, sale el boton "Abrir la musica" (con el toque si
+         se abre) y ya no suena debajo de Pixel. "Aqui en la app" queda solo si el usuario la elige.
          En Android una ventana es una pestana que tapa a Pixel (y deja de oir), y una web no puede
          manejar la app de YouTube: ahi suena aqui, y hay un boton para abrirla en la app (sin control).
        app: el reproductor embebido de Inicio (IFrame Player API).
@@ -31,7 +36,7 @@
   const YOUTUBE_CLAVE = (window.PIXEL_CLAVES || {}).youtube || "";    // web/claves.js, fuera de git
   const API_YT = "https://www.youtube.com/iframe_api";
   const VOLUMEN_BAJO = 12;                     // mientras Pixel oye la orden, piensa o habla
-  const VENTANA = "popup=yes,width=1000,height=640,left=40,top=40";   // ventana aparte (una pestana taparia a Pixel)
+  const PESTANA = "pixel-musica";          // el nombre de la pestana de musica: cada cancion va a la misma
   const DONDE = ["ventana", "app", "pc"];
 
   // ------------------------------------------------------------------ texto (puro: se prueba en Node)
@@ -185,8 +190,17 @@
         w.Pixel.poner(v.id, tituloDicho(v.titulo));
         return true;
       }
-      try { w = window.open(`reproductor.html#v=${v.id}`, "pixel-musica", VENTANA); } catch (e) { w = null; }
-      if (!w) return false;                        // ventanas emergentes bloqueadas
+      try { w = window.open(`reproductor.html#v=${v.id}`, PESTANA); } catch (e) { w = null; }
+      if (!w) return false;                        // ventanas emergentes bloqueadas: abrirConToque()
+      return conectarVentana(w, v);
+    },
+    pausar() { const w = ventanaViva(); if (w) w.Pixel.pausar(); },
+    seguir() { const w = ventanaViva(); if (w) w.Pixel.seguir(); },
+    parar() { clearInterval(mu.vigia); if (mu.ventana && !mu.ventana.closed) mu.ventana.close(); mu.ventana = null; },
+    volumen(n) { const w = ventanaViva(); if (w) w.Pixel.volumenTemporal(n); },
+    estado() { const w = ventanaViva(); return w ? w.Pixel.estado().estado : -1; },
+  };
+  async function conectarVentana(w, v) {
       mu.ventana = w;
       // cuando cargue: el titulo, que avise al acabar cada video y seguir su estado
       const t0 = Date.now();
@@ -203,13 +217,25 @@
         if (e && e.estado !== mu.estado) { mu.estado = e.estado; pintar(); }
       }, 700);
       return true;
-    },
-    pausar() { const w = ventanaViva(); if (w) w.Pixel.pausar(); },
-    seguir() { const w = ventanaViva(); if (w) w.Pixel.seguir(); },
-    parar() { clearInterval(mu.vigia); if (mu.ventana && !mu.ventana.closed) mu.ventana.close(); mu.ventana = null; },
-    volumen(n) { const w = ventanaViva(); if (w) w.Pixel.volumenTemporal(n); },
-    estado() { const w = ventanaViva(); return w ? w.Pixel.estado().estado : -1; },
-  };
+  }
+  // El navegador no dejo abrir la pestana sola: un boton (con el toque si deja) en vez de la pantallita
+  function abrirConToque(v) {
+    const caja = $("#ag-video");
+    caja.innerHTML = `<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 5 3-5 3z"/></svg></span>
+      <div class="txt"><b data-titulo></b><small>Tócalo y suena en otra pestaña. Para que se abra sola, permite las ventanas emergentes de esta página.</small></div>
+      <button class="btn primario" type="button" data-abrir-musica>Abrir la música</button>
+      <button class="btn" type="button" data-quitar-video aria-label="Quitar">✕</button>`;
+    caja.querySelector("[data-titulo]").textContent = tituloDicho(v.titulo);   // texto, no HTML
+    caja.hidden = false;
+    caja.querySelector("[data-abrir-musica]").addEventListener("click", async () => {
+      let w = null;
+      try { w = window.open(`reproductor.html#v=${v.id}`, PESTANA); } catch (e) { w = null; }
+      if (!w) { N.anunciar("El navegador no deja abrir otra pestaña. Permite las ventanas emergentes de esta página y vuelve a tocarlo."); return; }
+      caja.hidden = true;
+      mu.salida = VENT;
+      if (await conectarVentana(w, v)) { $("#ag-musica").hidden = false; $("#ag-musica").classList.add("remota"); pintar(); }
+    }, {once: true});
+  }
 
   // ------------------------------------------------------------------ salida 3: el navegador del PC
   async function alPc(cuerpo) {
@@ -335,8 +361,7 @@
       }
       if (!res.length) return `No encontré ${q} en YouTube.`;
       let donde = a.donde ? normalizarDonde(a.donde) : dondeGuardado();
-      if (donde === "ventana" && esAndroid()) donde = "app";      // en el celular, aqui (ver arriba)
-      if (donde === "pc" && !(window.PixelAparatos && window.PixelAparatos.puenteCon("pc"))) donde = esAndroid() ? "app" : "ventana";
+      if (donde === "pc" && !(window.PixelAparatos && window.PixelAparatos.puenteCon("pc"))) donde = "ventana";
       const otra = SALIDAS[donde];
       if (mu.salida && mu.salida !== otra) mu.salida.parar();    // cambia de sitio: lo de antes se calla
       mu.salida = otra;
@@ -347,16 +372,21 @@
       const titulo = tituloDicho(res[0].titulo);
       try {
         if (await reproducir(0)) {
-          if (otra === VENT) { $("#ag-musica").hidden = false; $("#ag-musica").classList.add("remota"); pintar(); return `Te pongo ${titulo} en la ventana de música.`; }
+          if (otra === VENT) { $("#ag-musica").hidden = false; $("#ag-musica").classList.add("remota"); pintar(); return `Te pongo ${titulo} en la pestaña de música.`; }
           if (otra === PC) { $("#ag-musica").hidden = false; $("#ag-musica").classList.add("remota"); pintar(); return `Listo, pongo ${titulo} en el PC.`; }
           return `Pongo ${titulo}.`;
         }
       } catch (e) { console.warn("musica:", e); }
-      // la ventana no se abrio (ventanas emergentes bloqueadas) o fallo el PC: suena aqui
+      // 12 nov: la pestana no se abrio sola (ventanas emergentes bloqueadas): boton, nunca la pantallita
+      if (otra === VENT) {
+        mu.salida = null;
+        abrirConToque(res[0]);
+        return `Tengo ${titulo}. Toca «Abrir la música» y suena en otra pestaña.`;
+      }
+      // fallo el PC: suena aqui
       mu.salida = APP;
       try { await reproducir(0); } catch (e) { N.mostrarVideo(q); return "No pude cargar el reproductor de YouTube. Te lo dejo para abrirlo con un toque."; }
-      return otra === VENT ? `Pongo ${titulo} aquí. Para que salga en otra ventana, permite las ventanas emergentes de esta página: el icono de la barra de direcciones.`
-        : `El PC no contestó: pongo ${titulo} aquí.`;
+      return `El PC no contestó: pongo ${titulo} aquí.`;
     }
     if (nombre === "controlar_musica") {
       const s = mu.salida;
@@ -416,7 +446,7 @@
     elegir.forEach((r) => r.addEventListener("change", () => {
       if (!r.checked) return;
       guardarDonde(r.value);
-      toast("Listo: la música sonará " + {ventana: esAndroid() ? "aquí (en el celular, la ventana de música es esta)." : "en la ventana de música.", app: "aquí en la app.", pc: "en el PC."}[r.value]);
+      toast("Listo: la música sonará " + {ventana: "en una pestaña del navegador.", app: "aquí en la app.", pc: "en el PC."}[r.value]);
     }));
     $("#ag-musica").addEventListener("click", async (e) => {
       const b = e.target.closest("button");
@@ -434,8 +464,8 @@
     herramientas: () => HERRAMIENTAS,
     capacidad: () => "- Poner música o videos de YouTube y manejarlos por voz: parar, pausar, seguir, cambiar de canción, volver a la anterior y el volumen (poner_musica, controlar_musica).",
     contexto: () => {
-      const donde = {ventana: "en la ventana de música (otra ventana con YouTube)", app: "aquí en la app", pc: "en el PC"};
-      let s = `## Música\nEl usuario la quiere ${donde[esAndroid() && dondeGuardado() === "ventana" ? "app" : dondeGuardado()]}.`;
+      const donde = {ventana: "en una pestaña del navegador (con YouTube)", app: "aquí en la app", pc: "en el PC"};
+      let s = `## Música\nEl usuario la quiere ${donde[dondeGuardado()]}.`;
       if (mu.cola.length && actual()) {
         s += ` Ahora ${mu.estado === 2 ? "está en pausa" : "suena"} «${tituloDicho(actual().titulo)}» ${donde[mu.salida.nombre]} (se pidió «${mu.consulta}»).`
           + " «Para», «pausa», «cambia de canción», «más alto» se refieren a esto: usa controlar_musica (o poner_musica si dice qué otra canción).";

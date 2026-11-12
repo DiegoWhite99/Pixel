@@ -330,7 +330,7 @@ const cuerpoDe = (raw) => Buffer.from(raw.split("\r\n\r\n")[1].replace(/\r\n/g, 
       else {
       e = await ve();
       console.log("  ventana:", pestanas.map((t) => t.url()).filter((u) => /reproductor/.test(u)).join(" "), "|", JSON.stringify(e.ventana));
-      comprobar(/ventana de música/.test(r) && e.ventana.video === e.cola[0].id && !e.ventana.silencio, "abre otra ventana con el video pedido (con volumen)", r);
+      comprobar(/pestaña de música/.test(r) && e.ventana.video === e.cola[0].id && !e.ventana.silencio, "abre la pestaña de música con el video pedido (con volumen)", r);
       comprobar(!(await page.$eval("#ag-musica", (x) => x.hidden)) && await page.$eval("#ag-musica", (x) => x.classList.contains("remota")), "en la app queda la barra de mando");
       await espera(800);
       const heroMusica = await page.evaluate(() => [document.querySelector("#hero-estado").textContent, document.querySelector("#pill-esp").textContent, document.querySelector(".hero").classList.contains("modo-musica")]);

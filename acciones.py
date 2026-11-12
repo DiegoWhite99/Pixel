@@ -489,11 +489,22 @@ def _buscar(consulta):
     return entradas[0].get("id"), entradas[0].get("title")
 
 
+_RE_YOUTUBE = re.compile(r"^https://(www\.)?youtube\.com/(watch\?v=[\w-]{11}|)$")
+
+
 def _abrir(url):
     """xdg-open en el navegador del PC. Devuelve el codigo de salida, o None si
     a los 3 s sigue vivo (pasa cuando arranca un navegador nuevo).
-    En Windows (instalador .exe) no hay xdg-open: lo abre el navegador predeterminado."""
+    En Windows (instalador .exe) no hay xdg-open: lo abre el navegador predeterminado.
+    YouTube va a la ventana de musica (navegador.py): siempre la misma, sin una pestana nueva por cancion."""
     import os
+    if _RE_YOUTUBE.match(url):
+        import navegador
+        try:
+            if navegador.abrir(url) is not None:
+                return 0
+        except Exception as e:
+            print("acciones: la ventana de música falló (%s); abro el navegador de siempre" % e)
     if os.name == "nt":
         try:
             os.startfile(url)

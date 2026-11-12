@@ -17,6 +17,9 @@
         "vivo": {
           ".read": "auth != null && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()"
         },
+        "ia": {
+          ".read": "auth != null && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()"
+        },
         "voz": {
           ".read": "auth != null && root.child('pixeles/' + $pid + '/duenos/' + auth.uid).exists()"
         },

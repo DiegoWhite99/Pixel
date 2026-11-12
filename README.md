@@ -3,8 +3,8 @@
 Píxel es un agente de inteligencia artificial creado por Divergencia IA, con cara de robot, hecho para una feria de tecnología. Vive en una aplicación web que se instala en el celular: oye la palabra **«Píxel»**, piensa con la inteligencia artificial que elijas (cada persona pone su clave), contesta con una voz natural de alta calidad y mueve su cara en 3D. Se entra con la cuenta de Google y cada persona tiene su perfil. Un computador y un ESP32 son opcionales: le dan micrófono y altavoz propios y le dejan manejar los aparatos de la casa.
 
 - **Aplicación:** https://pixelassitance.web.app (en el celular, con Chrome).
-- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.2.1/pixel_2.2.1_amd64.deb) y [Windows (.exe, versión de prueba)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.2.1/Pixel-2.2.1-Setup.exe), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
-- **Versión actual:** 2.2.1, del 12 de noviembre de 2026.
+- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.3.0/pixel_2.3.0_amd64.deb) y [Windows (.exe, versión de prueba)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.3.0/Pixel-2.3.0-Setup.exe), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
+- **Versión actual:** 2.3.0, del 12 de noviembre de 2026.
 - **Cómo está hecho por dentro:** `CLAUDE.md`. **Mediciones y decisiones:** `memoria.md`.
 
 ## Qué puede hacer
@@ -38,6 +38,7 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 
 | Versión | Fecha | Qué trae |
 |---|---|---|
+| **2.3.0** | 12 nov 2026 | En Windows el PC se maneja como en Linux (volumen, música, bloquear, suspender, su MAC). La música suena en una pestaña, siempre la misma. La IA del programa del PC llega a la app con su indicador «En uso». El robot se llama Píxel, se puede quitar y pide un código al agregarlo. Google en el programa, a un paso. |
 | **2.2.1** | 12 nov 2026 | La primera descarga de la voz ya no se rinde si se corta internet: sigue donde iba y reintenta sola. La búsqueda en la red ignora las direcciones que el router contesta por todas. |
 | **2.2.0** | 12 nov 2026 | El programa del computador se abre en su propia ventana: un panel de control azul, con Píxel que llega desde el fondo y saluda. Icono e instalador nuevos. Groq como otra IA (en el programa y en la app). Arreglada la búsqueda de aparatos en Windows. La app ya acepta claves de Google que no empiezan por «AIza». |
 | **2.1.2** | 11 nov 2026 | Windows: desinstalar con Píxel abierto ya borra el programa entero. Enlace con la cuenta probado con el programa instalado. |
@@ -50,6 +51,20 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 | **1.0.0** | 10 nov 2026 | Píxel entero en el celular: Gemini, Calendar, Gmail, Pomodoro, Eisenhower, cerebro, aparatos, música, notas y voz infantil. |
 
 No hay 1.1.0: la segunda fase salió directamente como 1.2.1.
+
+### 2.3.0 · 12 de noviembre de 2026
+
+Pedidos del usuario tras probar la 2.2.1 en su Windows.
+
+- **El PC con Windows, como con Linux:** subir y bajar el volumen, silenciar, pausar, siguiente y anterior (con las teclas multimedia del sistema), bloquear, apagar la pantalla y suspender (con la API de Windows), y su MAC para encenderlo por red. Antes en Windows no funcionaba nada de eso.
+- **La música en una pestaña, siempre la misma:**
+    - En el PC, YouTube sale en una ventana de música propia, con su perfil: cada canción reemplaza a la anterior, en vez de abrir una pestaña nueva por pedido.
+    - En la app, «pon tal canción» la pone en una pestaña del navegador (siempre la misma), ya no en la pantallita debajo de Píxel. Si el navegador no deja abrirla sola, sale el botón «Abrir la música».
+- **La IA del programa del PC llega a la app:** las claves de Gemini o Groq que pongas en la ventana del PC las usa también la app de las cuentas vinculadas a ese PC, mientras no tengan una clave propia en ese aparato. En Ajustes → Proveedor de IA se ve cuál es y cuál está **«En uso»**, y en la ventana del PC dice «En uso» o «De respaldo». La clave viaja por la nube y solo la pueden leer las cuentas vinculadas a ese PC.
+- **El robot se llama Píxel:** en la app ya no dice «ESP32». Cada puente tiene un botón **«Quitar»**: el robot olvida a su dueño y el PC desenlaza esa cuenta.
+- **Código al agregar el robot desde la app:** Píxel inventa un código de 6 cifras y el PC lo dice por el altavoz del robot; se escribe en la app. Sin el PC conectado, vale pulsar una vez su botón BOOT, como antes. Requiere el firmware nuevo del robot (cargado el 12 nov).
+- **Google en el programa (calendario y correo):** la ventana del PC tiene la tarjeta «Google» para conectar la cuenta, y lo que se le pida por voz al robot o al PC irá a Google Calendar y Gmail. Falta la credencial de «app de escritorio» del proyecto en Google Cloud: el programa la trae en cuanto exista.
+- **Prueba de GitHub en Windows:** también lee la MAC, toca el volumen y pone tres canciones de YouTube comprobando que queda una sola pestaña.
 
 ### 2.2.1 · 12 de noviembre de 2026
 

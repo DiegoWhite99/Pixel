@@ -74,11 +74,28 @@ const Proveedores = (function () {
   }
   // El que se usa ahora: {proveedor, modelo, clave, base, propio}. Sin clave o sin modelo, ninguno
   // (propio: false): Pixel no puede pensar hasta que el usuario ponga su clave en Ajustes.
-  function actual() {
-    const cfg = leer(), p = cfg.proveedor, ninguno = {proveedor: "", modelo: "", clave: "", base: "", propio: false};
-    if (!LISTA[p] || !cfg.claves[p] || !modeloDe(cfg, p)) return ninguno;
-    if (LISTA[p].compatible && !/^https:\/\//.test(baseDe(cfg, p))) return ninguno;
+  // 12 nov (el usuario: "si pongo la API aqui [en el programa del PC], debe reflejarse en la web"): las IA del
+  // Pixel del PC enlazado (pixeles/<pid>/ia, que app.js le pasa a ponerDelPc). Sin clave propia en este aparato,
+  // Pixel piensa con la del PC (la preferida del PC primero). La clave propia, si la hay, manda.
+  let delPc = null;                            // {pc, preferida, gemini: {clave, modelo}, groq: {clave, modelo}}
+  const ponerDelPc = (v) => { delPc = v && typeof v === "object" ? v : null; };
+  function iaDelPc() {
+    if (!delPc) return null;
+    const orden = delPc.preferida === "groq" ? ["groq", "gemini"] : ["gemini", "groq"];
+    const p = orden.find((k) => LISTA[k] && delPc[k] && delPc[k].clave && delPc[k].modelo);
+    if (!p) return null;
+    return {proveedor: p, modelo: String(delPc[p].modelo), clave: String(delPc[p].clave), base: LISTA[p].base || "", propio: true,
+      delPc: String(delPc.pc || "tu PC")};
+  }
+  const pcTiene = () => (delPc ? ["gemini", "groq"].filter((k) => delPc[k] && delPc[k].clave).map((k) => ({id: k, modelo: String(delPc[k].modelo || "")})) : []);
+  function propia() {
+    const cfg = leer(), p = cfg.proveedor;
+    if (!LISTA[p] || !cfg.claves[p] || !modeloDe(cfg, p)) return null;
+    if (LISTA[p].compatible && !/^https:\/\//.test(baseDe(cfg, p))) return null;
     return {proveedor: p, modelo: modeloDe(cfg, p), clave: cfg.claves[p], base: baseDe(cfg, p), propio: true};
+  }
+  function actual() {
+    return propia() || iaDelPc() || {proveedor: "", modelo: "", clave: "", base: "", propio: false};
   }
   // 12 nov (el usuario: "dice que la clave empieza por AIza, entonces no deja"): antes cada proveedor exigia su
   // comienzo de siempre (AIza..., sk-ant-..., gsk_...) y una clave de otro formato no se podia ni guardar. Ahora
@@ -273,6 +290,7 @@ const Proveedores = (function () {
   }
 
   return {LISTA, leer, guardar, actual, modeloDe, baseDe, claveValida, tapada, motor, probar, buscarModelos, registrar,
+    ponerDelPc, iaDelPc, pcTiene, propia,
     sanear, claveUso, nombreModelo, precioDe,
     texto: {extraerJSON, entradaValida, aMensajesOpenAI, aHerramientasOpenAI, leerSSE, trozosOpenAI}};
 })();

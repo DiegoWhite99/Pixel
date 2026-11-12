@@ -467,6 +467,11 @@ input[type=number] { width: 100%; padding: 10px 12px; border: 1px solid var(--li
 
 /* Fase 14: la prueba de un puente (aparatos.js) */
 .prueba-puente { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--surface-2); font-size: 14px; }
+/* 12 nov: la IA del programa del PC en Ajustes */
+.ia-pc { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--surface-2); font-size: 14px; display: grid; gap: 8px; margin: 10px 0; }
+.ia-pc .fila { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ia-pc .ia-nombre { font-weight: 650; }
+.ia-pc .chip { margin-left: auto; }
 .prueba-puente ul { margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }
 .prueba-puente li { padding-left: 22px; position: relative; color: var(--muted); }
 .prueba-puente li::before { content: "•"; position: absolute; left: 6px; }

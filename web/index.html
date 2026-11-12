@@ -20,7 +20,7 @@
     </div>
     <div class="pills">
       <button class="pill" id="pill-servidor" type="button"><i></i>Servidor</button>
-      <span class="pill" id="pill-esp"><i></i>ESP32</span>
+      <span class="pill" id="pill-esp"><i></i>Robot</span>
       <span class="pill" id="pill-ollama"><i></i>IA local</span>
     </div>
     <!-- 2.0.0: la cuenta (perfil.js): foto y nombre; abre Mi perfil -->
@@ -156,7 +156,7 @@
       <div class="card">
         <div class="titulo"><div class="ico verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 12a8 8 0 0 1 16 0v5a2 2 0 0 1-2 2h-1v-6h3M4 13h3v6H6a2 2 0 0 1-2-2z"/></svg></div><h2>Mi voz</h2></div>
         <div class="dato" id="r-voz" style="font-size:22px">–</div>
-        <p class="sub" id="r-voz-sub">por el ESP32</p>
+        <p class="sub" id="r-voz-sub">por el robot Píxel</p>
       </div>
       <div class="card">
         <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></div><h2>Cuentas</h2></div>
@@ -188,7 +188,7 @@
           <label class="campo">Puente<select id="ap-puente"></select></label>
           <label class="campo" id="ap-campo-ip" hidden>IP del TV en tu WiFi<input type="text" id="ap-ip" inputmode="decimal"></label>
           <div class="grupo" id="ap-campo-pin" hidden>
-            <label class="campo">Pin del relé en el ESP32<input type="number" id="ap-pin" min="1" max="47" value="18"></label>
+            <label class="campo">Pin del relé en el robot Píxel<input type="number" id="ap-pin" min="1" max="47" value="18"></label>
             <label class="check"><input type="checkbox" id="ap-invertido"> Mi relé se activa con nivel bajo (si "encender" lo apaga, marca esto)</label>
           </div>
           <label class="campo" id="ap-campo-mac" hidden>MAC del PC<input type="text" id="ap-mac" placeholder="aa:bb:cc:dd:ee:ff"></label>
@@ -202,8 +202,8 @@
     </div>
     <div class="card" id="card-puentes" hidden>
       <div class="head"><div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 18c0-6 4-10 8-10s8 4 8 10M2 18h20M8 18v-4M16 18v-4M12 18v-6"/></svg></div><h2>Puentes</h2></div>
-        <button class="btn primario" type="button" id="ap-ble-btn">Agregar ESP32 por Bluetooth</button></div>
-      <p class="sub">El puente está en tu casa y recibe las órdenes de Píxel por internet: el ESP32 (infrarrojo, relé, encender el PC por red) o el PC con el servidor (el propio PC y un TV Android).</p>
+        <button class="btn primario" type="button" id="ap-ble-btn">Agregar el robot Píxel por Bluetooth</button></div>
+      <p class="sub">El puente está en tu casa y recibe las órdenes de Píxel por internet: el robot Píxel (infrarrojo, relé, encender el PC por red) o el PC con el servidor (el propio PC y un TV Android).</p>
       <div class="lista" id="ap-puentes"></div>
       <div class="prueba-puente" id="ap-prueba" hidden aria-live="polite"></div>
       <div id="ap-ble" hidden></div>
@@ -231,7 +231,7 @@
       <div class="grupo" id="salida-bloque">
         <h2>Por dónde habla</h2>
         <div class="voces">
-          <label class="voz"><input type="radio" name="salida_voz" value="esp32"><span><b>Por el ESP32</b><br><small class="sub">su propio altavoz</small></span></label>
+          <label class="voz"><input type="radio" name="salida_voz" value="esp32"><span><b>Por el robot Píxel</b><br><small class="sub">su propio altavoz</small></span></label>
           <label class="voz"><input type="radio" name="salida_voz" value="pc"><span><b>Por el altavoz del PC</b><br><small class="sub" id="salida-pc-nota">el altavoz Bluetooth si está conectado</small></span></label>
         </div>
       </div>
@@ -274,11 +274,11 @@
     <div class="card" id="card-musica" hidden>
       <div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div><h2>Dónde pongo la música</h2></div>
       <div class="segmento" role="radiogroup" aria-label="Dónde suena la música">
-        <label><input type="radio" name="musica-donde" value="ventana">En otra ventana</label>
+        <label><input type="radio" name="musica-donde" value="ventana">En una pestaña del navegador</label>
         <label><input type="radio" name="musica-donde" value="app">Aquí en la app</label>
         <label><input type="radio" name="musica-donde" value="pc">En el PC</label>
       </div>
-      <p class="sub">En otra ventana: se abre la ventana de música de Píxel con YouTube y la manejas toda por voz ("para", "cambia de canción", "más alto"). La primera vez permite las ventanas emergentes de esta página (el icono de la barra de direcciones). En el celular suena aquí: una página web no puede manejar la app de YouTube. También por voz: "Píxel, pon Queen en el PC".</p>
+      <p class="sub">En una pestaña: cada canción suena en la misma pestaña del navegador, con YouTube, y la manejas por voz ("para", "cambia de canción", "más alto"). Para que se abra sola, permite una vez las ventanas emergentes de esta página (el icono de la barra de direcciones); si no, sale un botón para abrirla. En el PC: siempre en la misma ventana del navegador del PC. También por voz: "Píxel, pon Queen en el PC".</p>
     </div>
 
     <!-- Fase 13: el cerebro de Pixel (cerebro.js, solo en la app de internet) -->
@@ -414,7 +414,8 @@
     <div class="card" id="card-ia">
       <div class="head"><div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="3"/><path d="M9 9h6v6H9zM9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg></div><h2>Proveedor de IA</h2></div>
         <span class="chip" id="ia-chip">…</span></div>
-      <p class="sub">Para pensar, Píxel usa la inteligencia artificial que tú elijas, con <b>tu propia clave</b>: Gemini, Claude, GPT, Kimi (por OpenRouter), DeepSeek u otra compatible. Lo que gastes lo cobra tu proveedor. La clave se guarda <b>solo en este aparato y para esta cuenta</b>: no se sube a la nube ni a GitHub.</p>
+      <p class="sub">Para pensar, Píxel usa la inteligencia artificial que tú elijas, con <b>tu propia clave</b>: Gemini, Groq, Claude, GPT, Kimi (por OpenRouter), DeepSeek u otra compatible. Lo que gastes lo cobra tu proveedor. La clave que pongas aquí se guarda <b>solo en este aparato y para esta cuenta</b>. Si pusiste una en el programa de tu PC, Píxel la usa aquí también.</p>
+      <div id="ia-pc" class="ia-pc" hidden aria-live="polite"></div>
       <form class="ia-form" id="f-ia" autocomplete="off">
         <label class="campo">Proveedor<select id="ia-proveedor"></select></label>
         <p class="nota" id="ia-ayuda"></p>
@@ -599,7 +600,7 @@
     <div class="opciones">
       <button class="opcion" type="button" data-paso="bt"><span class="ico" data-icono="bluetooth"></span><span><b>Por Bluetooth</b><small>Altavoces, audífonos y móviles. Se conectan al PC de Píxel.</small></span><span class="flecha">›</span></button>
       <button class="opcion" type="button" data-paso="wifi"><span class="ico verde" data-icono="wifi"></span><span><b>Por WiFi</b><small>Enchufes, luces, pantallas y otros aparatos de tu red.</small></span><span class="flecha">›</span></button>
-      <button class="opcion" type="button" data-paso="pixel"><span class="ico" data-icono="pixel"></span><span><b>Otro Píxel</b><small>Un ESP32 nuevo, con el portal Pixel asistente de voz.</small></span><span class="flecha">›</span></button>
+      <button class="opcion" type="button" data-paso="pixel"><span class="ico" data-icono="pixel"></span><span><b>Otro Píxel</b><small>Un robot Píxel nuevo, con el portal Pixel asistente de voz.</small></span><span class="flecha">›</span></button>
     </div>
   </div>
   <div class="hoja-cuerpo" id="paso-bt" hidden>
@@ -616,7 +617,7 @@
     <details class="mas" id="ble-cerca">
       <summary>Detectar cuando está cerca de Píxel</summary>
       <div class="grupo">
-        <p class="sub">El ESP32 mira cada 30 segundos qué hay a su alrededor por Bluetooth de bajo consumo. Recuerda relojes, pulseras o balizas para saber si están cerca. Los móviles cambian su dirección cada pocos minutos, así que con ellos dura poco.</p>
+        <p class="sub">El robot Píxel mira cada 30 segundos qué hay a su alrededor por Bluetooth de bajo consumo. Recuerda relojes, pulseras o balizas para saber si están cerca. Los móviles cambian su dirección cada pocos minutos, así que con ellos dura poco.</p>
         <div class="acciones"><button class="btn suave" type="button" id="b-buscar">Buscar con Píxel</button></div>
         <div id="busqueda"></div>
       </div>
@@ -629,10 +630,10 @@
   </div>
   <div class="hoja-cuerpo" id="paso-pixel" hidden>
     <ol class="pasos">
-      <li>Enciende el ESP32. Si no encuentra su red, abre la red <b>Pixel asistente de voz</b> y el LED se pone <b>morado</b>. También puedes abrirla manteniendo pulsado el botón <b>BOOT</b> 3 segundos.</li>
+      <li>Enciende el robot Píxel. Si no encuentra su red, abre la red <b>Pixel asistente de voz</b> y el LED se pone <b>morado</b>. También puedes abrirla manteniendo pulsado el botón <b>BOOT</b> 3 segundos.</li>
       <li>Desde el móvil, conéctate a <b>Pixel asistente de voz</b> (clave <code id="portal-clave">…</code>).</li>
       <li>Se abre la página de configuración. Si no se abre, entra a <code>http://192.168.4.1</code>.</li>
-      <li>Elige la red WiFi y pon como IP del servidor <code id="ip-servidor">…</code>. Al guardar, el ESP32 se reinicia y aparece en "Píxel conectados".</li>
+      <li>Elige la red WiFi y pon como IP del servidor <code id="ip-servidor">…</code>. Al guardar, el robot Píxel se reinicia y aparece en "Píxel conectados".</li>
     </ol>
     <p class="aviso">Requiere el firmware con portal (<code>Pixel_portal.ino</code>).</p>
   </div>

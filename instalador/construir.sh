@@ -14,7 +14,7 @@
 # Descargas y herramientas: $PIXEL_CACHE (por defecto ~/.cache/pixel-instalador).
 set -euo pipefail
 
-VERSION=2.2.1
+VERSION=2.3.0
 RAIZ=$(cd "$(dirname "$0")/.." && pwd)
 INST=$RAIZ/instalador
 DIST=$RAIZ/dist
@@ -81,7 +81,8 @@ revisar_secretos() {
     if [ -n "$(find "$dir" -name "$n" -not -path '*/site-packages/*' -print -quit)" ]; then echo "  MAL: va $n"; malo=1; fi
   done
   if [ -n "$(find "$dir" \( -name '*.wav' -o -name 'capturas' \) -not -path '*/site-packages/*' -print -quit)" ]; then echo "  MAL: van grabaciones"; malo=1; fi
-  if grep -rIq --exclude-dir=site-packages -e 'client_secret' -e 'refresh_token"\s*:' "$dir"; then echo "  MAL: va un secreto de OAuth"; malo=1; fi
+  # la credencial de Google del programa (google_programa.json, si existe) si puede ir: es de "app de escritorio"
+  if grep -rIq --exclude-dir=site-packages --exclude=google_programa.json -e 'client_secret' -e 'refresh_token"\s*:' "$dir"; then echo "  MAL: va un secreto de OAuth"; malo=1; fi
   if ! grep -q 'youtube: ""' "$(find "$dir" -path '*web/claves.js' | head -1)"; then echo "  MAL: web/claves.js no va vacia"; malo=1; fi
   [ $malo = 0 ] && echo "  bien: nada que no deba ir"
   return $malo
@@ -118,6 +119,7 @@ linux() {
   rm -f "$opt/app"/*.pyi
   [ "$(ls "$opt/app"/*.so | wc -l)" = "$(ls "$fuente"/*.py | wc -l)" ] || { echo "faltan modulos compilados" >&2; exit 1; }
   cp "$INST/iniciar.py" "$opt/app/"
+  [ -f "$INST/google_programa.json" ] && cp "$INST/google_programa.json" "$opt/app/"
   copiar_web "$opt/app/web"
 
   install -Dm755 "$INST/linux/pixel" "$raiz/usr/bin/pixel"
@@ -180,6 +182,7 @@ windows() {
     rm -f "$org/app"/*.py
   fi
   cp "$INST/iniciar.py" "$org/app/"
+  [ -f "$INST/google_programa.json" ] && cp "$INST/google_programa.json" "$org/app/"
   copiar_web "$org/app/web"
   sed 's/$/\r/' "$INST/LEEME.txt" > "$org/LEEME.txt"
   revisar_secretos "$org"

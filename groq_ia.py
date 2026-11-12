@@ -108,6 +108,11 @@ def hay_clave():
     return _clave is not None
 
 
+def clave():
+    """La clave (solo para nube.publicar_ia: va a las cuentas vinculadas a este PC)."""
+    return _clave or ""
+
+
 def activo():
     """Hay clave, ya se sabe con que modelo, y no esta en pausa por un fallo reciente."""
     return _clave is not None and bool(_modelo) and time.monotonic() >= _pausa_hasta
