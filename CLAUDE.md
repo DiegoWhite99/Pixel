@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Asistente de voz para una demo de feria. Un ESP32-S3 (micrófono INMP441; su firmware **no** está en este repo) manda audio por TCP. El servidor en Python lo transcribe (faster-whisper), decide la acción (regex, clasificador LLM o respuesta libre del LLM) y devuelve voz (Piper o Supertonic). Palabra de activación: "Píxel". Gemini o Groq responden si hay clave (`llm.motores()`, la preferida primero); si no, Ollama (`qwen2.5:3b` en `127.0.0.1:11434`).
 
-Repo público: https://github.com/DiegoWhite99/Pixel. No entran claves, grabaciones ni datos personales (ver `.gitignore`). Ramas: `main` (v2.2.1) y `vinculacion_movil` (trabajo nuevo). Versiones `vX.Y.Z` con su historia en `README.md`.
+Repo público: https://github.com/DiegoWhite99/Pixel. No entran claves, grabaciones ni datos personales (ver `.gitignore`). Ramas: `main` (v2.3.0) y `vinculacion_movil` (trabajo nuevo). Versiones `vX.Y.Z` con su historia en `README.md`.
 
 **Detalle y mediciones:** `memoria.md`, con el registro de decisiones y, al final, el apéndice "Referencia detallada" (el detalle por fase que antes estaba aquí). **Funciones, código y rutas:** `docs/FUNCIONES.md`. **Auditoría de esta limpieza:** `docs/AUDITORIA.md`.
 
@@ -113,6 +113,19 @@ Los datos de las pruebas (nombres de ejemplo como «Ana Prueba») van solo en cu
 **Ventana del programa** (2.2.0, 12 nov; pedido: "no desplegar un servidor web, necesito una ventana" y "un dashboard todo azul" distinto de la app): `web/escritorio.html/.css/.js`, con la bienvenida (Píxel llega del fondo y dice el saludo exacto del usuario, que comprueba `prueba_modulos.js`) y Inicio, Dispositivos, Tus APIs y Voz. Habla solo con el panel local (`/api/estado` y las rutas de `panel.py`; `/api/apagar` la agrega el lanzador). `instalador/pixel_ventana.py` la abre en otro proceso (`iniciar.py --ventana`): en Windows con pywebview (WebView2, `SOLO_WINDOWS` de `construir.sh`), una sola ventana (mutex); si falla, o en Linux, Chrome/Edge con `--app`. Cerrarla no apaga a Píxel. En el programa instalado el panel escucha solo en `127.0.0.1` (`panel.DIRECCION`); el servidor de desarrollo sigue en `0.0.0.0`. Mientras baja la voz, la página de espera del lanzador sirve esa misma ventana, con `/api/estado` en 503 y el avance en `/progreso`. Las imágenes del programa (icono azul, franjas del instalador) están hechas en `instalador/imagenes/` desde `web/icono_programa.svg` (`instalador/imagenes.js`); la app de internet sigue con `web/icono.svg`.
 
 **Groq** (`groq_ia.py`, 2.2.0): igual que `gemini.py` (mismo `NOMBRE`, `Error`, `activo`, `generar`, `generar_stream`, `probar`), API compatible con OpenAI. El modelo se elige al probar la clave (`PREFERIDOS`, de la lista de esa clave) y se guarda con ella en `groq_clave.json`. `llm.PREFERIDA` (ajuste `ia`, ruta `/api/ia`) dice cuál contesta primero; si falla, la otra, y al final Ollama. Una clave que Google o Groq rechazan no se queda guardada (`clave_rechazada()`). En la app de internet, Groq es un proveedor más de `web/proveedores.js`.
+
+**2.3.0 (12 nov):**
+- **Windows en el puente del PC:** `puente_pc._Windows` (teclas multimedia con `keybd_event`, `LockWorkStation`, `SetSuspendState`, MAC con `GetAdaptersInfo`).
+- **Música en el PC:** `navegador.py`. YouTube siempre en la misma ventana: un Chrome/Edge aparte, con su perfil y el puerto de depuración en 127.0.0.1. Cada canción abre su pestaña y cierra las demás. Se llega por `acciones._abrir`, así que las pruebas que lo sustituyen siguen sin abrir nada.
+- **Música en la app:** suena en una pestaña con nombre fijo (`PESTANA`). Si el navegador no deja abrirla, sale el botón «Abrir la música»; nunca la pantallita.
+- **La IA del PC en la app:**
+    - El PC publica sus claves en `pixeles/<pid>/ia` con `nube.publicar_ia()`, al conectar y al guardar. La regla deja leerlo solo a los dueños.
+    - `proveedores.js` usa esa clave si la cuenta no tiene una propia en ese aparato (`delPc`, `iaDelPc`), y Ajustes muestra cuál está «En uso».
+- **Robot:**
+    - En la app se llama «robot Píxel», no ESP32.
+    - «Quitar» en Puentes manda `/api/olvidar` al robot o `/api/nube/quitar` al PC, y borra `usuarios/<uid>/pixeles/<pid>`.
+    - Al agregarlo por Bluetooth, la app manda `{pedir_codigo}`. El firmware inventa 6 cifras y manda el debug `codigo:NNNNNN`. El PC lo dice por el altavoz del robot (`FRASE_CODIGO_ROBOT`) y no lo escribe en el registro. Sin el PC (`"pc": false` en el BLE), vale el botón BOOT.
+- **Google en el programa:** tarjeta en la ventana. La credencial de app de escritorio va en `instalador/google_programa.json` (fuera de git), y `construir.sh` la mete en el paquete si existe. Hoy no existe.
 
 **Gemini:** REST `v1beta` desde `gemini.py` (clave en la cabecera `x-goog-api-key`, nunca en la URL ni en logs). Si falla, responde Ollama y pausa Gemini unos segundos (`PAUSA_S`), o 10 min tras un 429 (`PAUSA_CUPO_S`). El plan gratis tiene cupo diario por modelo: las pruebas de punta a punta lo gastan.
 

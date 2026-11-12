@@ -108,6 +108,7 @@ MSG_AUDIO_IN = 0x01
 MSG_AUDIO_OUT = 0x02
 MSG_END_TURN = 0x03
 MSG_DEBUG = 0x04
+FRASE_CODIGO_ROBOT = "Para enlazarme con la app, mi código es: %s. Repito: %s."
 
 MAX_PAYLOAD = 1 << 20     # 1 MiB, para no confiar en una longitud corrupta
 
@@ -1146,6 +1147,14 @@ def atender(sock, addr):
                 texto = payload.decode("utf-8", "replace")
                 if texto.startswith("ble:"):
                     sesion.recibir_ble(texto[4:])
+                elif texto.startswith("codigo:"):
+                    # 12 nov: la app quiere enlazar al robot por Bluetooth y el robot pide decir su codigo (el
+                    # autenticador): el PC lo dice por el altavoz del robot. El codigo no va al registro.
+                    cifras = "".join(c for c in texto[7:] if c.isdigit())[:6]
+                    if len(cifras) == 6:
+                        log("%s  el robot pide decir su código para enlazar la app" % sesion.peer)
+                        dicho = ", ".join(cifras)
+                        sesion.cola.put(("decir_esp32", FRASE_CODIGO_ROBOT % (dicho, dicho)))
                 else:
                     log("%s  debug ESP32: %s" % (sesion.peer, texto))
             elif msg_type == MSG_AUDIO_OUT:

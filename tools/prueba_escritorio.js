@@ -68,13 +68,16 @@ const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
 
     console.log("Bienvenida");
     await p.goto(PAGINA, {waitUntil: "domcontentloaded"});
-    await esperar(700);
-    await foto("1_llega");
-    const lejos = await p.$eval("#intro-pixel", (e) => e.getBoundingClientRect().width);
-    await esperar(1300);
+    // el tamano de Pixel durante la llegada: el mas pequeno visto contra el del final
+    const anchos = [];
+    for (let i = 0; i < 26; i++) {
+      anchos.push(await p.$eval("#intro-pixel", (e) => e.getBoundingClientRect().width));
+      if (i === 6) await foto("1_llega");
+      await esperar(100);
+    }
     await foto("2_cerca");
-    await esperar(800);
-    const cerca = await p.$eval("#intro-pixel", (e) => e.getBoundingClientRect().width);
+    await esperar(600);
+    const lejos = Math.min(...anchos), cerca = await p.$eval("#intro-pixel", (e) => e.getBoundingClientRect().width);
     ok(cerca > lejos * 3, `Píxel se acerca de atrás hacia adelante (${Math.round(lejos)} px → ${Math.round(cerca)} px)`);
     await p.waitForFunction(() => document.querySelector("#intro-entrar").classList.contains("ver"), {timeout: 15000});
     await foto("3_saludo");

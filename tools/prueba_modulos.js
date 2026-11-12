@@ -868,6 +868,18 @@ if (ctx.PixelContactos) {
     assert.ok(g && g.compatible && g.base === "https://api.groq.com/openai/v1");
     assert.ok(P.claveValida("groq", "gsk_" + "a".repeat(40)) && !P.claveValida("groq", "gsk_ con espacios " + "a".repeat(20)));
   });
+  prueba("proveedores: sin clave propia, Píxel usa la IA del programa del PC (la preferida del PC primero)", () => {
+    P.ponerDelPc({pc: "PC de prueba", preferida: "groq", gemini: {clave: "g".repeat(39), modelo: "gemini-3.5-flash-lite"},
+      groq: {clave: "q".repeat(50), modelo: "openai/gpt-oss-120b"}});
+    let a = P.actual();
+    assert.ok(a.propio && a.proveedor === "groq" && a.modelo === "openai/gpt-oss-120b" && a.base === "https://api.groq.com/openai/v1" && a.delPc === "PC de prueba");
+    P.ponerDelPc({pc: "PC de prueba", preferida: "gemini", gemini: {clave: "g".repeat(39), modelo: "gemini-3.5-flash-lite"}});
+    a = P.actual();
+    assert.ok(a.proveedor === "gemini" && a.clave === "g".repeat(39));
+    igual(P.pcTiene().map((x) => x.id), ["gemini"]);
+    P.ponerDelPc(null);
+    assert.ok(!P.actual().propio && P.pcTiene().length === 0);
+  });
   const RAIZ = path.join(__dirname, "..");
   const esc = fs.readFileSync(path.join(WEB, "escritorio.js"), "utf8");
   const html = fs.readFileSync(path.join(WEB, "escritorio.html"), "utf8");

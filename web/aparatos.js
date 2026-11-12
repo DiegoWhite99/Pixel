@@ -1,15 +1,15 @@
 /* Fase 13 - Aparatos de la casa: Pixel los maneja a traves de un puente.
    El navegador no puede hablar con los aparatos de la red de casa ni mandar infrarrojo, asi que la
    orden va por Firebase a un "puente" que esta en la casa y la ejecuta:
-     - el ESP32 (firmware Pixel_portal con la parte de puente): infrarrojo, rele, Wake-on-LAN y http;
+     - el robot Píxel (firmware Pixel_portal con la parte de puente): infrarrojo, rele, Wake-on-LAN y http;
      - el PC con el servidor (nube.py + control_pc.py + tv_android.py): el propio PC (volumen, musica,
        bloquear...), un TV Android/Google TV por WiFi, Wake-on-LAN y http.
    Un puente es un Pixel enlazado a la cuenta (usuarios/<uid>/pixeles/<pid>) y recibe ordenes igual
    que el PC: pixeles/<pid>/ordenes/<id> = {uid, ruta, cuerpo (JSON)} -> pixeles/<pid>/respuestas/<id>.
-   Sus capacidades salen de su estado (pixeles/<pid>/estado: el del PC trae "puente"; el del ESP32
+   Sus capacidades salen de su estado (pixeles/<pid>/estado: el del PC trae "puente"; el del robot Píxel
    es {tipo: "puente", capacidades}).
    Los aparatos: usuarios/<uid>/aparatos/<aid> = {nombre, tipo, metodo, puente, config, acciones}.
-   El ESP32 se agrega por Bluetooth desde el celular (Web Bluetooth, Chrome en Android).
+   El robot Píxel se agrega por Bluetooth desde el celular (Web Bluetooth, Chrome en Android).
    Al cargarse no toca la pagina: las funciones de texto (PixelAparatos.texto) se prueban en Node. */
 "use strict";
 (function () {
@@ -24,8 +24,8 @@
   const METODOS = {
     pc: {nombre: "Es el PC de Píxel", sub: "volumen, música, YouTube, bloquear y suspender", cap: "pc"},
     atv: {nombre: "TV Android o Google TV por WiFi", sub: "lo maneja el PC; se empareja con un código", cap: "atv"},
-    ir: {nombre: "Infrarrojo, como su control remoto", sub: "el ESP32 aprende los botones del control", cap: "ir"},
-    rele: {nombre: "Relé del ESP32", sub: "enciende y apaga lo que esté conectado al relé", cap: "rele"},
+    ir: {nombre: "Infrarrojo, como su control remoto", sub: "el robot Píxel aprende los botones del control", cap: "ir"},
+    rele: {nombre: "Relé del robot Píxel", sub: "enciende y apaga lo que esté conectado al relé", cap: "rele"},
     wol: {nombre: "Encender por red (Wake-on-LAN)", sub: "despierta un PC con su MAC", cap: "wol"},
     http: {nombre: "Enchufe o luz WiFi (dirección web)", sub: "Shelly, Tasmota y parecidos: una URL para cada acción", cap: "http"},
   };
@@ -146,7 +146,7 @@
             const v = x.val();
             if (!v || !v.json) return;
             try {
-              const e = JSON.parse(v.json), p = e.puente || e;          // el PC lo trae en "puente"; el ESP32 es todo puente
+              const e = JSON.parse(v.json), p = e.puente || e;          // el PC lo trae en "puente"; el robot Píxel es todo puente
               Object.assign(ap.puentes[pid], {capacidades: p.capacidades || [], tvs: p.tvs || [], mac: p.mac || "", ip: p.ip || (e.servidor && e.servidor.ip) || "",
                 panel: (e.servidor && e.servidor.panel) || 0, version: p.version || "", rssi: p.rssi || 0,
                 ir_rx: !!p.ir_rx, wifi: (e.wifi && e.wifi.dispositivos) || []});
@@ -160,6 +160,26 @@
   }
 
   // Manda una orden a un puente y espera su respuesta ({ok, mensaje, ...}). esperarRespuesta es de app.js.
+  // 12 nov (pedido: "yo debería poder quitar el dispositivo"): el robot olvida a su dueño (/api/olvidar) y el PC
+  // desenlaza esta cuenta (/api/nube/quitar); si no contestan (apagados), igual sale de la lista de esta cuenta.
+  async function quitarPuente(pid, boton) {
+    const p = ap.puentes[pid];
+    if (!p) return;
+    const robot = p.tipo === "puente";
+    if (!confirm(`¿Quitar «${p.nombre}» de tu cuenta? ${robot ? "Para volver a usarlo tendrás que agregarlo otra vez por Bluetooth." : "Para volver a usarlo tendrás que enlazarlo otra vez con su código."}`)) return;
+    boton.disabled = true;
+    try {
+      if (enLinea(pid)) {
+        try { await mandar(pid, robot ? "/api/olvidar" : "/api/nube/quitar", robot ? {} : {uid: nube.uid}, 15000); } catch (e) { console.warn("quitar:", e); }
+      }
+      await nube.d.remove(ref(`usuarios/${nube.uid}/pixeles/${pid}`));
+      toast(`Quitado: ${p.nombre}.`);
+    } catch (e) {
+      toast("No pude quitarlo: " + (e.message || e), true);
+      boton.disabled = false;
+    }
+  }
+
   async function mandar(pid, ruta, cuerpo, ms) {
     if (!ap.puentes[pid]) throw new Error("Ese puente ya no está enlazado.");
     if (!enLinea(pid)) throw new Error(`${nombrePuente(pid)} no está conectado. ¿Está encendido y con internet?`);
@@ -180,7 +200,7 @@
     if (!p) return {pasos: [{ok: false, texto: "Ese puente ya no está enlazado."}], resumen: "Ese puente ya no está enlazado."};
     const seg = (t0) => `${((Date.now() - t0) / 1000).toFixed(1).replace(".", ",")} s`;
     if (!enLinea(pid)) {
-      pasos.push({ok: false, texto: `Sin latido: ${p.tipo === "puente" ? "¿el ESP32 está encendido y con WiFi?" : "¿el PC está encendido con el servidor?"}`});
+      pasos.push({ok: false, texto: `Sin latido: ${p.tipo === "puente" ? "¿el robot Píxel está encendido y con WiFi?" : "¿el PC está encendido con el servidor?"}`});
       return {pasos, resumen: `${p.nombre} no está conectado.`};
     }
     pasos.push({ok: true, texto: "En línea (manda su latido)"});
@@ -189,8 +209,8 @@
       try { await mandar(pid, "/api/eco", {}, 15000); pasos.push({ok: true, texto: `Recibe órdenes y contesta (${seg(t0)})`}); } catch (e) {
         const m = String(e.message || e);
         if (/no existe/.test(m)) pasos.push({ok: true, texto: `Recibe órdenes y contesta (${seg(t0)})`});
-        else if (/dueña/.test(m)) { pasos.push({ok: false, texto: "No te reconoce como dueño: vuelve a enlazarlo por Bluetooth"}); return {pasos, resumen: "El ESP32 no me reconoce como su dueño."}; }
-        else { pasos.push({ok: false, texto: "No contestó la orden: " + m}); return {pasos, resumen: "El ESP32 no contestó."}; }
+        else if (/dueña/.test(m)) { pasos.push({ok: false, texto: "No te reconoce como dueño: vuelve a enlazarlo por Bluetooth"}); return {pasos, resumen: "El robot Píxel no me reconoce como su dueño."}; }
+        else { pasos.push({ok: false, texto: "No contestó la orden: " + m}); return {pasos, resumen: "El robot Píxel no contestó."}; }
       }
       const pc = Object.entries(ap.puentes).find(([id, x]) => x.tipo !== "puente" && x.ip && enLinea(id));
       if (pc) {
@@ -251,7 +271,7 @@
 
   // ------------------------------------------------------------------ herramientas para Gemini
   const HERRAMIENTAS = [
-    {name: "controlar_aparato", description: "Maneja un aparato de la casa (TV, PC, luz, enchufe, aire, ventilador) a través del puente (el ESP32 o el PC de Píxel). Llámala siempre que pida algo a un aparato, aunque creas que no sabe hacerlo: la app le explica qué falta.",
+    {name: "controlar_aparato", description: "Maneja un aparato de la casa (TV, PC, luz, enchufe, aire, ventilador) a través del puente (el robot Píxel o el PC de Píxel). Llámala siempre que pida algo a un aparato, aunque creas que no sabe hacerlo: la app le explica qué falta.",
       parameters: {type: "object", properties: {
         aparato: {type: "string", description: "Cómo lo nombra el usuario: 'la tele', 'el PC', 'la lámpara del cuarto'."},
         accion: {type: "string", enum: ACCIONES},
@@ -303,34 +323,89 @@
         const red = await pedirWifi(paso, info.red || "");
         if (!red) { gatt.disconnect(); caja.hidden = true; return; }
         await c.writeValue(enc.encode(JSON.stringify({ssid: red.ssid, clave: red.clave})));
-        paso('<div class="buscando"><span class="giro"></span>El ESP32 se está conectando a ' + esc(red.ssid) + "…</div>");
+        paso('<div class="buscando"><span class="giro"></span>El robot Píxel se está conectando a ' + esc(red.ssid) + "…</div>");
       }
       // espera a que tenga WiFi y su cuenta de Firebase (la crea al tener internet)
       const t0 = Date.now();
       while (Date.now() - t0 < 45000 && (!info.wifi || !info.id)) { await N.esperar(2000); info = await leerBle(c); }
-      if (!info.wifi) throw new Error("El ESP32 no pudo conectarse a esa red WiFi. Revisa el nombre y la clave.");
-      if (!info.id) throw new Error("El ESP32 tiene WiFi pero no llega a internet (Firebase).");
-      if (info.dueno && !info.emparejar && !(nube.mios && nube.mios[info.id])) {
-        throw new Error("Este ESP32 ya tiene dueño. Pulsa una vez su botón BOOT (el LED parpadea en azul) y vuelve a intentarlo.");
-      }
-      // el permiso para que este ESP32 entre en la lista de esta cuenta (las reglas lo piden: 15 min)
+      if (!info.wifi) throw new Error("El robot Píxel no pudo conectarse a esa red WiFi. Revisa el nombre y la clave.");
+      if (!info.id) throw new Error("El robot Píxel tiene WiFi pero no llega a internet (Firebase).");
+      // el permiso para que este robot Píxel entre en la lista de esta cuenta (las reglas lo piden: 15 min)
       await N.conTiempo(nube.d.set(ref(`usuarios/${nube.uid}/enlazando/${info.id}`), nube.d.serverTimestamp()), 8000);
-      await c.writeValue(enc.encode(JSON.stringify({dueno: nube.uid, nombre: (nube.usuario && (nube.usuario.displayName || nube.usuario.email)) || "Píxel app"})));
-      paso('<div class="buscando"><span class="giro"></span>Enlazando el ESP32 con tu cuenta…</div>');
+      const nombre = (nube.usuario && (nube.usuario.displayName || nube.usuario.email)) || "Píxel app";
+      // 12 nov (pedido: "el robot físico debe darme un autenticador"): Píxel inventa un código de 6 cifras y,
+      // con el PC conectado, el PC lo dice por su altavoz. Sin el PC, vale su botón BOOT (como antes).
+      for (let intento = 0; ; intento++) {
+        await c.writeValue(enc.encode(JSON.stringify({pedir_codigo: true})));
+        await N.esperar(1500);
+        info = await leerBle(c);
+        if (!info.pc) {
+          const listo = await pedirBoot(paso, c);
+          if (!listo) { gatt.disconnect(); caja.hidden = true; return; }
+          await c.writeValue(enc.encode(JSON.stringify({dueno: nube.uid, nombre})));
+          break;
+        }
+        const r = await pedirCodigo(paso, intento > 0);
+        if (r === null) { gatt.disconnect(); caja.hidden = true; return; }
+        if (r === "otra") continue;
+        await c.writeValue(enc.encode(JSON.stringify({dueno: nube.uid, nombre, codigo: r})));
+        await N.esperar(1200);
+        info = await leerBle(c);
+        if (info.codigo === "pedido" || info.codigo === "bloqueado") { if (intento >= 4) throw new Error("Demasiados códigos equivocados. Vuelve a empezar."); continue; }
+        break;
+      }
+      paso('<div class="buscando"><span class="giro"></span>Enlazando el robot Píxel con tu cuenta…</div>');
       const t1 = Date.now();
       while (Date.now() - t1 < 30000 && !ap.puentes[info.id]) await N.esperar(1000);
       gatt.disconnect();
-      if (!ap.puentes[info.id]) throw new Error("El ESP32 no confirmó el enlace. Mira que tenga internet e inténtalo otra vez.");
-      paso('<div class="vacio" style="border-style:solid;background:var(--green-soft);color:var(--green);font-weight:650">¡Listo! El ESP32 ya es tu puente. Ahora agrega los aparatos que maneja.</div>');
+      if (!ap.puentes[info.id]) throw new Error("El robot Píxel no confirmó el enlace. Mira que tenga internet e inténtalo otra vez.");
+      paso('<div class="vacio" style="border-style:solid;background:var(--green-soft);color:var(--green);font-weight:650">¡Listo! El robot Píxel ya es tu puente. Ahora agrega los aparatos que maneja.</div>');
     } catch (e) {
       try { if (disp && disp.gatt.connected) disp.gatt.disconnect(); } catch (er) { /* nada */ }
       paso(`<p class="aviso">${esc(e.message || e)}</p>`);
     }
   }
 
+  // El código que dice Píxel (por el PC): "otra" = que lo diga otra vez, null = cancelar
+  function pedirCodigo(paso, error) {
+    return new Promise((ok) => {
+      paso(`<form class="grupo" id="ap-codigo"><p class="sub">${error ? "<b>Ese no era el código, o pediste otro.</b> " : ""}Escucha a Píxel: está diciendo un código de 6 cifras. Escríbelo aquí.</p>
+        <div class="form-fila"><label class="campo">Código<input type="text" id="ap-cod" inputmode="numeric" maxlength="7" autocomplete="one-time-code" placeholder="000 000" required></label>
+        <button class="btn primario" type="submit">Enlazar</button></div>
+        <div class="acciones"><button class="btn" type="button" id="ap-cod-otra">Que lo diga otra vez</button><button class="btn" type="button" id="ap-cod-no">Cancelar</button></div></form>`);
+      $("#ap-cod").focus();
+      $("#ap-codigo").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const v = $("#ap-cod").value.replace(/\D/g, "");
+        if (v.length === 6) ok(v);
+      });
+      $("#ap-cod-otra").addEventListener("click", () => ok("otra"));
+      $("#ap-cod-no").addEventListener("click", () => ok(null));
+    });
+  }
+
+  // Sin el PC, Píxel no puede decir el código: se enlaza con su botón BOOT (prueba de que lo tienes delante)
+  function pedirBoot(paso, c) {
+    return new Promise((ok) => {
+      paso(`<div class="grupo"><p class="sub">Píxel no está conectado a tu PC, así que no puede decirte el código. Pulsa <b>una vez</b> su botón <b>BOOT</b> (la luz se pone celeste) y espera.</p>
+        <div class="buscando"><span class="giro"></span>Esperando el botón…</div><button class="btn" type="button" id="ap-boot-no">Cancelar</button></div>`);
+      let fin = false;
+      $("#ap-boot-no").addEventListener("click", () => { fin = true; ok(false); });
+      (async () => {
+        const t0 = Date.now();
+        while (!fin && Date.now() - t0 < 120000) {
+          const i = await leerBle(c);
+          if (i.emparejar) { fin = true; ok(true); return; }
+          await N.esperar(1500);
+        }
+        if (!fin) ok(false);
+      })();
+    });
+  }
+
   function pedirWifi(paso, red) {
     return new Promise((ok) => {
-      paso(`<form class="grupo" id="ap-wifi"><p class="sub">El ESP32 aún no tiene WiFi. ¿A qué red lo conecto? (Solo redes de 2,4 GHz.)</p>
+      paso(`<form class="grupo" id="ap-wifi"><p class="sub">El robot Píxel aún no tiene WiFi. ¿A qué red lo conecto? (Solo redes de 2,4 GHz.)</p>
         <div class="form-fila"><label class="campo">Red WiFi<input type="text" id="ap-ssid" maxlength="32" value="${esc(red)}" required></label>
         <label class="campo">Clave<input type="password" id="ap-clave" maxlength="64"></label>
         <button class="btn primario" type="submit">Conectar</button></div>
@@ -359,10 +434,11 @@
     if (!u) return;
     const ps = Object.entries(ap.puentes);
     const hp = ps.length ? ps.map(([pid, p]) => `<div class="fila"><span class="ico ${enLinea(pid) ? "verde" : ""}">${svg(p.tipo === "puente" ? "otro" : "pc")}</span>
-        <div class="txt"><b>${esc(p.nombre)}</b><small>${p.tipo === "puente" ? "ESP32" : "PC con el servidor"} · ${enLinea(pid) ? "conectado" : "desconectado"}${p.capacidades.length ? " · " + esc(p.capacidades.join(", ")) : ""}</small></div>
+        <div class="txt"><b>${esc(p.nombre)}</b><small>${p.tipo === "puente" ? "Robot Píxel" : "PC con el servidor"} · ${enLinea(pid) ? "conectado" : "desconectado"}${p.capacidades.length ? " · " + esc(p.capacidades.join(", ")) : ""}</small></div>
         <span class="chip ${enLinea(pid) ? "ok" : "warn"}">${enLinea(pid) ? "En línea" : "Sin conexión"}</span>
-        <button class="btn suave" type="button" data-probar-puente="${esc(pid)}">Probar</button></div>`).join("")
-      : '<div class="vacio">Aún no hay puentes. Agrega el ESP32 por Bluetooth, o enlaza el PC en Cuentas.</div>';
+        <button class="btn suave" type="button" data-probar-puente="${esc(pid)}">Probar</button>
+        <button class="btn" type="button" data-quitar-puente="${esc(pid)}">Quitar</button></div>`).join("")
+      : '<div class="vacio">Aún no hay puentes. Agrega el robot Píxel por Bluetooth, o enlaza el PC en Cuentas.</div>';
     if (hp !== ap.pintadoP) { $("#ap-puentes").innerHTML = hp; ap.pintadoP = hp; pintarFormulario(); }
     const xs = ap.aparatos;
     const h = xs === null ? '<div class="vacio">Cargando…</div>' : xs.length ? xs.map((a) => {
@@ -456,6 +532,8 @@
     $("#f-aparato").addEventListener("submit", guardarAparato);
     $("#ap-ble-btn").addEventListener("click", () => agregarEsp32());
     $("#ap-puentes").addEventListener("click", async (e) => {
+      const q = e.target.closest("[data-quitar-puente]");
+      if (q) { quitarPuente(q.dataset.quitarPuente, q); return; }
       const b = e.target.closest("[data-probar-puente]");
       if (!b) return;
       b.disabled = true;
@@ -475,7 +553,7 @@
         if (b.dataset.ap) toast(await hacer(a, b.dataset.accion));
         if (b.dataset.apAprender) {
           const boton = document.querySelector(`[data-ap-boton="${a.id}"]`).value;
-          toast(`Apunta el control al ESP32 y aprieta «${boton.replace(/_/g, " ")}» (tienes 10 segundos).`);
+          toast(`Apunta el control al robot Píxel y aprieta «${boton.replace(/_/g, " ")}» (tienes 10 segundos).`);
           const r = await mandar(a.puente, "/api/ir/aprender", {segundos: 10}, 20000);
           if (!r.codigo) throw new Error("No recibí ningún código. Acerca más el control.");
           await nube.d.set(ref(`usuarios/${nube.uid}/aparatos/${a.id}/acciones/${boton}`), {codigo: r.codigo});
@@ -513,7 +591,7 @@
       if (!m || !nube.uid) return undefined;
       const esp = /esp|puente|robot/.test(m[1]);
       const pid = Object.keys(ap.puentes).find((id) => (ap.puentes[id].tipo === "puente") === esp);
-      if (!pid) return Promise.resolve(esp ? "Aún no tengo el ESP32 enlazado. En Dispositivos, toca «Agregar ESP32 por Bluetooth»." : "El PC no está enlazado a tu cuenta.");
+      if (!pid) return Promise.resolve(esp ? "Aún no tengo el robot Píxel enlazado. En Dispositivos, toca «Agregar el robot Píxel por Bluetooth»." : "El PC no está enlazado a tu cuenta.");
       pintarPrueba(pid, null);
       return probarPuente(pid).then((r) => { pintarPrueba(pid, r); return r.resumen; });
     },

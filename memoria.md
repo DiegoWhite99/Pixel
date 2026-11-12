@@ -1051,6 +1051,16 @@ El usuario: «las voces están del asco, busca cosas de calidad, sé que hay voc
 - **En el PC:** se carga en 0,9 s; 1,6 s de voz en 0,78 s, 5,1 s en 1,71 s, 5,0 s en 2,79 s. Servidor reiniciado a las 15:57: `panel: voz st-F4 (normal)`.
 - **Pendiente:** medirla en el Android del usuario (con y sin WebGPU) y ver si la bajada de 400 MB es aceptable en la feria.
 
+## 2.3.0 (12 nov, tarde)
+
+Pedidos del usuario tras probar la 2.2.1 en su Windows, y lo que se decidió:
+- **Google en el programa** («no está vinculado Google, no arrastra los datos a la app web»). Eligió «las dos cosas»: Calendar y Gmail por voz desde el PC, y la configuración del programa en la app. La configuración (las claves de IA) ya llega a la app. Para Calendar y Gmail en el programa falta un cliente OAuth de «app de escritorio» que tiene que crear él en Google Cloud (proyecto `pixelassitance`). Iría dentro del paquete público (`instalador/google_programa.json`): preguntarle antes de meterlo.
+- **Tus APIs** («no sale nada, debe salir qué API estoy usando y si está en uso»). La ventana marca «En uso» y «De respaldo». El PC publica sus claves en `pixeles/<pid>/ia`, y la app las usa si la cuenta no tiene una propia en ese aparato. La regla nueva sale con la 2.3.0.
+- **Música** («no quiero que se reproduzca YouTube dentro de la app», «que use la misma ventana»). En el PC se usa `navegador.py`: tres canciones seguidas dejan una sola pestaña (Chrome sin pantalla, `test_musica_en_una_sola_ventana`). En la app suena en una pestaña con nombre fijo, también en el celular; si el navegador no deja abrirla, sale el botón «Abrir la música».
+- **Robot** («quita el nombre de ESP32, se llama Píxel», «poder quitar el dispositivo», «cada vez que detecta la ESP32 me debe dar un autenticador»). Para el código eligió «al agregarlo en la app». El firmware se cargó a las 13:49. Probado con un robot simulado: el PC dijo el código por voz (8,8 s) y no lo escribió en el registro.
+- **Windows** («en Windows no puedo subir ni bajar volumen ni suspender, y no sale la MAC»): `puente_pc._Windows`. Probado aquí simulando Windows; en un Windows de verdad lo prueba `.github/workflows/probar_instaladores.yml` (paso «El PC desde la app en Windows»), al publicar.
+- Pruebas antes de armar: ruff, pytest (31), `prueba_modulos.js` (85), las cuatro pruebas de la app en Chrome y `prueba_escritorio.js`, todas bien. La animación de entrada de la ventana falló una vez por tiempo (251 → 250 px); la prueba ahora mide varias veces.
+
 
 ---
 
@@ -1224,6 +1234,8 @@ La parte `musica` necesita que YouTube suene en Chrome sin pantalla. Tras muchas
     - Se compila sin subirlo con `~/.local/bin/arduino-cli compile --fqbn esp32:esp32:esp32s3:PartitionScheme=huge_app --build-path <carpeta temporal> ~/Arduino/Pixel_portal` (core esp32 3.3.12; desde la Fase 13 necesita la partición grande).
     - Guarda red, IP del servidor, volumen y ganancia en Preferences.
     - Si no encuentra la red, o si se mantiene BOOT 3 s, abre la red `Pixel asistente de voz` (clave `[clave del portal: notas privadas]`) con un formulario en `192.168.4.1`, y el LED se pone morado.
+    - **Código al enlazarlo desde la app (12 nov, 2.3.0):** la app escribe `{"pedir_codigo": true}` por BLE. `atenderPedirCodigo()` (en `loop()`, que es quien habla con el PC) inventa 6 cifras con `esp_random`, válidas 3 minutos y con 5 intentos, y manda el debug `codigo:NNNNNN`; el PC lo dice por el altavoz. El BLE ya no acepta un dueño sin el código o sin el modo emparejar (BOOT). Además da `"codigo"` (`pedido` o `bloqueado`, nunca las cifras) y `"pc"` (`pcConectado`, que pone `loop()`). La orden `/api/olvidar` borra el dueño. Cargado el 12 nov a las 13:49.
+    - **Luz (12 nov, para usarlo con batería):** al encender parpadea 4 veces en verde y queda **verde** (encendido, sin el PC); conectado al servidor del PC, **azul**; si se pierde el PC, vuelve a verde. Además, amarillo mientras habla, morado en el portal, cian al emparejar y rojo solo si falla el micro o el parlante. Copia de antes en `Pixel_portal.ino.respaldo-12nov` y `puente.ino.respaldo-12nov`. Sin carga por WiFi: para cambiarlo hay que conectarlo por USB.
 - `Etb_boot/Etb_boot.ino` es el básico del 21 oct:
     - Red e IP del servidor fijas (`SERVER_IP` = [IP del servidor: notas privadas]), sin portal, sin Bluetooth y sin descubrimiento.
     - Su `sendDebug` solo manda el primer byte del largo: un texto de más de 255 bytes rompe el protocolo.

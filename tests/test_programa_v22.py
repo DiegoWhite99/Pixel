@@ -251,3 +251,70 @@ def test_descarga_cortada_sigue_donde_iba(tmp_path, monkeypatch, con_range):
     assert open(destino, "rb").read() == datos and not os.path.exists(destino + ".parte")
     assert len(pedidos) == 2 and pedidos[0] is None and pedidos[1] == "bytes=%d-" % (len(datos) // 2)
     assert sum(hecho) == len(datos)                     # el avance de la pantalla cuadra aunque se repita
+
+
+# ------------------------------------------------------------------ 2.3.0: el PC con Windows hace lo mismo que con Linux
+
+def test_windows_volumen_y_musica_con_teclas(monkeypatch):
+    import puente_pc
+    teclas = []
+    monkeypatch.setattr(puente_pc, "WINDOWS", True)
+    monkeypatch.setattr(puente_pc._Windows, "tecla", staticmethod(lambda n, veces=1: teclas.append((n, veces))))
+    puente_pc.control({"accion": "subir_volumen"})
+    puente_pc.control({"accion": "bajar_volumen"})
+    puente_pc.control({"accion": "volumen", "valor": 30})
+    puente_pc.control({"accion": "silenciar"})
+    for a in ("pausa", "pausar", "play", "siguiente", "anterior"):
+        puente_pc.control({"accion": a})
+    assert teclas == [("subir", 5), ("bajar", 5), ("bajar", 50), ("subir", 15), ("silencio", 1),
+                      ("play-pause", 1), ("play-pause", 1), ("play-pause", 1), ("next", 1), ("previous", 1)]
+
+
+def test_windows_bloquear_pantalla_y_diagnostico(monkeypatch):
+    import puente_pc
+    hechos = []
+    monkeypatch.setattr(puente_pc, "WINDOWS", True)
+    monkeypatch.setattr(puente_pc._Windows, "bloquear", staticmethod(lambda: hechos.append("bloquear")))
+    monkeypatch.setattr(puente_pc._Windows, "apagar_pantalla", staticmethod(lambda: hechos.append("pantalla")))
+    monkeypatch.setattr(puente_pc._Windows, "mac", staticmethod(lambda: "aa:bb:cc:dd:ee:ff"))
+    monkeypatch.setattr(puente_pc, "_correr", lambda *a, **k: (_ for _ in ()).throw(AssertionError("en Windows no hay pactl")))
+    puente_pc.control({"accion": "bloquear"})
+    puente_pc.control({"accion": "apagar_pantalla"})
+    assert hechos == ["bloquear", "pantalla"]
+    d = puente_pc.diagnostico()
+    assert d["mac"] == "aa:bb:cc:dd:ee:ff" and "teclas" in d["volumen"]
+    assert puente_pc.estado()["mac"] == "aa:bb:cc:dd:ee:ff"
+
+
+def test_musica_en_una_sola_ventana(tmp_path, monkeypatch):
+    """Dos canciones seguidas: la ventana de musica es la misma y queda una sola pestana (Chrome sin pantalla)."""
+    import navegador
+    if not navegador.ejecutable():
+        pytest.skip("sin Chrome")
+    monkeypatch.setattr(navegador, "PERFIL", str(tmp_path / "perfil"))
+    monkeypatch.setattr(navegador, "PUERTO", _puerto_libre())
+    monkeypatch.setattr(navegador, "EXTRA", ["--headless=new"])
+    monkeypatch.setattr(navegador, "LOG", lambda *a: None)
+    import http.server
+    import threading
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), type("H", (http.server.BaseHTTPRequestHandler,), {
+        "do_GET": lambda self: (self.send_response(200), self.end_headers(), self.wfile.write(b"<title>ok</title>")),
+        "log_message": lambda self, *a: None}))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = "http://127.0.0.1:%d" % srv.server_address[1]
+    try:
+        assert navegador.abrir(base + "/cancion1") == 0
+        assert navegador.abrir(base + "/cancion2") == 0
+        assert navegador.abrir(base + "/cancion3") == 0
+        import time as _t
+        _t.sleep(1)
+        paginas = navegador._paginas()
+        assert [p["url"] for p in paginas] == [base + "/cancion3"]
+    finally:
+        srv.shutdown()
+        try:
+            urllib.request.urlopen("http://127.0.0.1:%d/json/version" % navegador.PUERTO, timeout=2)
+            import subprocess
+            subprocess.run(["pkill", "-f", "[u]ser-data-dir=" + navegador.PERFIL])
+        except Exception:
+            pass

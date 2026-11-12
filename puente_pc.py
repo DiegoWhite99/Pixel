@@ -12,6 +12,11 @@ panel). Aqui estan las rutas:
     /api/tv/codigo     un codigo de 6 caracteres que se escribe en la app.
 El certificado con el que el PC se presenta al TV queda en TV_CERT / TV_CLAVE (fuera de git).
 Solo usa la libreria estandar, pactl, playerctl, xset, gdbus y systemctl; androidtvremote2 es opcional.
+
+12 nov (el usuario, con el programa en Windows: "no puedo subir ni bajar volumen ni nada ni suspender; como lo
+tenemos aqui debe funcionar todo"): en Windows no hay pactl, playerctl ni systemctl. Ahi se usan las teclas
+multimedia del sistema (volumen y musica: las entiende Windows y cualquier navegador o reproductor), y la API
+de Windows para bloquear, apagar la pantalla y suspender; la MAC sale de GetAdaptersInfo. Ver _Windows.
 """
 
 import asyncio
@@ -43,6 +48,7 @@ APPS_TV = {"youtube": "https://www.youtube.com", "netflix": "com.netflix.ninja",
            "plex": "com.plexapp.android", "twitch": "tv.twitch.android.app", "ajustes": "com.android.tv.settings"}
 
 S = None                    # modulo del servidor (para el log y las rutas de archivos)
+WINDOWS = os.name == "nt"
 
 
 class ErrorPuente(Exception):
@@ -76,14 +82,144 @@ def _abrir(url):
     return acciones._abrir(url)
 
 
+# ------------------------------------------------------------------ Windows (12 nov)
+class _Windows:
+    """Lo mismo que pactl / playerctl / loginctl / systemctl, con la API de Windows (ctypes, sin instalar nada)."""
+    # teclas virtuales: las del teclado multimedia (Windows sube o baja el volumen de 2 en 2)
+    TECLAS = {"subir": 0xAF, "bajar": 0xAE, "silencio": 0xAD, "play-pause": 0xB3, "next": 0xB0, "previous": 0xB1,
+              "stop": 0xB2}
+    PASO = 2
+
+    @staticmethod
+    def tecla(nombre, veces=1):
+        import ctypes
+        vk = _Windows.TECLAS[nombre]
+        for _ in range(veces):
+            ctypes.windll.user32.keybd_event(vk, 0, 1, 0)          # KEYEVENTF_EXTENDEDKEY
+            ctypes.windll.user32.keybd_event(vk, 0, 1 | 2, 0)      # ... | KEYEVENTF_KEYUP
+
+    @staticmethod
+    def volumen(cambio):
+        """cambio: "+10%", "-10%" o "35%" (como pactl)."""
+        m = re.match(r"^([+-]?)(\d+)%$", cambio)
+        signo, n = m.group(1), int(m.group(2))
+        pasos = max(1, round(n / _Windows.PASO))
+        if signo:
+            _Windows.tecla("subir" if signo == "+" else "bajar", pasos)
+        else:                                       # exacto: a cero y luego hasta n (sin leer el volumen actual)
+            _Windows.tecla("bajar", 100 // _Windows.PASO)
+            if n:
+                _Windows.tecla("subir", min(pasos, 100 // _Windows.PASO))
+
+    @staticmethod
+    def bloquear():
+        import ctypes
+        if not ctypes.windll.user32.LockWorkStation():
+            raise ErrorPuente("No pude bloquear el PC.")
+
+    @staticmethod
+    def apagar_pantalla():
+        import ctypes
+        # WM_SYSCOMMAND, SC_MONITORPOWER, 2 = apagar; PostMessage para no quedarse esperando a todas las ventanas
+        ctypes.windll.user32.PostMessageW(0xFFFF, 0x0112, 0xF170, 2)
+
+    @staticmethod
+    def suspender():
+        """SetSuspendState pide el privilegio de apagar activado en el proceso (el usuario lo tiene, apagado)."""
+        import ctypes
+        from ctypes import wintypes
+
+        class LUID(ctypes.Structure):
+            _fields_ = [("LowPart", wintypes.DWORD), ("HighPart", wintypes.LONG)]
+
+        class TOKEN_PRIVILEGES(ctypes.Structure):
+            _fields_ = [("PrivilegeCount", wintypes.DWORD), ("Luid", LUID), ("Attributes", wintypes.DWORD)]
+        adv, k32 = ctypes.windll.advapi32, ctypes.windll.kernel32
+        k32.GetCurrentProcess.restype = wintypes.HANDLE          # con los tipos exactos: en 64 bits son punteros
+        adv.OpenProcessToken.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
+        adv.LookupPrivilegeValueW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR, ctypes.POINTER(LUID)]
+        adv.AdjustTokenPrivileges.argtypes = [wintypes.HANDLE, wintypes.BOOL, ctypes.POINTER(TOKEN_PRIVILEGES),
+                                              wintypes.DWORD, ctypes.c_void_p, ctypes.c_void_p]
+        token = wintypes.HANDLE()
+        if adv.OpenProcessToken(k32.GetCurrentProcess(), 0x0020 | 0x0008, ctypes.byref(token)):
+            tp = TOKEN_PRIVILEGES(1, LUID(), 0x00000002)                # SE_PRIVILEGE_ENABLED
+            if adv.LookupPrivilegeValueW(None, "SeShutdownPrivilege", ctypes.byref(tp.Luid)):
+                adv.AdjustTokenPrivileges(token, False, ctypes.byref(tp), 0, None, None)
+            k32.CloseHandle(token)
+        if not ctypes.windll.powrprof.SetSuspendState(False, False, False):
+            _log("puente: Windows no dejó suspender (SetSuspendState)")
+
+    @staticmethod
+    def mac():
+        """La MAC del adaptador que tiene la IP con la que este PC sale a la red (GetAdaptersInfo)."""
+        import ctypes
+        ip = _ip_salida()
+
+        class IP_ADDR_STRING(ctypes.Structure):
+            pass
+        IP_ADDR_STRING._fields_ = [("Next", ctypes.POINTER(IP_ADDR_STRING)), ("IpAddress", ctypes.c_char * 16),
+                                   ("IpMask", ctypes.c_char * 16), ("Context", ctypes.c_ulong)]
+
+        class IP_ADAPTER_INFO(ctypes.Structure):
+            pass
+        IP_ADAPTER_INFO._fields_ = [
+            ("Next", ctypes.POINTER(IP_ADAPTER_INFO)), ("ComboIndex", ctypes.c_ulong), ("AdapterName", ctypes.c_char * 260),
+            ("Description", ctypes.c_char * 132), ("AddressLength", ctypes.c_uint), ("Address", ctypes.c_ubyte * 8),
+            ("Index", ctypes.c_ulong), ("Type", ctypes.c_uint), ("DhcpEnabled", ctypes.c_uint),
+            ("CurrentIpAddress", ctypes.POINTER(IP_ADDR_STRING)), ("IpAddressList", IP_ADDR_STRING),
+            ("GatewayList", IP_ADDR_STRING), ("DhcpServer", IP_ADDR_STRING), ("HaveWins", ctypes.c_int),
+            ("PrimaryWinsServer", IP_ADDR_STRING), ("SecondaryWinsServer", IP_ADDR_STRING),
+            ("LeaseObtained", ctypes.c_int64), ("LeaseExpires", ctypes.c_int64)]
+        tam = ctypes.c_ulong(0)
+        ctypes.windll.iphlpapi.GetAdaptersInfo(None, ctypes.byref(tam))
+        buf = ctypes.create_string_buffer(tam.value or 1)
+        if ctypes.windll.iphlpapi.GetAdaptersInfo(buf, ctypes.byref(tam)) != 0:
+            return ""
+        a = ctypes.cast(buf, ctypes.POINTER(IP_ADAPTER_INFO))
+        primera = ""
+        while a:
+            info = a.contents
+            mac = ":".join("%02x" % b for b in info.Address[:info.AddressLength]) if info.AddressLength == 6 else ""
+            ips = []
+            d = info.IpAddressList
+            while True:
+                ips.append(d.IpAddress.decode("ascii", "replace"))
+                if not d.Next:
+                    break
+                d = d.Next.contents
+            if mac and ip in ips:
+                return mac
+            if mac and not primera and any(x and x != "0.0.0.0" for x in ips):
+                primera = mac
+            a = info.Next
+        return primera
+
+
+def _ip_salida():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("10.255.255.255", 1))        # UDP: no envia nada, solo elige la interfaz
+        return s.getsockname()[0]
+    except OSError:
+        return ""
+    finally:
+        s.close()
+
+
 # ------------------------------------------------------------------ el propio PC
 def _volumen(cambio):
+    if WINDOWS:
+        _Windows.volumen(cambio)
+        return
     rc, out = _correr(["pactl", "set-sink-volume", "@DEFAULT_SINK@", cambio])
     if rc != 0:
         raise ErrorPuente("No pude cambiar el volumen del PC.")
 
 
 def _media(orden):
+    if WINDOWS:                                 # play, pause y play-pause son la misma tecla en Windows
+        _Windows.tecla({"play": "play-pause", "pause": "play-pause"}.get(orden, orden))
+        return
     rc, out = _correr(["playerctl", orden])
     if rc != 0:
         raise ErrorPuente("No hay nada sonando en el PC." if "No players" in out or rc == 1 else "No pude manejar la música del PC.")
@@ -104,6 +240,9 @@ def _url_de(valor):
 
 
 def _bloquear():
+    if WINDOWS:
+        _Windows.bloquear()
+        return
     rc, _ = _correr(["gdbus", "call", "--session", "--dest", "org.gnome.ScreenSaver", "--object-path", "/org/gnome/ScreenSaver",
                      "--method", "org.gnome.ScreenSaver.Lock"])
     if rc != 0:
@@ -117,7 +256,10 @@ def _suspender_luego():
         import time
         time.sleep(SUSPENDER_TRAS_S)
         _log("puente: suspendiendo el PC por orden de la app")
-        _correr(["systemctl", "suspend"])
+        if WINDOWS:
+            _Windows.suspender()
+        else:
+            _correr(["systemctl", "suspend"])
     threading.Thread(target=hilo, daemon=True).start()
 
 
@@ -132,11 +274,15 @@ def control(d):
         except (TypeError, ValueError):
             raise ErrorPuente("¿A qué volumen? Dime un número del 0 al 100.")
         _volumen("%d%%" % n)
+    elif accion == "silenciar" and WINDOWS:
+        _Windows.tecla("silencio")
     elif accion == "silenciar":
         if _correr(["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"])[0] != 0:
             raise ErrorPuente("No pude silenciar el PC.")
     elif accion == "pausa":                     # alternar (el boton de los aparatos)
         _media("play-pause")
+    elif accion == "pausar" and WINDOWS:        # Windows no tiene "solo pausa": la tecla alterna
+        _Windows.tecla("play-pause")
     elif accion == "pausar":                    # exacto (la musica de la app: "para", "pausa")
         if _correr(["playerctl", "--all-players", "pause"])[0] != 0:
             raise ErrorPuente("No hay nada sonando en el PC.")
@@ -163,6 +309,8 @@ def control(d):
         return {"mensaje": titulo or consulta, "decir": "Listo, puse %s en el PC." % acciones._hablable(titulo or consulta)}
     elif accion == "bloquear":
         _bloquear()
+    elif accion == "apagar_pantalla" and WINDOWS:
+        _Windows.apagar_pantalla()
     elif accion == "apagar_pantalla":
         if _correr(["xset", "dpms", "force", "off"])[0] != 0:
             raise ErrorPuente("No pude apagar la pantalla.")
@@ -569,6 +717,12 @@ def buscar_youtube(d):
 # ------------------------------------------------------------------ estado
 def _mac_pc():
     """La MAC de la interfaz con la ruta por defecto (para encender este PC por Wake-on-LAN)."""
+    if WINDOWS:
+        try:
+            return _Windows.mac()
+        except Exception as e:
+            _log("puente: no pude leer la MAC del PC (%s)" % e)
+            return ""
     try:
         with open("/proc/net/route") as f:
             for linea in f.readlines()[1:]:
@@ -584,6 +738,11 @@ def _mac_pc():
 def diagnostico():
     """Lo que el PC puede manejar ahora mismo (la prueba de la app). Solo lee: no cambia nada."""
     d = {"volumen": None, "musica": None, "tv": "sin la librería" if not _tv_ok() else "sin emparejar", "mac": _mac_pc()}
+    if WINDOWS:                 # con las teclas multimedia de Windows: se maneja, pero no se puede leer
+        d.update(volumen="con las teclas de volumen de Windows", musica="con las teclas multimedia de Windows")
+        if _tv_ok() and _tvs_emparejados():
+            d["tv"] = "emparejado (%s)" % ", ".join(_tvs_emparejados())
+        return d
     rc, out = _correr(["pactl", "get-sink-volume", "@DEFAULT_SINK@"])
     m = re.search(r"(\d+)%", out) if rc == 0 else None
     d["volumen"] = int(m.group(1)) if m else None

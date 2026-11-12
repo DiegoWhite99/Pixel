@@ -402,12 +402,19 @@
     }
   }
 
-  function chipApi(v) {
+  // 12 nov (pedido: "debe salir que API estoy usando y el indicador si esta en uso"): la que contesta primero
+  // dice "En uso"; la otra, si tambien tiene clave, "De respaldo"
+  function enUso(c) {
+    const lista = c.ia === "groq" ? ["groq", "gemini"] : ["gemini", "groq"];
+    return lista.find((k) => c[k] && c[k].configurada && c[k].modelo) || "";
+  }
+  function chipApi(api, c) {
+    const v = c[api];
     if (!v || !v.configurada) return ["", "Sin clave"];
     const conError = v.error && v.hace_error != null && (v.hace_ok == null || v.hace_error < v.hace_ok);
     if (conError) return ["mal", "Con error"];
     if (!v.modelo) return ["aviso", "Sin probar"];
-    return ["bien", "Activa"];
+    return enUso(c) === api ? ["bien", "En uso"] : ["", "De respaldo"];
   }
 
   let apiOcupada = "";
@@ -417,25 +424,39 @@
     const nombres = {gemini: "Gemini", groq: "Groq"};
     for (const api of ["gemini", "groq"]) {
       const v = datos[api], tarjeta = $(`[data-api="${api}"]`);
-      const [nivel, texto] = chipApi(v);
+      const [nivel, texto] = chipApi(api, c);
       const chip = $("[data-chip]", tarjeta);
       chip.className = "chip " + nivel;
-      chip.textContent = texto + (c.ia === api && v.configurada ? " · primero" : "");
+      chip.textContent = texto;
       const det = [];
       if (v.configurada && v.modelo) det.push(`Modelo: ${v.modelo}.`);
       if (v.configurada && v.error && nivel === "mal") det.push(`Último error: ${v.error}`);
       if (!v.configurada) det.push(api === "gemini" ? "Pega tu clave para que Píxel piense con Google Gemini." : "Pega tu clave para que Píxel piense con Groq.");
+      if (v.configurada && v.modelo && nivel !== "mal") det.push("También la usa la app de las cuentas vinculadas.");
       $("[data-detalle]", tarjeta).textContent = det.join(" ");
       $("[data-probar]", tarjeta).hidden = !v.configurada;
       $("[data-quitar]", tarjeta).hidden = !v.configurada;
       for (const b of $$("button", tarjeta)) b.disabled = apiOcupada === api;
     }
     for (const b of $$("[data-ia]")) b.setAttribute("aria-checked", String(b.dataset.ia === (c.ia || "gemini")));
+    // Google en el PC (12 nov: "no esta vinculado Google: lo que le pido por voz no llega a la app")
+    const g = c.google || {}, chipG = $("#chip-google"), detG = $("#google-detalle"), botonG = $("#google-conectar");
+    const [nivelG, textoG, detalleG] = !g.credenciales
+      ? ["aviso", "Falta un paso", "Este programa todavía no trae la credencial de Google. Cuando la tenga, aquí conectas tu cuenta y lo que le pidas por voz (eventos, correos) irá a tu Google Calendar y Gmail, los mismos de la app."]
+      : g.estado === "esperando" ? ["aviso", "Esperando…", "Se abrió Google en el navegador de este computador: entra con tu cuenta y acepta."]
+      : g.vinculada ? ["bien", "Conectada", "Lo que le pidas por voz al robot o a este computador va a tu Google Calendar y Gmail, los mismos de la app." + (g.autorizado ? " Conectada el " + g.autorizado + "." : "")]
+      : g.estado === "error" ? ["mal", "Con error", "No se pudo conectar: " + (g.error || "inténtalo otra vez") + "."]
+      : ["", "Sin conectar", "Conecta tu cuenta de Google para que lo que le pidas por voz (eventos, correos) vaya a tu Google Calendar y Gmail."];
+    chipG.className = "chip " + nivelG;
+    chipG.textContent = textoG;
+    detG.textContent = detalleG;
+    botonG.hidden = !g.credenciales || g.estado === "esperando";
+    botonG.textContent = g.vinculada ? "Conectar otra cuenta" : "Conectar con Google";
     const local = $("#chip-local");
     local.className = "chip " + (E.servidor && E.servidor.ollama ? "bien" : "");
     local.textContent = E.servidor && E.servidor.ollama ? "Instalada" : "No instalada";
     $("#resumen-apis").innerHTML = ["gemini", "groq"].map((api) => {
-      const [nivel, texto] = chipApi(datos[api]);
+      const [nivel, texto] = chipApi(api, c);
       return `<div class="fila"><span class="ico">${api === "gemini" ? '<svg viewBox="0 0 24 24"><path d="M12 3c.6 4.6 3.4 7.4 8 8-4.6.6-7.4 3.4-8 8-.6-4.6-3.4-7.4-8-8 4.6-.6 7.4-3.4 8-8Z"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>'}</span>
         <div class="txt"><b>${nombres[api]}</b><small>${esc(datos[api].modelo || (datos[api].configurada ? "Clave guardada" : "Sin clave"))}</small></div><span class="chip ${nivel}">${esc(texto)}</span></div>`;
     }).join("");
@@ -623,6 +644,7 @@
   }
 
   $("#buscar-red").addEventListener("click", () => { formRed = ""; enviar("/api/wifi/buscar", {}); });
+  $("#google-conectar").addEventListener("click", () => enviar("/api/google/vincular", {}));
 
   const fVoz = $("#f-voz");
   fVoz.addEventListener("input", () => { vozTocada = true; contarPersonalidad(); });

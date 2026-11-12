@@ -156,7 +156,7 @@
               <button class="btn fantasma" type="button" data-quitar>Quitar</button>
             </div>
           </form>
-          <p class="ayuda" id="ayuda-gemini">Consíguela gratis en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com</a> → «Get API key». Se guarda solo en este computador.</p>
+          <p class="ayuda" id="ayuda-gemini">Consíguela gratis en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com</a> → «Get API key». Se guarda en este computador y la usa también la app de tus cuentas vinculadas.</p>
         </article>
         <article class="tarjeta api" data-api="groq">
           <div class="api-cab">
@@ -174,7 +174,15 @@
               <button class="btn fantasma" type="button" data-quitar>Quitar</button>
             </div>
           </form>
-          <p class="ayuda" id="ayuda-groq">Créala en <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com</a> → «API Keys». Muy rápida para conversar. Se guarda solo en este computador.</p>
+          <p class="ayuda" id="ayuda-groq">Créala en <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com</a> → «API Keys». Muy rápida para conversar. Se guarda en este computador y la usa también la app de tus cuentas vinculadas.</p>
+        </article>
+        <article class="tarjeta ancha google" id="tarjeta-google">
+          <div class="api-cab">
+            <div class="api-logo google" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20.5 12.2c0-.6-.1-1.2-.2-1.7H12v3.3h4.8a4.1 4.1 0 0 1-1.8 2.7v2.2h2.9c1.7-1.6 2.6-3.9 2.6-6.5z"/><path d="M12 21c2.4 0 4.4-.8 5.9-2.2L15 16.6c-.8.5-1.8.9-3 .9-2.3 0-4.3-1.6-5-3.7H4v2.3A9 9 0 0 0 12 21z"/><path d="M7 13.8a5.4 5.4 0 0 1 0-3.5V8H4a9 9 0 0 0 0 8z"/><path d="M12 6.6c1.3 0 2.5.5 3.4 1.3L18 5.4A9 9 0 0 0 4 8l3 2.3c.7-2.1 2.7-3.7 5-3.7z"/></svg></div>
+            <div><h2>Google: calendario y correo</h2><span class="chip" id="chip-google">…</span></div>
+          </div>
+          <p class="sub" id="google-detalle"></p>
+          <div class="acciones"><button class="btn primario" type="button" id="google-conectar" hidden>Conectar con Google</button></div>
         </article>
         <article class="tarjeta ancha local">
           <div class="api-cab">

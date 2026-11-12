@@ -31,7 +31,7 @@
     {id: "google", nombre: "Google Calendar y Gmail", que: "Tu calendario y tu correo, por voz.", gasto: "aveces", cuanto: "Va en la misma pregunta; leer correos o eventos suma una vuelta."},
     {id: "whatsapp", nombre: "WhatsApp", que: "Escribir a tus contactos. Enviar siempre lo confirmas tú.", gasto: "aveces", cuanto: "Va en la misma pregunta."},
     {id: "musica", nombre: "Música, baile y escenarios", que: "YouTube por voz; baila y cambia el fondo según el género.", gasto: "aveces", cuanto: "Pedir una canción: 1 petición. Pausa, sigue, cambia y el volumen: sin IA."},
-    {id: "aparatos", nombre: "Aparatos de la casa", que: "El PC, el TV y el ESP32 por voz.", gasto: "aveces", cuanto: "La orden pasa por la IA; «Píxel, prueba el ESP32» no."},
+    {id: "aparatos", nombre: "Aparatos de la casa", que: "El PC, el TV y el robot Píxel por voz.", gasto: "aveces", cuanto: "La orden pasa por la IA; «Píxel, prueba el robot Píxel» no."},
     {id: "tiempo", nombre: "Modo enfoque", que: "Pomodoro y la matriz de Eisenhower, con guía.", gasto: "no", cuanto: "La guía, los pomodoros y sus atajos son locales."},
     {id: "apuntes", nombre: "Notas dictadas", que: "«Píxel, toma nota» y la pestaña Notas.", gasto: "no", cuanto: "Dictar no usa la IA."},
     {id: "clasificar", nombre: "Asunto automático de las notas", que: "Al guardar una nota, la IA le pone asunto y lo más importante.", gasto: "si", cuanto: "1 petición por nota. Apagado, lo saca del título.", de: "apuntes"},
@@ -265,8 +265,26 @@
   function pintarChipIA() {
     if (typeof Proveedores === "undefined") return;
     const a = Proveedores.actual(), chip = $("#ia-chip");
-    const t = a.propio ? `En uso: ${Proveedores.nombreModelo(Proveedores.sanear(a.modelo))}` : "Sin clave: Píxel no puede pensar";
+    const nombre = a.delPc ? `${Proveedores.LISTA[a.proveedor].nombre.split(" (")[0]} · de tu PC` : Proveedores.nombreModelo(Proveedores.sanear(a.modelo));
+    const t = a.propio ? `En uso: ${nombre}` : "Sin clave: Píxel no puede pensar";
     if (chip.textContent !== t) { chip.textContent = t; chip.className = "chip" + (a.propio ? " ok" : " warn"); }
+    pintarIaPc();
+  }
+  // 12 nov: las IA del programa del PC enlazado, con cual esta en uso aqui (pedido: "debe salir que API estoy
+  // usando y el indicador si esta en uso"). La clave no se muestra.
+  function pintarIaPc() {
+    const caja = $("#ia-pc"), P = Proveedores;
+    if (!caja) return;
+    const lista = P.pcTiene(), a = P.actual(), propia = P.propia();
+    if (!lista.length) { caja.hidden = true; caja.innerHTML = ""; return; }
+    const pc = (a.delPc || (nube.estado && nube.estado.nube && nube.estado.nube.nombre) || "tu PC");
+    const h = `<b>IA del programa de tu PC «${esc(pc)}»</b>` + lista.map((x) => {
+      const enUso = !propia && a.delPc && a.proveedor === x.id;
+      return `<div class="fila"><span class="ia-nombre">${esc(P.LISTA[x.id].nombre.split(" (")[0])}</span><small>${esc(x.modelo)}</small>
+        <span class="chip ${enUso ? "ok" : ""}">${enUso ? "En uso" : "Lista, de respaldo"}</span></div>`;
+    }).join("") + `<small class="sub">${propia ? "Tienes una clave propia en este aparato: Píxel usa esa. Bórrala para usar la del PC." : "Píxel la usa aquí porque no pusiste una clave propia en este aparato."}</small>`;
+    if (caja.innerHTML !== h) caja.innerHTML = h;
+    caja.hidden = false;
   }
   function formularioIA(p) {
     const P = Proveedores, L = P.LISTA[p], cfg = P.leer();
@@ -429,5 +447,5 @@
   }
 
   A.modulo({nombre: "ajustes", montar, alUsuario, pintar});
-  window.PixelAjustes = {texto: {costoDia, dolares, compacto, ultimosDias, diaCorto, porMotivo, porModelo}, MODOS, PRECIOS};
+  window.PixelAjustes = {texto: {costoDia, dolares, compacto, ultimosDias, diaCorto, porMotivo, porModelo}, MODOS, PRECIOS, pintarIA: pintarChipIA};
 })();

@@ -35,7 +35,7 @@ import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "2.2.1"
+VERSION = "2.3.0"
 APP = os.path.dirname(os.path.abspath(__file__))
 WINDOWS = os.name == "nt"
 REGISTRO_MAX = 5 * 1024 * 1024        # pixel.log: al pasar de esto se guarda como pixel.log.1
@@ -288,9 +288,16 @@ def bajar_lo_que_falte(datos):
 # ------------------------------------------------------------------ el servidor
 def configurar(datos):
     """Las rutas del servidor en la carpeta de datos, y los puertos de las pruebas."""
+    import navegador
     import panel
     import puente_pc
     import servidor
+    navegador.PERFIL = os.path.join(datos, "navegador")      # la ventana de musica (YouTube siempre en la misma)
+    # 12 nov: Google (Calendar y Gmail) en el programa. La credencial de "app de escritorio" del proyecto viene en
+    # el paquete si construir.sh la encontro (instalador/google_programa.json); una propia en datos/ tiene prioridad.
+    programa = os.path.join(APP, "google_programa.json")
+    if os.path.exists(programa) and not os.path.exists(os.path.join(datos, servidor.GOOGLE_CLIENTE)):
+        servidor.GOOGLE_CLIENTE = programa
     servidor.BASE_DIR = datos                       # los .json relativos (ajustes, nube_token, gemini_clave...) y voces/
     servidor.CAPTURE_DIR = os.path.join(datos, "capturas")
     panel.WEB_DIR = os.path.join(APP, "web")        # ruta absoluta: os.path.join(BASE_DIR, ...) la respeta

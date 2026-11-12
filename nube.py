@@ -484,6 +484,33 @@ def _escribir_habla():
             S.log("nube: no pude dejar la voz para el celular: %s" % e)
 
 
+def publicar_ia():
+    """Las IA de este PC para sus cuentas vinculadas: pixeles/<pid>/ia (las reglas: solo ellas lo leen).
+
+    12 nov, el usuario: "si pongo la API aqui (en el programa del PC), debe reflejarse en la web". La app de
+    esas cuentas la usa mientras no tengan una clave propia en ese aparato (web/proveedores.js, delPc).
+    Sin ninguna clave, se borra. En un hilo: se llama al guardar una clave en el panel y al conectar."""
+    if not _estado["activa"] or not _auth.get("id"):
+        return
+    import gemini
+    import groq_ia
+    import llm
+    d = {"preferida": llm.PREFERIDA, "pc": nombre(), "t": SV}
+    if gemini.hay_clave():
+        d["gemini"] = {"clave": gemini.clave(), "modelo": gemini.MODELO}
+    if groq_ia.hay_clave() and groq_ia.modelo():
+        d["groq"] = {"clave": groq_ia.clave(), "modelo": groq_ia.modelo()}
+    hay = "gemini" in d or "groq" in d
+
+    def hilo():
+        try:
+            _db("PUT" if hay else "DELETE", "pixeles/%s/ia" % _pid(), d if hay else None)
+            S.log("nube: IA de este PC %s para las apps enlazadas" % ("publicada (%s)" % ", ".join(k for k in ("gemini", "groq") if k in d) if hay else "quitada"))
+        except Exception as e:
+            S.log("nube: no pude publicar la IA de este PC: %s" % e)
+    threading.Thread(target=hilo, daemon=True).start()
+
+
 def registrar(tipo, texto, detalle=""):
     """11 nov: registro de acciones. Lo que hizo Pixel en el PC (correos, eventos, recordatorios...) va a
     pixeles/<pid>/registro y la app lo muestra con su hora. Solo encola: nunca frena el turno."""
@@ -560,6 +587,8 @@ def _publicar():
             _limpiar_moviles(ahora)
             if not _estado["conectada"]:
                 S.log("nube: conectada como %s (%s), %d app(s) enlazada(s)" % (nombre(), _pid(), len(_estado["duenos"])))
+                _estado["conectada"] = True
+                publicar_ia()
             _estado.update(conectada=True, error="")
         except Exception as e:
             if _estado["conectada"] or _estado["error"] != str(e)[:200]:

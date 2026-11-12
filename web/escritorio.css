@@ -264,6 +264,10 @@ body.con-intro .app { opacity: 0; }
 .api-logo.gemini svg { fill: currentColor; stroke: none; }
 .api-logo.groq { background: linear-gradient(135deg, rgba(37, 99, 235, 0.4), rgba(14, 165, 233, 0.12)); color: var(--cian-vivo); }
 .api-logo.local { background: rgba(96, 165, 250, 0.14); color: var(--azul-claro); }
+.api-logo.google { background: rgba(255, 255, 255, 0.92); }
+.api-logo.google svg { stroke: none; }
+.api-logo.google path:nth-child(1) { fill: #4285f4; } .api-logo.google path:nth-child(2) { fill: #34a853; }
+.api-logo.google path:nth-child(3) { fill: #fbbc05; } .api-logo.google path:nth-child(4) { fill: #ea4335; }
 .ayuda { color: var(--tenue); font-size: 13px; margin: 12px 0 0; }
 .resumen-apis { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 10px; }
 
