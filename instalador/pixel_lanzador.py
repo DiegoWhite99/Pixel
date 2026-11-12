@@ -35,7 +35,7 @@ import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "2.2.0"
+VERSION = "2.2.1"
 APP = os.path.dirname(os.path.abspath(__file__))
 WINDOWS = os.name == "nt"
 REGISTRO_MAX = 5 * 1024 * 1024        # pixel.log: al pasar de esto se guarda como pixel.log.1
@@ -207,36 +207,72 @@ def _sha256(ruta):
     return h.hexdigest()
 
 
+# 12 nov (Windows del usuario, 2.2.0): "No pude preparar a Pixel: <urlopen error [WinError 10054] Se ha forzado la
+# interrupcion de una conexion existente por el host remoto>" a los 73 de 456 MB. Antes cada corte volvia a bajar el
+# archivo desde cero, a los 3 cortes se rendia y habia que cerrar Pixel a mano. Ahora sigue donde iba (Range), no
+# cuenta como fallo un intento que avanzo, guarda lo bajado (.parte) aunque se cierre, y main() reintenta solo.
+MAX_FALLOS_SEGUIDOS = 6                 # intentos seguidos sin avanzar nada antes de rendirse (main() reintenta luego)
+AVANCE_MINIMO = 1 << 20                 # un intento que bajo al menos 1 MB no cuenta como fallo
+
+
 def _bajar(url, destino, tam, huella, avance):
+    """Baja url a destino siguiendo donde se corto; comprueba tamano y huella SHA-256."""
     tmp = destino + ".parte"
-    for intento in range(3):
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Pixel-instalador/%s" % VERSION})
-            with urllib.request.urlopen(req, timeout=60) as r, open(tmp, "wb") as f:
-                for trozo in iter(lambda: r.read(1 << 16), b""):
-                    f.write(trozo)
-                    avance(len(trozo))
-            if os.path.getsize(tmp) == tam and _sha256(tmp) == huella:
-                os.replace(tmp, destino)
-                return
-            raise ValueError("el archivo llegó dañado (tamaño o huella distintos)")
-        except Exception as e:
-            avance(-(os.path.getsize(tmp) if os.path.exists(tmp) else 0))
-            log("descarga fallida (%d/3) %s: %s" % (intento + 1, os.path.basename(destino), e))
-            if intento == 2:
-                raise
-            time.sleep(3)
-        finally:
-            if os.path.exists(tmp):
-                os.remove(tmp)
+    fallos = 0
+    while True:
+        tengo = os.path.getsize(tmp) if os.path.exists(tmp) else 0
+        if tengo > tam:                                 # sobra algo: no es de este archivo
+            avance(-tengo)
+            os.remove(tmp)
+            tengo = 0
+        if tengo < tam:
+            bajado = 0
+            try:
+                cab = {"User-Agent": "Pixel-instalador/%s" % VERSION}
+                if tengo:
+                    cab["Range"] = "bytes=%d-" % tengo
+                with urllib.request.urlopen(urllib.request.Request(url, headers=cab), timeout=60) as r:
+                    if tengo and r.status != 206:       # el servidor no sabe seguir: desde cero
+                        avance(-tengo)
+                        tengo = 0
+                    with open(tmp, "ab" if tengo else "wb") as f:
+                        for trozo in iter(lambda: r.read(1 << 16), b""):
+                            f.write(trozo)
+                            bajado += len(trozo)
+                            avance(len(trozo))
+                if os.path.getsize(tmp) < tam:
+                    raise ConnectionError("la descarga se cortó a medias")
+            except Exception as e:
+                fallos = 0 if bajado >= AVANCE_MINIMO else fallos + 1
+                log("descarga cortada %s (%.0f de %.0f MB; %d sin avanzar): %s" % (
+                    os.path.basename(destino), os.path.getsize(tmp) / 1048576.0 if os.path.exists(tmp) else 0,
+                    tam / 1048576.0, fallos, e))
+                if fallos >= MAX_FALLOS_SEGUIDOS:
+                    raise
+                _estado["fase"] = "Se cortó la conexión: sigo donde iba…"
+                time.sleep(min(30, 2 * (fallos + 1)))
+                _estado["fase"] = "Bajando la voz de Píxel…"
+                continue
+        if os.path.getsize(tmp) == tam and _sha256(tmp) == huella:
+            os.replace(tmp, destino)
+            return
+        avance(-os.path.getsize(tmp))                   # llego entero pero distinto: desde cero
+        os.remove(tmp)
+        fallos += 1
+        log("descarga dañada %s (huella distinta), la repito" % os.path.basename(destino))
+        if fallos >= MAX_FALLOS_SEGUIDOS:
+            raise ValueError("el archivo llegó dañado varias veces (tamaño o huella distintos)")
 
 
 def bajar_lo_que_falte(datos):
     faltan = [a for a in ARCHIVOS if not (os.path.exists(os.path.join(datos, a[0]))
                                           and os.path.getsize(os.path.join(datos, a[0])) == a[2])]
     if faltan:
-        _estado.update(fase="Bajando la voz de Píxel…", hecho=0, total=sum(a[2] for a in faltan))
-        log("bajando %d archivos de voz (%.0f MB)" % (len(faltan), _estado["total"] / 1048576.0))
+        # lo que ya estaba a medias (.parte de una vez anterior) cuenta como hecho: se sigue desde ahi
+        ya = sum(min(os.path.getsize(p), a[2]) for a in faltan for p in [os.path.join(datos, a[0]) + ".parte"]
+                 if os.path.exists(p))
+        _estado.update(fase="Bajando la voz de Píxel…", hecho=ya, total=sum(a[2] for a in faltan))
+        log("bajando %d archivos de voz (%.0f MB; ya había %.0f MB)" % (len(faltan), _estado["total"] / 1048576.0, ya / 1048576.0))
 
         def avance(n):
             _estado["hecho"] += n
@@ -324,8 +360,19 @@ def main(argv=None):
     if ventana:
         abrir_ventana(url)
     borrar_capturas_viejas(os.path.join(datos, "capturas"))
+    espera_s = 30
+    while True:                             # sin internet o con cortes: reintenta solo, sin tener que cerrar Pixel
+        try:
+            bajar_lo_que_falte(datos)
+            break
+        except Exception as e:
+            traceback.print_exc()
+            _estado["error"] = ("La descarga se cortó (%s). Lo intento otra vez solo en %d s, siguiendo donde iba; "
+                                "revisa que haya internet." % (e, espera_s))
+            time.sleep(espera_s)
+            _estado["error"] = ""
+            espera_s = min(espera_s * 2, 300)
     try:
-        bajar_lo_que_falte(datos)
         _estado.update(fase="Cargando la voz y el oído de Píxel…", hecho=0, total=0)
         servidor, panel = configurar(datos)
     except Exception as e:

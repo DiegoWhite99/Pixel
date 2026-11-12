@@ -202,3 +202,52 @@ def test_pagina_de_espera_sirve_la_ventana(monkeypatch):
         srv.shutdown()
         srv.server_close()
     assert pixel_lanzador.en_marcha(puerto) == ""
+
+
+# ------------------------------------------------------------------ descargas que se cortan (2.2.1)
+
+def _servidor_que_corta(datos, con_range=True):
+    """Sirve datos; la primera vez corta la conexion a la mitad (como el WinError 10054 del usuario)."""
+    import http.server
+    import threading
+    pedidos = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            rango = self.headers.get("Range")
+            pedidos.append(rango)
+            desde = int(rango.split("=")[1].split("-")[0]) if rango and con_range else 0
+            self.send_response(206 if desde else 200)
+            self.send_header("Content-Length", str(len(datos) - desde))
+            self.end_headers()
+            if len(pedidos) == 1:                       # el primero se corta a la mitad
+                self.wfile.write(datos[:len(datos) // 2])
+                self.wfile.flush()
+                self.connection.shutdown(socket.SHUT_RDWR)
+                return
+            self.wfile.write(datos[desde:])
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv, pedidos
+
+
+@pytest.mark.parametrize("con_range", [True, False])
+def test_descarga_cortada_sigue_donde_iba(tmp_path, monkeypatch, con_range):
+    import hashlib
+    datos = os.urandom(3 * 1024 * 1024)
+    srv, pedidos = _servidor_que_corta(datos, con_range)
+    monkeypatch.setattr(pixel_lanzador.time, "sleep", lambda s: None)
+    hecho = []
+    try:
+        destino = str(tmp_path / "voz.onnx")
+        pixel_lanzador._bajar("http://127.0.0.1:%d/voz.onnx" % srv.server_address[1], destino, len(datos),
+                              hashlib.sha256(datos).hexdigest(), hecho.append)
+    finally:
+        srv.shutdown()
+    assert open(destino, "rb").read() == datos and not os.path.exists(destino + ".parte")
+    assert len(pedidos) == 2 and pedidos[0] is None and pedidos[1] == "bytes=%d-" % (len(datos) // 2)
+    assert sum(hecho) == len(datos)                     # el avance de la pantalla cuadra aunque se repita
