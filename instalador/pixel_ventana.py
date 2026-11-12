@@ -105,7 +105,7 @@ def _modo_aplicacion(url):
     exe = _ruta_edge() if WINDOWS else next((shutil.which(n) for n in NAVEGADORES_APP if shutil.which(n)), None)
     if not exe:
         return False
-    subprocess.Popen([exe, "--app=" + url, "--window-size=%d,%d" % (ANCHO, ALTO)],
+    subprocess.Popen([exe, "--app=" + url, "--window-size=%d,%d" % (ANCHO, ALTO), "--disable-features=Translate"],
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                      **({} if WINDOWS else {"start_new_session": True}))
     LOG("ventana: abierta en modo aplicación con %s" % os.path.basename(exe))

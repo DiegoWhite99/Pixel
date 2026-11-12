@@ -3,8 +3,8 @@
 Píxel es un agente de inteligencia artificial creado por Divergencia IA, con cara de robot, hecho para una feria de tecnología. Vive en una aplicación web que se instala en el celular: oye la palabra **«Píxel»**, piensa con la inteligencia artificial que elijas (cada persona pone su clave), contesta con una voz natural de alta calidad y mueve su cara en 3D. Se entra con la cuenta de Google y cada persona tiene su perfil. Un computador y un ESP32 son opcionales: le dan micrófono y altavoz propios y le dejan manejar los aparatos de la casa.
 
 - **Aplicación:** https://pixelassitance.web.app (en el celular, con Chrome).
-- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.2.0/pixel_2.2.0_amd64.deb) y [Windows (.exe, versión de prueba)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.2.0/Pixel-2.2.0-Setup.exe), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
-- **Versión actual:** 2.2.0, del 12 de noviembre de 2026.
+- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.2.1/pixel_2.2.1_amd64.deb) y [Windows (.exe, versión de prueba)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.2.1/Pixel-2.2.1-Setup.exe), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
+- **Versión actual:** 2.2.1, del 12 de noviembre de 2026.
 - **Cómo está hecho por dentro:** `CLAUDE.md`. **Mediciones y decisiones:** `memoria.md`.
 
 ## Qué puede hacer
@@ -38,6 +38,7 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 
 | Versión | Fecha | Qué trae |
 |---|---|---|
+| **2.2.1** | 12 nov 2026 | La primera descarga de la voz ya no se rinde si se corta internet: sigue donde iba y reintenta sola. La búsqueda en la red ignora las direcciones que el router contesta por todas. |
 | **2.2.0** | 12 nov 2026 | El programa del computador se abre en su propia ventana: un panel de control azul, con Píxel que llega desde el fondo y saluda. Icono e instalador nuevos. Groq como otra IA (en el programa y en la app). Arreglada la búsqueda de aparatos en Windows. La app ya acepta claves de Google que no empiezan por «AIza». |
 | **2.1.2** | 11 nov 2026 | Windows: desinstalar con Píxel abierto ya borra el programa entero. Enlace con la cuenta probado con el programa instalado. |
 | **2.1.1** | 11 nov 2026 | Instaladores publicados, con una prueba de punta a punta en Windows y Ubuntu limpios. Página de entrada sin nombres de tecnología y con video de presentación. |
@@ -49,6 +50,13 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 | **1.0.0** | 10 nov 2026 | Píxel entero en el celular: Gemini, Calendar, Gmail, Pomodoro, Eisenhower, cerebro, aparatos, música, notas y voz infantil. |
 
 No hay 1.1.0: la segunda fase salió directamente como 1.2.1.
+
+### 2.2.1 · 12 de noviembre de 2026
+
+- **Primera descarga:** en el Windows del usuario, la conexión se cortó a los 73 de 456 MB («WinError 10054») y Píxel se rindió: cada corte volvía a bajar el archivo desde cero, a los 3 cortes paraba y había que cerrarlo con el Administrador de tareas. Ahora sigue donde iba, no se rinde mientras avance, guarda lo bajado aunque se cierre y, si no hay internet, lo vuelve a intentar solo cada poco.
+- **La ventana propia en Windows:** en la 2.2.0 no arrancaba (al armar el instalador se quitaron unas piezas de la librería de la ventana que ella pide al empezar) y Píxel la abría en Edge en modo aplicación. Lo vio la prueba de GitHub y salió también en el Windows del usuario.
+- **Buscar en la red:** en algunas redes el router contesta por todas las direcciones con la suya (así es la red de las máquinas de GitHub: salían 237 «equipos» y en Windows la búsqueda pasaba de 2 minutos). Esas direcciones ya no cuentan como aparatos.
+- **Prueba de GitHub:** si falla una revisión, sigue con las demás (en la 2.2.0 no llegó a abrir la ventana de Windows por eso).
 
 ### 2.2.0 · 12 de noviembre de 2026
 

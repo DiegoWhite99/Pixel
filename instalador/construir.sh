@@ -14,7 +14,7 @@
 # Descargas y herramientas: $PIXEL_CACHE (por defecto ~/.cache/pixel-instalador).
 set -euo pipefail
 
-VERSION=2.2.0
+VERSION=2.2.1
 RAIZ=$(cd "$(dirname "$0")/.." && pwd)
 INST=$RAIZ/instalador
 DIST=$RAIZ/dist
@@ -157,8 +157,11 @@ windows() {
   "$herr" -m pip install -q --disable-pip-version-check --no-warn-script-location --no-compile --no-deps \
     --only-binary=:all: --platform win_amd64 --python-version 3.10 --implementation cp --abi cp310 \
     --find-links "$CACHE/ruedas" --target "$sp" -r "$INST/bloqueo.txt" $SOLO_WINDOWS
-  # pywebview trae piezas para otros sistemas (Android, Edge en ARM y 32 bits) que aqui no hacen falta
-  rm -rf "$sp/webview/lib/pywebview-android.jar" "$sp/webview/lib/runtimes/win-arm64" "$sp/webview/lib/runtimes/win-x86"
+  # pywebview trae una pieza de Android que aqui no hace falta. Las de webview/lib/runtimes (ARM, 32 y 64 bits) SI:
+  # edgechromium.py las pide todas al arrancar y sin ellas falla ("Cannot find win-arm64"; asi salio la 2.2.0 y la
+  # ventana se abria en Edge en vez de la propia)
+  rm -f "$sp/webview/lib/pywebview-android.jar"
+  [ -d "$sp/webview/lib/runtimes/win-arm64" ] && [ -d "$sp/webview/lib/runtimes/win-x86" ] || { echo "faltan piezas de pywebview" >&2; exit 1; }
   rm -rf "$sp/bin"
   recortar_python "$org/python/Lib"
   rm -rf "$org/python"/{include,libs,tcl,Scripts}
