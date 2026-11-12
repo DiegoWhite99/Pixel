@@ -9,6 +9,7 @@ DNS inverso, puertos tipicos de enchufes y luces (Tuya 6668, Kasa 9999, Shelly e
 su progreso y resultado salen en estado().
 """
 
+import collections
 import concurrent.futures
 import json
 import os
@@ -25,6 +26,10 @@ ESPERA_ARP_S = 2.5      # tras tocar todas las IP, cuanto se espera a las respue
 MDNS_S = 2.0
 TCP_TIMEOUT_S = 0.6
 VIGILAR_S = 30          # cada cuanto se comprueba si los guardados siguen encendidos
+# 12 nov (prueba de GitHub): hay redes donde el router contesta el ARP de TODAS las IP con su propia MAC (proxy
+# ARP; asi es la red de las maquinas de GitHub). Salian 237 "equipos" iguales y en Windows la busqueda pasaba de
+# 2 minutos. Una MAC en mas IP que esto no son equipos: se descartan (un repetidor WiFi tiene unos pocos detras).
+ECO_ARP = 12
 
 # puerto -> lo que suele haber detras
 PUERTOS = {
@@ -138,6 +143,13 @@ def _arp():
     except OSError:
         pass
     return tabla
+
+
+def _sin_eco_arp(tabla, gateway=""):
+    """Quita las IP que contesta otro por ellas: la misma MAC en mas de ECO_ARP direcciones (salvo el router)."""
+    cuantas = collections.Counter(tabla.values())
+    falsas = {m for m, n in cuantas.items() if n > ECO_ARP}
+    return {i: m for i, m in tabla.items() if m not in falsas or i == gateway}
 
 
 def _tocar(ips):
@@ -427,7 +439,7 @@ def buscar(ips_pixel=()):
             time.sleep(0.6)
             _tocar(ips)                     # segunda pasada: algunos equipos dormidos tardan en contestar
             time.sleep(ESPERA_ARP_S)
-            tabla = {i: m for i, m in _arp().items() if i in ips}
+            tabla = _sin_eco_arp({i: m for i, m in _arp().items() if i in ips}, gateway)
             _busqueda["fase"] = "Preguntando nombres a %d equipos…" % len(tabla)
             mdns = _mdns(list(tabla))
             _busqueda["fase"] = "Probando si son enchufes, luces o pantallas…"

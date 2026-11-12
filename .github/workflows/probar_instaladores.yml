@@ -75,6 +75,7 @@ jobs:
         run: python3 tools/revisar_panel.py
 
       - name: Desinstalar
+        if: ${{ !cancelled() }}         # aunque falle una revision anterior: que se vea todo
         run: |
           pkill -f /opt/pixel/app/iniciar.py || true
           sudo apt-get remove -y pixel
@@ -179,6 +180,7 @@ jobs:
         run: python tools/revisar_panel.py
 
       - name: La ventana de Píxel (el acceso del escritorio, con Píxel ya en marcha)
+        if: ${{ !cancelled() }}         # aunque falle una revision anterior: que se vea todo
         run: |
           Add-Type -AssemblyName System.Windows.Forms, System.Drawing
           function Foto($n) { $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds; $m = New-Object System.Drawing.Bitmap $b.Width, $b.Height
@@ -210,6 +212,7 @@ jobs:
           Select-String -Path "$env:LOCALAPPDATA\Pixel\datos\pixel.log" -Pattern "ventana:" | Select-Object -Last 5 | ForEach-Object { $_.Line }
 
       - name: Desinstalar (con Píxel abierto, como quien lo tiene arrancando con Windows)
+        if: ${{ !cancelled() }}         # aunque falle una revision anterior: que se vea todo
         run: |
           $dir = "$env:LOCALAPPDATA\Pixel"
           "abiertos antes:"; Get-Process python, pythonw -ErrorAction SilentlyContinue | Select-Object Id, Path | Format-Table -AutoSize

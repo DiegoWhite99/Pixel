@@ -47,6 +47,16 @@ def test_arp_de_windows_en_espanol(monkeypatch):
     assert red_wifi._arp_windows() == {"192.168.1.1": "a4:2b:b0:11:22:33"}
 
 
+def test_router_que_contesta_por_todas_las_ip():
+    """La red de GitHub: el router contesta el ARP de las 254 IP con su MAC; no son 254 equipos."""
+    tabla = {"10.1.0.%d" % i: "12:34:56:78:9a:bc" for i in range(2, 240)}
+    tabla.update({"10.1.0.1": "12:34:56:78:9a:bc", "10.1.0.250": "aa:bb:cc:00:00:01", "10.1.0.251": "aa:bb:cc:00:00:02"})
+    assert red_wifi._sin_eco_arp(tabla, "10.1.0.1") == {"10.1.0.1": "12:34:56:78:9a:bc", "10.1.0.250": "aa:bb:cc:00:00:01",
+                                                        "10.1.0.251": "aa:bb:cc:00:00:02"}
+    repetidor = {"192.168.1.%d" % i: "aa:aa:aa:aa:aa:aa" for i in range(10, 15)}       # 5 equipos tras un repetidor
+    assert red_wifi._sin_eco_arp(repetidor) == repetidor
+
+
 def test_arp_sin_salida_no_revienta(monkeypatch):
     monkeypatch.setattr(red_wifi.subprocess, "run", lambda *a, **k: types.SimpleNamespace(stdout=None))
     assert red_wifi._arp_windows() == {}

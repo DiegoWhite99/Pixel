@@ -73,7 +73,7 @@ print("Búsqueda en la red")
 codigo, cuerpo = pedir("/api/wifi/buscar", {})
 bien(codigo == 200, "empieza la búsqueda (%d %s)" % (codigo, cuerpo.decode("utf-8", "replace")[:120]))
 b = {}
-for _ in range(60):
+for _ in range(120):                    # hasta 4 minutos: en Windows cada equipo se mira mas despacio
     time.sleep(2)
     b = (estado() or {}).get("wifi", {}).get("busqueda", {})
     if b.get("estado") != "buscando":
