@@ -3,6 +3,8 @@
 
 Usa solo urllib (libreria estandar): no hace falta instalar nada.
 Fase 11: si hay clave de Gemini, responde Gemini (gemini.py) y Ollama queda de respaldo.
+Fase 15 (12 nov): tambien Groq (groq_ia.py). Con las dos claves, primero la PREFERIDA (la elige el usuario en el
+panel) y si falla la otra; Ollama siempre queda de respaldo.
 """
 
 import json
@@ -11,10 +13,24 @@ import urllib.error
 import urllib.request
 
 import gemini
+import groq_ia
 
 # Una sola generacion de Ollama a la vez: el modelo es uno y la CPU tambien.
 # Es de modulo, no de instancia, porque cada conversacion tiene su propio Llm.
 _OLLAMA = threading.Lock()
+
+PREFERIDA = "gemini"        # "gemini" o "groq": la pone panel.aplicar_ajustes (ajuste "ia")
+PROVEEDORES = (gemini, groq_ia)
+
+
+def motores():
+    """Las IA de internet que pueden contestar ahora (con clave y sin pausa), la preferida primero."""
+    orden = sorted(PROVEEDORES, key=lambda m: m.NOMBRE != PREFERIDA)
+    return [m for m in orden if m.activo()]
+
+
+def hay_clave():
+    return any(m.hay_clave() for m in PROVEEDORES)
 
 SYSTEM_PROMPT = (
     "Te llamas Píxel y eres el asistente de voz de una demo en una feria tecnológica; hablas en español. "
@@ -28,10 +44,10 @@ SYSTEM_PROMPT = (
 )
 
 # Lo que dice Pixel si no hay ninguna IA que conteste (se lee en voz alta: con tildes)
-SIN_IA = ("Todavía no tengo inteligencia artificial para contestar eso. Pon tu clave de Gemini en el panel, "
-          "en Cuentas, o instala Ollama en este computador.")
-SIN_IA_CON_GEMINI = ("Gemini no me contestó y no tengo Ollama de respaldo. Revisa tu clave de Gemini en el panel, "
-                     "en Cuentas.")
+SIN_IA = ("Todavía no tengo inteligencia artificial para contestar eso. Pon tu clave de Gemini o de Groq "
+          "en el panel de Píxel, en Tus APIs, o instala Ollama en este computador.")
+SIN_IA_CON_CLAVE = ("La inteligencia artificial de internet no me contestó y no tengo Ollama de respaldo. "
+                    "Revisa tus claves en el panel de Píxel, en Tus APIs.")
 
 DIAS = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
 MESES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
@@ -59,7 +75,7 @@ class Llm:
         self.timeout = timeout
         self.espera_lock = espera_lock
         self.historial = []               # propio de esta conversacion
-        self.motor = None                 # quien dio la ultima respuesta: "gemini" u "ollama" (para el log)
+        self.motor = None                 # quien dio la ultima respuesta: "gemini", "groq" u "ollama" (para el log)
 
     # -- utilidades -------------------------------------------------------
 
@@ -96,22 +112,22 @@ class Llm:
     def responder(self, texto_usuario):
         """Generador: cede trozos de texto segun los va soltando el modelo.
 
-        Con clave de Gemini responde Gemini; si falla antes de decir nada, este turno
-        responde Ollama. Al terminar guarda el turno en el historial.
+        Con clave de Gemini o de Groq responde esa IA (la preferida primero); si falla antes de
+        decir nada, prueba la siguiente y al final Ollama. Al terminar guarda el turno en el historial.
         """
-        if gemini.activo():
+        for m in motores():
             dicho = []
             try:
-                for trozo in gemini.generar_stream(self.system, self._conversacion(texto_usuario)):
+                for trozo in m.generar_stream(self.system, self._conversacion(texto_usuario)):
                     dicho.append(trozo)
                     yield trozo
-            except gemini.ErrorGemini as e:
+            except m.Error as e:
                 if dicho:
-                    gemini.LOG("gemini: se corto a media respuesta (%s)" % e)
+                    m.LOG("%s: se corto a media respuesta (%s)" % (m.NOMBRE, e))
                 else:
-                    gemini.LOG("gemini: fallo (%s); este turno responde Ollama" % e)
+                    m.LOG("%s: fallo (%s); este turno responde otra IA" % (m.NOMBRE, e))
             if dicho:
-                self.motor = "gemini"
+                self.motor = m.NOMBRE
                 self._recordar(texto_usuario, "".join(dicho))
                 return
         self.motor = "ollama"
@@ -142,7 +158,7 @@ class Llm:
                 if isinstance(e, urllib.error.HTTPError) and e.code != 404 or isinstance(e.reason, TimeoutError):
                     raise
                 self.motor = "ninguno"
-                yield SIN_IA_CON_GEMINI if gemini.activo() else SIN_IA
+                yield SIN_IA_CON_CLAVE if hay_clave() else SIN_IA
                 return
             with r:
                 for linea in r:

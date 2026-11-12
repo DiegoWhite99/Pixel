@@ -215,7 +215,7 @@ def _solicitud(uid, s):
     clave = "enlace-" + uid
     enlace = _estado["enlace"]
     if enlace is None or time.monotonic() > enlace["hasta"]:
-        _responder(clave, uid, False, "Píxel no está en modo enlace. En el PC de Píxel: panel → Cuentas → Enlazar otra app.", n=n)
+        _responder(clave, uid, False, "Píxel no está en modo enlace. En el computador de Píxel, abre su panel y pide un código para vincular.", n=n)
         return
     codigo = str(s.get("codigo") or "").strip()
     if not codigo:

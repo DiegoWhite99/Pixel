@@ -15,12 +15,14 @@ La clave va en la cabecera x-goog-api-key: nunca en la URL, en el log ni en /api
 
 import json
 import os
+import re
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
+NOMBRE = "gemini"
 URL = "https://generativelanguage.googleapis.com/v1beta"
 
 # valores por defecto; servidor.main() pone los suyos con configurar()
@@ -44,6 +46,9 @@ class ErrorGemini(Exception):
     pass
 
 
+Error = ErrorGemini         # el mismo nombre en groq_ia: llm.py los recorre igual
+
+
 def configurar(modelo, pensar, max_tokens, timeout, log):
     global MODELO, PENSAR, MAX_TOKENS, TIMEOUT, LOG
     MODELO, PENSAR, MAX_TOKENS, TIMEOUT, LOG = modelo, pensar, max_tokens, timeout, log
@@ -52,13 +57,16 @@ def configurar(modelo, pensar, max_tokens, timeout, log):
 # ------------------------------------------------------------------ clave
 
 def cargar(ruta):
-    """Lee la clave guardada en ruta, si la hay. -> True si hay clave."""
-    global _clave, _ruta
+    """Lee la clave guardada en ruta, si la hay (y el modelo, si al probarla hubo que elegir otro). -> True si hay clave."""
+    global _clave, _ruta, MODELO
     _ruta = ruta
     clave = None
     try:
         with open(ruta, encoding="utf-8") as f:
-            clave = (json.load(f).get("clave") or "").strip() or None
+            d = json.load(f)
+        clave = (d.get("clave") or "").strip() or None
+        if clave and isinstance(d.get("modelo"), str) and d["modelo"].strip():
+            MODELO = d["modelo"].strip()
     except FileNotFoundError:
         pass
     except (OSError, ValueError, AttributeError) as e:
@@ -68,17 +76,21 @@ def cargar(ruta):
     return clave is not None
 
 
+def _escribir(datos):
+    tmp = _ruta + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)     # solo la lee este usuario
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(datos, f)
+    os.replace(tmp, _ruta)
+
+
 def guardar(clave):
     """Guarda la clave (o la borra si viene vacia) y se usa desde ya, sin reiniciar."""
     global _clave, _sin_pensar, _pausa_hasta
     clave = (clave or "").strip()
     with _lock:
         if clave:
-            tmp = _ruta + ".tmp"
-            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)     # solo la lee este usuario
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump({"clave": clave}, f)
-            os.replace(tmp, _ruta)
+            _escribir({"clave": clave})
         elif os.path.exists(_ruta):
             os.remove(_ruta)
         _clave = clave or None
@@ -272,6 +284,7 @@ def probar():
     if not hay_clave():
         return False, "No hay clave guardada."
     _pausa_hasta = 0.0
+    _estado["rechazada"] = False
     modelos, token = [], ""
     try:
         for _ in range(10):         # paginas de la lista
@@ -285,16 +298,27 @@ def probar():
                 break
     except ErrorGemini as e:
         _fallo(str(e), _pausa_de(e))
+        _estado["rechazada"] = rechazada(e)
+        if rechazada(e):
+            return False, "Google no acepta esa clave (%s). Cópiala entera desde aistudio.google.com." % e
         return False, "Gemini no acepta la clave o no responde: %s" % e
     except (OSError, ValueError) as e:
         _fallo("lista de modelos rota: %s" % e)
         return False, "Gemini no responde bien: %s" % _limpiar(e)
+    cambio = ""
     if MODELO not in modelos:
-        flash = [m for m in modelos if "flash" in m][:8]
-        texto = "La clave vale, pero el modelo %s no está disponible. Algunos que sí: %s" % (
-            MODELO, ", ".join(flash) or "ninguno Flash")
-        _fallo(texto)
-        return False, texto
+        # 12 nov ("me rechaza la clave"): si el modelo de siempre no esta para esa clave, se usa otro Flash
+        # (el mas nuevo, Flash-Lite primero) en vez de dar la clave por mala. Se guarda con la clave.
+        otro = elegir_modelo(modelos)
+        if not otro:
+            texto = "La clave vale, pero tu cuenta no tiene ningún modelo Gemini Flash disponible."
+            _fallo(texto)
+            return False, texto
+        cambio = "(%s no está para tu clave: uso %s) " % (MODELO, otro)
+        with _lock:
+            _set_modelo(otro)
+            if _clave:
+                _escribir({"clave": _clave, "modelo": otro})
     t0 = time.monotonic()
     try:
         texto = generar("Responde con una sola frase corta, en español.",
@@ -303,4 +327,34 @@ def probar():
         return False, "La clave vale, pero se acabó el cupo gratis de %s por hoy (%s). Mientras, responde la IA local." % (MODELO, e)
     except ErrorGemini as e:
         return False, "La clave vale, pero %s no respondió: %s" % (MODELO, e)
-    return True, "Gemini %s responde en %.1f s: %s" % (MODELO, time.monotonic() - t0, texto.strip()[:150])
+    return True, "%sGemini %s responde en %.1f s: %s" % (cambio, MODELO, time.monotonic() - t0, texto.strip()[:150])
+
+
+def clave_rechazada():
+    """La ultima prueba dijo que la clave no vale."""
+    return bool(_estado.get("rechazada"))
+
+
+def rechazada(e):
+    """El error dice que la clave no vale (no que falte internet o cupo): el panel no la deja guardada."""
+    texto = str(e)
+    return "API key not valid" in texto or "API_KEY_INVALID" in texto or texto.startswith(("HTTP 401", "HTTP 403"))
+
+
+def _set_modelo(m):
+    global MODELO
+    MODELO = m
+
+
+def _version(nombre):
+    return tuple(int(x) for x in re.findall(r"\d+", nombre.split("-flash")[0]))
+
+
+def elegir_modelo(modelos):
+    """El Flash estable mas nuevo de la lista (Flash-Lite primero: es el que se midio para la voz). "" si ninguno."""
+    estables = [m for m in modelos if re.fullmatch(r"gemini-[\d.]+-flash(-lite)?", m)]
+    for sufijo in ("-flash-lite", "-flash"):
+        hay = sorted((m for m in estables if m.endswith(sufijo)), key=_version, reverse=True)
+        if hay:
+            return hay[0]
+    return ""

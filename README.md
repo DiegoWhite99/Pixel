@@ -3,8 +3,8 @@
 Píxel es un agente de inteligencia artificial creado por Divergencia IA, con cara de robot, hecho para una feria de tecnología. Vive en una aplicación web que se instala en el celular: oye la palabra **«Píxel»**, piensa con la inteligencia artificial que elijas (cada persona pone su clave), contesta con una voz natural de alta calidad y mueve su cara en 3D. Se entra con la cuenta de Google y cada persona tiene su perfil. Un computador y un ESP32 son opcionales: le dan micrófono y altavoz propios y le dejan manejar los aparatos de la casa.
 
 - **Aplicación:** https://pixelassitance.web.app (en el celular, con Chrome).
-- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.1.2/pixel_2.1.2_amd64.deb) y [Windows (.exe, versión de prueba)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.1.2/Pixel-2.1.2-Setup.exe), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
-- **Versión actual:** 2.1.2, del 11 de noviembre de 2026.
+- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.2.0/pixel_2.2.0_amd64.deb) y [Windows (.exe, versión de prueba)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.2.0/Pixel-2.2.0-Setup.exe), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
+- **Versión actual:** 2.2.0, del 12 de noviembre de 2026.
 - **Cómo está hecho por dentro:** `CLAUDE.md`. **Mediciones y decisiones:** `memoria.md`.
 
 ## Qué puede hacer
@@ -38,6 +38,7 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 
 | Versión | Fecha | Qué trae |
 |---|---|---|
+| **2.2.0** | 12 nov 2026 | El programa del computador se abre en su propia ventana: un panel de control azul, con Píxel que llega desde el fondo y saluda. Icono e instalador nuevos. Groq como otra IA (en el programa y en la app). Arreglada la búsqueda de aparatos en Windows. La app ya acepta claves de Google que no empiezan por «AIza». |
 | **2.1.2** | 11 nov 2026 | Windows: desinstalar con Píxel abierto ya borra el programa entero. Enlace con la cuenta probado con el programa instalado. |
 | **2.1.1** | 11 nov 2026 | Instaladores publicados, con una prueba de punta a punta en Windows y Ubuntu limpios. Página de entrada sin nombres de tecnología y con video de presentación. |
 | **2.1.0** | 11 nov 2026 | Instaladores para Linux y Windows, página de entrada, la IA de cada cuenta (sin Gemini incluido), registro de acciones, el celular como micrófono del computador, confirmaciones estrictas para correos y eventos, destinatarios solo de Contactos (también en WhatsApp) y un botón para traer los contactos de Google (aún sin probar de punta a punta). |
@@ -48,6 +49,18 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 | **1.0.0** | 10 nov 2026 | Píxel entero en el celular: Gemini, Calendar, Gmail, Pomodoro, Eisenhower, cerebro, aparatos, música, notas y voz infantil. |
 
 No hay 1.1.0: la segunda fase salió directamente como 1.2.1.
+
+### 2.2.0 · 12 de noviembre de 2026
+
+Pedidos del usuario tras probar la 2.1.2 en Windows.
+
+- **Una ventana, no una página web.** El programa ya no abre el navegador: abre la ventana de Píxel (en Windows, con el motor de Edge que trae el sistema; en Linux, Chrome o Chromium sin barra de direcciones si los hay). El panel solo se abre en ese computador, no en la red. Cerrar la ventana no apaga a Píxel; para apagarlo, «Apagar Píxel» en el panel.
+- **Panel de control nuevo, todo azul**, distinto de la app de internet. Al abrirlo, Píxel llega desde el fondo hasta el frente y dice: «Hola, soy Píxel, un agente creado por Divergency IA. Bienvenido al panel de control. Aquí puedes vincular tus dispositivos y guardar tus APIs.» Tiene Inicio (estado de un vistazo), Dispositivos (el código de 6 cifras para vincular, las cuentas vinculadas, el robot y los aparatos de la red), Tus APIs y Voz. Mientras baja la voz la primera vez, el avance sale ahí mismo.
+- **Groq**, una IA muy rápida, como segunda opción junto a Gemini: en el programa (Tus APIs, con la opción de cuál contesta primero; la otra queda de respaldo) y en la app (Ajustes → Proveedor de IA).
+- **Claves:** en la app (Ajustes → Proveedor de IA) una clave de Google que no empezaba por «AIza» salía como «Esa clave no parece de Google Gemini» y no se podía guardar (captura del usuario). Ahora la app solo mira que la clave esté entera y la prueba con el servicio al guardarla: si la acepta se queda, si la rechaza no. Lo mismo en el programa del computador, y si el modelo de Gemini de siempre no está para esa clave, usa otro Flash en vez de rechazarla.
+- **Arreglo:** en un Windows en español, «Buscar en la red» fallaba con «No pude buscar: expected string or bytes-like object». La lista de equipos de Windows llega en otra codificación, la lectura fallaba en silencio y quedaba vacía.
+- **Instalador:** icono propio (también en los accesos y la ventana), páginas azules con Píxel, y «Divergency IA» como editor.
+- **Prueba de GitHub:** además de lo de antes, comprueba la búsqueda en la red, que una clave de Google inventada recibe una respuesta clara, que el panel no se abre a la red y, en Windows, que se abre una sola ventana de Píxel, con fotos de ella y del instalador.
 
 ### 2.1.2 · 11 de noviembre de 2026
 

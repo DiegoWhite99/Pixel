@@ -3,7 +3,10 @@
 # huella, lo instala como una persona (apt / el .exe sin administrador), arranca Pixel como su acceso directo,
 # le dice dos frases grabadas (tools/frase_prueba.wav) y comprueba que contesta con voz. Al final lo desinstala.
 # Sin nube (PIXEL_NUBE_DB=0): no deja Pixeles de prueba en Firebase. Sin IA: la 2a frase dice llm.SIN_IA.
-#   gh workflow run probar_instaladores.yml -f version=2.1.2
+# 2.2.0: tambien la busqueda en la red (el "No pude buscar: expected string..." del Windows en espanol), que una
+# clave de Google mala tenga respuesta clara, que el panel solo escuche en el PC y, en Windows, que se abra la
+# ventana de Pixel (una sola) y fotos de ella y del instalador (artefacto "windows").
+#   gh workflow run probar_instaladores.yml -f version=2.2.0
 name: Probar instaladores
 
 on:
@@ -68,6 +71,9 @@ jobs:
           python3 tools/cliente_prueba.py tools/frase_prueba.wav --espera 60
           python3 tools/revisar_respuestas.py
 
+      - name: El panel (solo en este PC), la busqueda en la red y una clave mala
+        run: python3 tools/revisar_panel.py
+
       - name: Desinstalar
         run: |
           pkill -f /opt/pixel/app/iniciar.py || true
@@ -88,6 +94,7 @@ jobs:
           path: |
             respuesta_*.wav
             pixel_linux.log
+            panel.json
           retention-days: 7
           if-no-files-found: ignore
 
@@ -118,13 +125,25 @@ jobs:
           "huella: $real"
           if ($real -ne $esperada) { throw "La huella no coincide: el archivo llegó dañado" }
 
+      - name: El instalador por dentro (foto de su primera pagina, sin instalar)
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          function Foto($n) { $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds; $m = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            $g = [System.Drawing.Graphics]::FromImage($m); $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $m.Save("$PWD\$n.png", [System.Drawing.Imaging.ImageFormat]::Png); $g.Dispose(); $m.Dispose() }
+          $p = Start-Process -PassThru -FilePath ".\Pixel-$env:V-Setup.exe"
+          Start-Sleep 6
+          Foto instalador_bienvenida
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          Start-Sleep 2
+
       - name: Instalar como una persona (sin administrador)
         run: |
           $p = Start-Process -Wait -PassThru -FilePath ".\Pixel-$env:V-Setup.exe" -ArgumentList "/S"
           "el instalador terminó con código $($p.ExitCode)"
           if ($p.ExitCode -ne 0) { throw "El instalador falló" }
           $dir = "$env:LOCALAPPDATA\Pixel"
-          foreach ($f in "python\pythonw.exe", "app\iniciar.py", "Desinstalar.exe", "LEEME.txt") {
+          foreach ($f in "python\pythonw.exe", "app\iniciar.py", "app\web\escritorio.html", "pixel.ico", "Desinstalar.exe", "LEEME.txt") {
             if (-not (Test-Path "$dir\$f")) { throw "Falta $dir\$f" }
           }
           Get-ChildItem ([Environment]::GetFolderPath("Programs")) -Recurse -Filter "*.lnk" | Where-Object Name -like "P*xel*" | Select-Object -ExpandProperty FullName
@@ -156,6 +175,40 @@ jobs:
           python tools/cliente_prueba.py tools/frase_prueba.wav --espera 60
           python tools/revisar_respuestas.py
 
+      - name: El panel (solo en este PC), la busqueda en la red y una clave mala
+        run: python tools/revisar_panel.py
+
+      - name: La ventana de Píxel (el acceso del escritorio, con Píxel ya en marcha)
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          function Foto($n) { $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds; $m = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            $g = [System.Drawing.Graphics]::FromImage($m); $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $m.Save("$PWD\$n.png", [System.Drawing.Imaging.ImageFormat]::Png); $g.Dispose(); $m.Dispose() }
+          function Ventanas { @(Get-Process pythonw -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like "P*xel*Panel de control*" }) }
+          $lnk = Get-ChildItem ([Environment]::GetFolderPath("Desktop")) -Filter "P*xel.lnk" | Select-Object -First 1
+          if (-not $lnk) { throw "No está el acceso directo del escritorio" }
+          $s = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk.FullName)
+          Start-Process -FilePath $s.TargetPath -ArgumentList $s.Arguments -WorkingDirectory "$env:LOCALAPPDATA\Pixel"
+          $v = @()
+          for ($i = 0; $i -lt 60 -and $v.Count -eq 0; $i++) { Start-Sleep 1; $v = Ventanas }
+          if ($v.Count -eq 0) {
+            Foto ventana_fallo
+            Get-Content "$env:LOCALAPPDATA\Pixel\datos\pixel.log" -Tail 40
+            throw "No se abrió la ventana de Píxel"
+          }
+          "ventana abierta: «$($v[0].MainWindowTitle)» (proceso $($v[0].Id))"
+          Start-Sleep 3
+          Foto ventana_1_bienvenida
+          Start-Sleep 15
+          Foto ventana_2_panel
+          # otra vez el acceso: no debe abrir una segunda ventana, solo traer la que hay
+          Start-Process -FilePath $s.TargetPath -ArgumentList $s.Arguments -WorkingDirectory "$env:LOCALAPPDATA\Pixel"
+          Start-Sleep 12
+          $n = (Ventanas).Count
+          "ventanas de Píxel abiertas: $n"
+          if ($n -ne 1) { throw "Esperaba una sola ventana de Píxel y hay $n" }
+          Select-String -Path "$env:LOCALAPPDATA\Pixel\datos\pixel.log" -Pattern "ventana:" | Select-Object -Last 5 | ForEach-Object { $_.Line }
+
       - name: Desinstalar (con Píxel abierto, como quien lo tiene arrancando con Windows)
         run: |
           $dir = "$env:LOCALAPPDATA\Pixel"
@@ -182,5 +235,7 @@ jobs:
           path: |
             respuesta_*.wav
             pixel_windows.log
+            panel.json
+            *.png
           retention-days: 7
           if-no-files-found: ignore

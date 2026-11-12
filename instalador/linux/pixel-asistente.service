@@ -7,7 +7,7 @@ After=graphical-session.target network-online.target
 PartOf=graphical-session.target
 
 [Service]
-ExecStart=/usr/bin/pixel --sin-navegador
+ExecStart=/usr/bin/pixel --sin-ventana
 Restart=on-failure
 RestartSec=5
 

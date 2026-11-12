@@ -9,13 +9,13 @@ Tambien separa un recordatorio en que recordar y el trozo de la frase que dice
 cuando; ese trozo lo interpreta recordatorios.extraer_hora().
 
 Fase 11: si hay clave de Gemini pregunta a Gemini (gemini.py); si falla, a Ollama.
+Fase 15: tambien Groq (groq_ia.py), en el orden de llm.motores().
 """
 
 import json
 import time
 import urllib.request
 
-import gemini
 import llm      # comparte el candado de Ollama: una generacion a la vez
 
 PROMPT = """Clasificas frases dichas a un asistente de voz. Responde SOLO con JSON.
@@ -63,13 +63,13 @@ class Clasificador:
 
     def _preguntar(self, prompt, texto, num_predict):
         """El JSON que devuelve el modelo para el texto, o None si algo falla."""
-        if gemini.activo():
+        for m in llm.motores():         # Gemini y Groq (Fase 15), la preferida primero
             try:
-                d = json.loads(gemini.generar(prompt, [{"role": "user", "content": texto}], json_salida=True))
-                self.motor = "gemini"
+                d = json.loads(m.generar(prompt, [{"role": "user", "content": texto}], json_salida=True))
+                self.motor = m.NOMBRE
                 return d
-            except (gemini.ErrorGemini, ValueError) as e:
-                gemini.LOG("gemini: el clasificador fallo (%s); pregunta a Ollama" % e)
+            except (m.Error, ValueError) as e:
+                m.LOG("%s: el clasificador fallo (%s); pregunta a otra IA" % (m.NOMBRE, e))
         self.motor = "ollama"
         cuerpo = {
             "model": self.modelo,

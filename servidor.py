@@ -159,6 +159,7 @@ GEMINI_MODELO = "gemini-3.5-flash-lite"   # medido el 6 nov con la clave real: 0
 GEMINI_PENSAR = "low"                  # thinkingLevel; 3.5 Flash-Lite lo acepta ("minimal" daba 400 en 3.8 Flash)
 GEMINI_MAX_TOKENS = 1024               # holgado: el razonamiento tambien gasta tokens del tope
 GEMINI_TIMEOUT = 10.0                  # s sin recibir nada antes de pasarse a Ollama
+GROQ_CLAVE = "groq_clave.json"         # Fase 15: la clave de Groq (gsk_...), como la de Gemini; tampoco se comparte
 
 # Fase 11: el celular hace de ESP32 remoto por la nube (SesionMovil, nube.py y la app de internet)
 MOVIL_LATENCIA_S = 1.0      # de dejar la voz en la nube a que suena en el celular (estimado, para las ventanas)
@@ -1244,6 +1245,10 @@ def main():
         log("Gemini: clave cargada; responde %s y Ollama queda de respaldo" % GEMINI_MODELO)
     else:
         log("Gemini: sin clave (se pone en el panel, Cuentas); responde Ollama")
+    import groq_ia
+    groq_ia.configurar(GEMINI_TIMEOUT, log)
+    if groq_ia.cargar(os.path.join(BASE_DIR, GROQ_CLAVE)):
+        log("Groq: clave cargada (modelo %s)" % (groq_ia.modelo() or "sin elegir: se elige al probarla en el panel"))
 
     import servicios_google
     try:

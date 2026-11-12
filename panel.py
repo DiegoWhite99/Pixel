@@ -27,6 +27,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import acciones
 import bluetooth_pc
 import gemini
+import groq_ia
+import llm
 import nube
 import puente_pc
 import recordatorios
@@ -54,13 +56,20 @@ PRUEBA_PC = "Hola, así suenan los altavoces del PC."     # sin "Píxel": el mic
 WEB_DIR = "web"
 TIPOS_MIME = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
               ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
-              ".json": "application/json; charset=utf-8", ".webmanifest": "application/manifest+json"}
+              ".json": "application/json; charset=utf-8", ".webmanifest": "application/manifest+json",
+              ".ico": "image/x-icon"}
 
 # Fase 13: tipo de voz (tts.Tts.agudo): infantil = mas aguda sin hablar mas rapido (no hay voces de nino en espanol)
 TONOS = {"normal": 1.0, "infantil": 1.32, "muy_infantil": 1.55}
 # 2.0.0: el tono propio de cada voz, como base en web/voz.js. La de hombre (~160 Hz) un 8 % mas grave.
 BASE_VOZ = {"ald": 0.92}
-AJUSTES = {"voz": "st-F4", "personalidad": "", "respuesta": "normal", "salida_voz": "esp32", "tono": "normal"}
+AJUSTES = {"voz": "st-F4", "personalidad": "", "respuesta": "normal", "salida_voz": "esp32", "tono": "normal",
+           "ia": "gemini"}        # Fase 15: la IA de internet que contesta primero si hay clave de las dos
+IAS = ("gemini", "groq")
+# Donde escucha el panel. El programa instalado (instalador/pixel_lanzador.py) pone 127.0.0.1: su panel es la
+# ventana de Pixel en ese PC, no una pagina para toda la red (pedido del 12 nov: "no desplegar un servidor web").
+DIRECCION = "0.0.0.0"
+PROGRAMA = {}        # el programa instalado: {"version", "apagar"} (lo pone el lanzador; sale en /api/estado)
 SALIDAS_VOZ = ("esp32", "pc")
 ACEPTADOS = {}      # mac -> {"nombre", "aceptado"} (Bluetooth del ESP32) o + {"via": "wifi", "ip", "tipo", "fabricante"}
 _RE_MAC = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
@@ -128,6 +137,7 @@ def aplicar_ajustes():
         for sesion in S.SESIONES + list(S.MOVILES.values()):
             sesion.llm.system = system
     S.SALIDA_VOZ = AJUSTES["salida_voz"]
+    llm.PREFERIDA = AJUSTES.get("ia") if AJUSTES.get("ia") in IAS else "gemini"
     S.TTS.agudo = TONOS.get(AJUSTES.get("tono"), 1.0) * BASE_VOZ.get(voz[0], 1.0)
     S.log("panel: voz %s (%s) por %s, respuestas %s, personalidad %r"
           % (voz[0], AJUSTES.get("tono", "normal"), AJUSTES["salida_voz"], AJUSTES["respuesta"], AJUSTES["personalidad"]))
@@ -222,8 +232,11 @@ def estado():
                        "estado": _google["estado"], "error": _google["error"]},
             "contactos": [{"nombre": n, "correo": c} for n, c in acciones.CONTACTOS.items()],
             "gemini": gemini.estado(),          # sin la clave: solo si hay, el modelo y el ultimo error
+            "groq": groq_ia.estado(),
+            "ia": AJUSTES.get("ia", "gemini"),
         },
         "agenda": {"recordatorios": pendientes, "eventos": eventos},
+        "programa": PROGRAMA,
     }
 
 
@@ -424,6 +437,9 @@ def guardar_gemini(d):
     S.log("panel: clave de Gemini guardada")
     ok, texto = gemini.probar()
     S.log("panel: prueba de Gemini: %s" % texto)
+    if not ok and gemini.clave_rechazada():       # 12 nov: una clave que Google no acepta no se queda
+        gemini.guardar("")
+        raise ErrorPanel(texto)
     if not ok:
         raise ErrorPanel("Clave guardada, pero falla. " + texto)
     return {"mensaje": "Clave guardada. " + texto}
@@ -435,6 +451,46 @@ def probar_gemini(d):
     if not ok:
         raise ErrorPanel(texto)
     return {"mensaje": texto}
+
+
+def guardar_groq(d):
+    """Fase 15: como guardar_gemini, con la clave de Groq (gsk_...). Al probarla se elige el modelo."""
+    clave = (d.get("clave") or "").strip()
+    if clave and (len(clave) < 20 or len(clave) > 200 or any(c.isspace() for c in clave)):
+        raise ErrorPanel("Esa clave no parece de Groq: cópiala entera desde console.groq.com → API Keys.")
+    groq_ia.guardar(clave)
+    if not clave:
+        S.log("panel: clave de Groq quitada")
+        return {"mensaje": "Clave de Groq quitada."}
+    S.log("panel: clave de Groq guardada")
+    ok, texto = groq_ia.probar()
+    S.log("panel: prueba de Groq: %s" % texto)
+    if not ok and groq_ia.clave_rechazada():      # una clave que Groq no acepta no se queda
+        groq_ia.guardar("")
+        raise ErrorPanel(texto)
+    if not ok:
+        raise ErrorPanel("Clave guardada, pero falla. " + texto)
+    return {"mensaje": "Clave guardada. " + texto}
+
+
+def probar_groq(d):
+    ok, texto = groq_ia.probar()
+    S.log("panel: prueba de Groq: %s" % texto)
+    if not ok:
+        raise ErrorPanel(texto)
+    return {"mensaje": texto}
+
+
+def elegir_ia(d):
+    """Cual de las dos IA de internet contesta primero (la otra queda de respaldo, y Ollama despues)."""
+    ia = d.get("ia")
+    if ia not in IAS:
+        raise ErrorPanel("Esa IA no la conozco.")
+    with _lock:
+        AJUSTES["ia"] = ia
+        _guardar_json(_ruta(S.AJUSTES_ARCHIVO), AJUSTES)
+        aplicar_ajustes()
+    return {"mensaje": "Primero contesta %s." % ("Gemini" if ia == "gemini" else "Groq")}
 
 
 RUTAS_POST = {
@@ -467,6 +523,9 @@ RUTAS_POST.update(puente_pc.rutas(ErrorPanel))
 RUTAS_SOLO_LOCAL = {
     "/api/gemini/clave": guardar_gemini,
     "/api/gemini/probar": probar_gemini,
+    "/api/groq/clave": guardar_groq,
+    "/api/groq/probar": probar_groq,
+    "/api/ia": elegir_ia,
 }
 
 
@@ -535,8 +594,8 @@ def iniciar(modulo_servidor):
         with open(ruta, encoding="utf-8") as f:
             ACEPTADOS.update(json.load(f))
     red_wifi.vigilar(_wifi_guardados)
-    srv = ThreadingHTTPServer(("0.0.0.0", S.PANEL_PORT), Manejador)
+    srv = ThreadingHTTPServer((DIRECCION, S.PANEL_PORT), Manejador)
     srv.daemon_threads = True
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     S.log("panel de administracion: http://%s:%d  (en este PC: http://localhost:%d)"
-          % (_ip_local(), S.PANEL_PORT, S.PANEL_PORT))
+          % (_ip_local() if DIRECCION == "0.0.0.0" else DIRECCION, S.PANEL_PORT, S.PANEL_PORT))

@@ -632,7 +632,10 @@ if (ctx.PixelAjustes) {
     igual(P.precioDe("propia:claude-haiku-5-5"), {e: 0.10, s: 0.50});
     igual(P.precioDe("gemini-3_5-flash-lite"), {e: 0.30, s: 2.50});
     assert.strictEqual(P.precioDe("propia:modelo-raro"), null);
-    assert.ok(P.claveValida("claude", "sk-ant-api03-abcdefghijklmnopqrstuvwxyz") && !P.claveValida("claude", "AIzaXXXXXXXXXXXXXXXXXXXXXXXX") && P.claveValida("openai", "sk-proj-1234567890abcdef"));
+    assert.ok(P.claveValida("claude", "sk-ant-api03-abcdefghijklmnopqrstuvwxyz") && P.claveValida("openai", "sk-proj-1234567890abcdef"));
+    // 12 nov: una clave de Google que no empieza por AIza tambien se acepta (la prueba el servicio); rotas, no
+    assert.ok(P.claveValida("gemini", "AQ.Ab8RN6" + "k".repeat(40)) && P.claveValida("gemini", "AIzaSy" + "x".repeat(33)));
+    assert.ok(!P.claveValida("gemini", "AIza Sy" + "x".repeat(33)) && !P.claveValida("gemini", "corta") && !P.claveValida("gemini", ""));
     igual(P.actual(), {proveedor: "", modelo: "", clave: "", base: "", propio: false});   // sin nada guardado: ninguno (11 nov: no hay IA incluida)
     // el panel: lo de la clave propia se cuenta aparte de lo gratis
     const J = ctx.PixelAjustes.texto, dia = {m: {"propia:claude-haiku-5-5": {n: 2, e: 1000000, s: 1000000}, "gemini-3_5-flash-lite": {n: 1, e: 1000000, s: 0}}};
@@ -854,6 +857,35 @@ if (ctx.PixelContactos) {
     const persona = fuente.slice(fuente.indexOf("async function correoDePersona"), fuente.indexOf("\n  }\n", fuente.indexOf("async function correoDePersona")));
     assert.ok(!/messages\?/.test(persona), "correoDePersona no busca en el historial de Gmail");
     assert.ok(/await PC\.esperar\(\)/.test(persona), "espera a la lista de contactos");
+  });
+}
+
+// ------------------------------------------------------------------ 2.2.0 (12 nov): Groq y la ventana del programa
+{
+  const P = vm.runInContext("Proveedores", ctx);
+  prueba("proveedores: Groq, con su clave gsk_ y su dirección compatible con OpenAI", () => {
+    const g = P.LISTA.groq;
+    assert.ok(g && g.compatible && g.base === "https://api.groq.com/openai/v1");
+    assert.ok(P.claveValida("groq", "gsk_" + "a".repeat(40)) && !P.claveValida("groq", "gsk_ con espacios " + "a".repeat(20)));
+  });
+  const RAIZ = path.join(__dirname, "..");
+  const esc = fs.readFileSync(path.join(WEB, "escritorio.js"), "utf8");
+  const html = fs.readFileSync(path.join(WEB, "escritorio.html"), "utf8");
+  prueba("ventana: saluda con lo que pidió el usuario", () => {
+    const frases = [...esc.slice(esc.indexOf("const FRASES"), esc.indexOf("];", esc.indexOf("const FRASES"))).matchAll(/t: "([^"]*)"/g)].map((m) => m[1]).join(" ");
+    assert.strictEqual(frases.replace(/ +/g, " "), "Hola, soy Píxel, un agente creado por Divergency IA . Bienvenido al panel de control. Aquí puedes vincular tus dispositivos y guardar tus APIs.");
+  });
+  prueba("ventana: cada botón llama a una ruta que el programa tiene", () => {
+    const fuente = ["panel.py", "nube.py", path.join("instalador", "pixel_lanzador.py")].map((f) => fs.readFileSync(path.join(RAIZ, f), "utf8")).join("\n");
+    const rutas = new Set([...esc.matchAll(/enviar\("(\/api\/[a-z/]+)"/g)].map((m) => m[1]));
+    for (const api of ["gemini", "groq"]) for (const r of ["clave", "probar"]) rutas.add(`/api/${api}/${r}`);
+    assert.ok(rutas.size >= 12, "rutas: " + [...rutas].join(", "));
+    for (const r of rutas) assert.ok(fuente.includes(`"${r}"`), "el programa no tiene " + r);
+  });
+  prueba("ventana: solo habla con este PC (nada de internet salvo los enlaces que abre el usuario)", () => {
+    assert.ok(!/fetch\(\s*["'`]https?:/.test(esc), "escritorio.js llama a internet");
+    assert.ok(!/<script[^>]+src=["']https?:/.test(html) && !/<link[^>]+href=["']https?:/.test(html), "escritorio.html carga algo de internet");
+    for (const m of html.matchAll(/<a [^>]*href="https:[^"]*"[^>]*>/g)) assert.ok(/target="_blank"/.test(m[0]) && /rel="noopener"/.test(m[0]), m[0]);
   });
 }
 
