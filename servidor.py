@@ -118,7 +118,12 @@ MSG_AUDIO_IN = 0x01
 MSG_AUDIO_OUT = 0x02
 MSG_END_TURN = 0x03
 MSG_DEBUG = 0x04
-FRASE_CODIGO_ROBOT = "Para enlazarme con la app, mi código es: %s. Repito: %s."
+FRASE_CODIGO_ROBOT = "Para enlazarme con la app, mi código es:"
+# 13 nov (el usuario: "va muy rapido con lo del codigo"): los codigos se dicen cifra por cifra, cada una sola y con
+# un silencio despues, y dos veces (_decir_codigo). Antes iban en una frase con comas ("6, 3, 7...") y sonaban seguidas.
+CIFRAS_PALABRAS = ("Cero", "Uno", "Dos", "Tres", "Cuatro", "Cinco", "Seis", "Siete", "Ocho", "Nueve")
+CODIGO_PAUSA_S = 0.55                  # despues de cada cifra (la voz ya viene sin su silencio: _sin_bordes)
+CODIGO_OTRA_VEZ = "Otra vez."
 
 MAX_PAYLOAD = 1 << 20     # 1 MiB, para no confiar en una longitud corrupta
 
@@ -417,6 +422,28 @@ BEEP_SALIDA = generar_sonido(SONIDO_NOTAS["salida"])
 BEEP_AVISO = generar_sonido(SONIDO_NOTAS["aviso"])
 PENSAR_PCM = tuple(generar_sonido(((f, 0.0),), PENSAR_DURA_S, PENSAR_VOLUMEN) for f in PENSAR_NOTAS)
 _SONIDOS = {id(x) for x in (BEEP_RECIBIDO, BEEP_SALIDA, BEEP_AVISO) + PENSAR_PCM}
+
+
+_CIFRAS_CACHE = {}
+
+
+def _cifra_dicha(n):
+    """La voz de una cifra sola ("Seis."), guardada por voz: los codigos se dicen sin esperar a sintetizar."""
+    clave = (id(TTS), n)
+    if clave not in _CIFRAS_CACHE:
+        _CIFRAS_CACHE[clave] = _sin_bordes(TTS.sintetizar(CIFRAS_PALABRAS[n] + "."))
+    return _CIFRAS_CACHE[clave]
+
+
+def _sin_bordes(pcm, umbral=400, antes_s=0.04, despues_s=0.08):
+    """Quita el silencio que la voz pone antes y despues (Supertonic: casi 1 s con una palabra sola)."""
+    x = np.frombuffer(pcm, dtype=np.int16)
+    fuerte = np.flatnonzero(np.abs(x) > umbral)
+    if not len(fuerte):
+        return pcm
+    a = max(0, fuerte[0] - int(antes_s * SAMPLE_RATE))
+    z = min(len(x), fuerte[-1] + int(despues_s * SAMPLE_RATE))
+    return x[a:z].tobytes()
 
 
 def es_sonido(pcm):
@@ -760,6 +787,14 @@ class Sesion:
                 finally:
                     self.forzar_esp32 = False
                 continue
+            if item[0] in ("codigo", "codigo_esp32"):   # un codigo de enlace (nube.py; el robot: por su altavoz)
+                self.respondiendo.set()
+                self.forzar_esp32 = item[0] == "codigo_esp32"
+                try:
+                    self._con_micro_sordo(self._decir_codigo, item[1], item[2])
+                finally:
+                    self.forzar_esp32 = False
+                continue
             self.turno_aceptado = False
             self._con_micro_sordo(self._turno, *item)
             if self.turno_aceptado:
@@ -943,6 +978,22 @@ class Sesion:
         log('%s  RECORDATORIO: "%s"' % (self.peer, texto))
         self.enviar_audio(BEEP_AVISO)
         self._decir(RECORDATORIO_FRASE % texto, cierre=False)
+
+    def _decir_codigo(self, intro, cifras):
+        """Un codigo de enlace despacio: intro, cada cifra sola con un silencio despues, "Otra vez." y las cifras.
+        Cada trozo sale en cuanto esta: el robot empieza a hablar enseguida. El codigo no va al registro."""
+        silencio = b"\x00\x00" * int(CODIGO_PAUSA_S * SAMPLE_RATE)
+        self.enviar_audio(BEEP_AVISO)
+        for vuelta in range(2):
+            audio = TTS.sintetizar(intro if vuelta == 0 else CODIGO_OTRA_VEZ)
+            if audio:
+                self.enviar_audio(audio + silencio)
+            for c in cifras:
+                audio = _cifra_dicha(int(c))
+                if audio:
+                    self.enviar_audio(audio + silencio)
+        self.fin_respuesta(cierre=False)
+        self.debug("ia: (codigo de enlace)")
 
     def _decir(self, texto, cierre=True):
         """Dice un texto fijo por voz (sin LLM) y cierra el turno."""
@@ -1226,8 +1277,7 @@ def atender(sock, addr):
                     cifras = "".join(c for c in texto[7:] if c.isdigit())[:6]
                     if len(cifras) == 6:
                         log("%s  el robot pide decir su código para enlazar la app" % sesion.peer)
-                        dicho = ", ".join(cifras)
-                        sesion.cola.put(("decir_esp32", FRASE_CODIGO_ROBOT % (dicho, dicho)))
+                        sesion.cola.put(("codigo_esp32", FRASE_CODIGO_ROBOT, cifras))
                 else:
                     log("%s  debug ESP32: %s" % (sesion.peer, texto))
             elif msg_type == MSG_AUDIO_OUT:

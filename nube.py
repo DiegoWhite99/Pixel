@@ -56,7 +56,7 @@ MIRANDO_S = 60          # la app esta abierta si su latido es de hace menos de e
 VIVO_S = 10
 RESPUESTA_S = 60        # las respuestas se borran pasado este tiempo
 DECIR_CADA_S = 12       # como mucho, cada cuanto se dice el codigo en voz alta
-FRASE_CODIGO = "Para enlazar la app, mi código es: %s."
+FRASE_CODIGO = "Para enlazar la app, mi código es:"     # luego las cifras, despacio (Sesion._decir_codigo)
 FRASE_ENLAZADO = "¡Listo! Ya estoy enlazado con tu app."
 SV = {".sv": "timestamp"}
 MOVIL_MAX_S = 12        # frase mas larga que se acepta del celular (el corta a los 10 s)
@@ -202,7 +202,7 @@ def decir_codigo():
         return False
     if time.monotonic() - _dicho["t"] > DECIR_CADA_S:
         _dicho["t"] = time.monotonic()
-        sesion.cola.put(("decir", FRASE_CODIGO % ", ".join(enlace["codigo"])))
+        sesion.cola.put(("codigo", FRASE_CODIGO, enlace["codigo"]))
     return True
 
 
