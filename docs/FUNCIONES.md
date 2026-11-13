@@ -16,7 +16,7 @@ Cómo leerla: **Entrada** es la vía por la que llega la orden (voz del ESP32, v
 | Partir la respuesta en frases para la voz | ESP32 | `servidor.py`: `extraer_frases` | — |
 | Hablar (Piper) | ESP32, PC | `tts.py`: `Tts`; `tts_supertonic.py`: `TtsSupertonic` | `panel.py`: `probar_voz` |
 | Reposo (olvida la conversación) | ESP32 | `servidor.py`: `Sesion._reposo` | — |
-| Beeps de entrada y salida | ESP32 | `servidor.py`: `generar_beep`, `fin_respuesta` | — |
+| Sonidos de entrada, pensando, salida y aviso (los mismos de la app, 13 nov) | ESP32 | `servidor.py`: `generar_sonido`, `SONIDO_NOTAS`, `_empezar_pensando`, `fin_respuesta` | `web/agente.js`: `SONIDOS`, `PENSAR` |
 | Boca de la cara sincronizada | PC, app | `servidor.py`: `Sesion.voz`; `panel.py` | `GET /api/voz` |
 
 ## 2. Voz y conversación en la app de internet (sin PC)

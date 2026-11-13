@@ -1083,6 +1083,21 @@ El usuario: «las configuraciones deben ser un espejo de uno al otro», «el Pí
 
 Este apendice guarda el detalle por fase que antes estaba en CLAUDE.md. Los datos de red y de cuentas se quitaron porque este repo es publico: estan en las notas privadas del usuario.
 
+
+### 13 nov: el robot con los sonidos de la app
+
+El usuario: «el robot no toma ni los sonidos ni nada de Píxel de la web, te recuerdo que deben ser iguales».
+- Antes el PC tenía dos barridos (800→1200 Hz y 1200→800 Hz, 0,12 s). Ahora `servidor.py` genera los mismos sonidos que `web/agente.js` (`SONIDOS`, `PENSAR`, `nota()`), con las mismas notas, el armónico ×2,01 con ganancia 0,22, la subida exponencial en 12 ms y el volumen 0,12 (0,035 las de pensar).
+    - Entrada (mi, si, mi agudo) al aceptar la frase, también dentro de la ventana del «Dime». Salida (al revés) al terminar, pero no tras el «Dime» ni tras un recordatorio. Aviso (dos notas) antes de un recordatorio.
+    - Mientras piensa: tras 0,6 s, una nota suave (do, mi, sol, mi) cada 0,42 s, hasta que suena la respuesta (`_empezar_pensando`, en otro hilo con `_pensar_lock`; `enviar_audio` lo para). En el celular (`SesionMovil`) no: la app pone las suyas al recibir el «oido».
+    - Las campanitas no mueven la boca (`es_sonido`).
+- Probado con el servidor de prueba aislado y `tools/cliente_prueba.py`: entrada, 16 notas mientras Ollama pensaba, la voz y la salida, sin trabarse. Falta: el interruptor «Sonidos» de Ajustes de la app todavía no llega al PC.
+
+### 13 nov: el robot no entraba en Firebase
+
+- El robot decía «Firebase: no pude entrar (HTTP -1)» y por eso no se podía enlazar desde la app. Con una línea más en `https()` de `puente.ino`, salió la causa: «SSL - Memory allocation failed», con 43 KB internos libres y como mucho 27 KB seguidos (8 MB libres en la PSRAM). El TLS del core (`CONFIG_MBEDTLS_INTERNAL_MEM_ALLOC=y`) solo usa la RAM interna.
+- El anillo del micro USB (32 KB, `xStreamBufferCreate`) se llevaba esa RAM. Ahora va en la PSRAM (`xStreamBufferCreateWithCaps(..., MALLOC_CAP_SPIRAM)`). Tras cargarlo: «Firebase: dentro» y el micro sigue con 10 000 paquetes bien cada 10 s. Copias: `puente.ino.respaldo-13nov` y `micro_usb.ino.respaldo-13nov`.
+
 ## (antes CLAUDE.md)
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
@@ -1176,7 +1191,7 @@ La parte `musica` necesita que YouTube suene en Chrome sin pantalla. Tras muchas
     - En medio de la frase también vale (`_RE_ACTIVACION_EN_MEDIO`): se toma lo que va tras la última aparición. Pasa cuando música, TV u otra voz juntan todo en una frase. Solo cuenta con pausa antes o después (signo de puntuación), así "un píxel de la pantalla" no la activa. Las frases sin activación se ignoran sin mandar nada al ESP32, ni siquiera `0x03`.
 4. Intención: primero `acciones.detectar()` (regex, rápido); si no hay coincidencia, `clasificador.Clasificador` (Gemini u Ollama, JSON), cuyo "youtube" solo vale si `acciones.hay_pedido()` ve un verbo de acción (aunque llegue roto), "quiero", YouTube o una palabra de música; si no, la frase va al LLM. Con regex, el clasificador solo se usa como `acciones.CORRECTOR` cuando YouTube no da resultados (corrige el nombre y busca otra vez).
 5. Si no es acción: `llm.Llm.responder()` en streaming; `extraer_frases()` parte el texto en frases (la primera también corta en coma para que la voz arranque antes) y cada frase va a Piper y se envía en cuanto está lista.
-6. Toda respuesta (LLM, acción, "Dime" o reposo) termina con `fin_respuesta()`: beep descendente y luego `0x03`.
+6. Toda respuesta (LLM, acción, "Dime" o reposo) termina con `fin_respuesta()`: la campanita de salida (no tras el "Dime" ni tras un recordatorio, como en la app) y luego `0x03`.
 
 **Reposo:** si pasan `REPOSO_S` desde la última respuesta a una frase aceptada, el hilo trabajador (que espera la cola con timeout) dice `REPOSO_FRASE`, borra el historial del `Llm` y no lo repite hasta la siguiente interacción.
 
@@ -1262,6 +1277,7 @@ La parte `musica` necesita que YouTube suene en Chrome sin pantalla. Tras muchas
         - **Medido:** 1000 paquetes por segundo, 96 000 bytes/s, unas 15 984 muestras/s de salida. En el servidor, piso de ruido de 336 a 448 y una frase de 1,9 s con pico 18 234. Whisper oyó «Hola, hola, hola, hola». El volumen del micrófono es 22,5 dB (de −12 a 33).
         - Los avisos van al servidor como debug «micro USB: …» (reconociendo, listo, desconectado). Copia del programa anterior en `*.respaldo-12nov-tarde`. Las pruebas que se usaron (`Prueba_mic`, `Prueba_usb`) quedaron fuera de `~/Arduino`.
         - El parlante MAX98357A va en BCLK=IO17, LRC=IO14 y DIN=IO7. **Con VIN a 5 V no sonaba:** el pin de 5 V de esta placa recibe corriente pero no la entrega. **A 3,3 V suena** (16:20). Con la prueba del pitido (`Prueba_parlante`: 1 kHz por el MAX, medido con el micrófono USB), el tono subió entre 56 y 531 veces sobre el silencio con los pines del programa, y nada con BCLK y LRC cruzados.
+        - **13 nov:** otra sesión de Claude (carpeta `~/Documentos/pruebaESP32`, PlatformIO/ESP-IDF) cargó en el robot sus programas de prueba y el robot quedó mandando silencio (`pico=0`, sin ningún «micro USB:»). A las 9:21 se volvió a cargar `Pixel_portal` sin cambios: reconoció el hub y el micrófono y dio piso de ruido 352. Si el robot conecta pero no oye, mirar primero si tiene cargado otro programa.
 - `Etb_boot/Etb_boot.ino` es el básico del 21 oct:
     - Red e IP del servidor fijas (`SERVER_IP` = [IP del servidor: notas privadas]), sin portal, sin Bluetooth y sin descubrimiento.
     - Su `sendDebug` solo manda el primer byte del largo: un texto de más de 255 bytes rompe el protocolo.

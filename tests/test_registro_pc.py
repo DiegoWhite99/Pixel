@@ -14,7 +14,7 @@ def _sesion(monkeypatch, anotado, clase=servidor.Sesion):
     monkeypatch.setattr(servidor, "TTS", _TtsMudo())
     s = clase.__new__(clase)                 # sin socket ni hilos: solo lo que usan _accion y _confirmar
     s.peer, s.pendiente, s.fin_reproduccion = "prueba", None, 0.0
-    s.fin_respuesta = lambda: None
+    s.fin_respuesta = lambda cierre=True: None
     s.debug = lambda texto: None
     return s
 
