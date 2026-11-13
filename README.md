@@ -3,8 +3,8 @@
 Píxel es un agente de inteligencia artificial creado por Divergencia IA, con cara de robot, hecho para una feria de tecnología. Vive en una aplicación web que se instala en el celular: oye la palabra **«Píxel»**, piensa con la inteligencia artificial que elijas (cada persona pone su clave), contesta con una voz natural de alta calidad y mueve su cara en 3D. Se entra con la cuenta de Google y cada persona tiene su perfil. Un computador y un ESP32 son opcionales: le dan micrófono y altavoz propios y le dejan manejar los aparatos de la casa.
 
 - **Aplicación:** https://pixelassitance.web.app (en el celular, con Chrome).
-- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.4.1/pixel_2.4.1_amd64.deb) y [Windows (.exe)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.4.1/Pixel-2.4.1-Setup.exe), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
-- **Versión actual:** 2.4.1, del 13 de noviembre de 2026.
+- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.4.2/pixel_2.4.2_amd64.deb) y [Windows (.exe)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.4.2/Pixel-2.4.2-Setup.exe), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
+- **Versión actual:** 2.4.2, del 13 de noviembre de 2026.
 - **Cómo está hecho por dentro:** `CLAUDE.md`. **Mediciones y decisiones:** `memoria.md`.
 
 ## Qué puede hacer
@@ -38,6 +38,7 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 
 | Versión | Fecha | Qué trae |
 |---|---|---|
+| **2.4.2** | 13 nov 2026 | Enlazar el robot desde la app: el código se dice despacio (cifra por cifra, dos veces) y, si el Bluetooth se corta, la app se vuelve a conectar sola. |
 | **2.4.1** | 13 nov 2026 | El robot y el programa del PC suenan como la app: la campanita al llamarlo, las notas suaves mientras piensa, la campanita al terminar y el aviso de los recordatorios. |
 | **2.4.0** | 12 nov 2026 | Un solo Píxel: el programa del PC (y el robot) y la app copian entre sí, en los dos sentidos, las claves de IA, la IA preferida, la voz, el tipo de voz, la personalidad y el largo de las respuestas; el perfil de la app llega al PC. El robot usa las mismas instrucciones que la app. Google se conecta en el programa cargando su credencial. Windows ya no es «versión de prueba». |
 | **2.3.0** | 12 nov 2026 | En Windows el PC se maneja como en Linux (volumen, música, bloquear, suspender, su MAC). La música suena en una pestaña, siempre la misma. La IA del programa del PC llega a la app con su indicador «En uso». El robot se llama Píxel, se puede quitar y pide un código al agregarlo. Google en el programa, a un paso. |
@@ -53,6 +54,17 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 | **1.0.0** | 10 nov 2026 | Píxel entero en el celular: Gemini, Calendar, Gmail, Pomodoro, Eisenhower, cerebro, aparatos, música, notas y voz infantil. |
 
 No hay 1.1.0: la segunda fase salió directamente como 1.2.1.
+
+### 2.4.2 · 13 de noviembre de 2026
+
+Pedido del usuario: «va muy rápido con lo del código, le doy repetir el código y se pierde la conexión».
+
+- **El código se dice despacio:** «Para enlazarme con la app, mi código es:», cada cifra sola («Seis.», «Tres.»…) con un silencio después, «Otra vez.» y las cifras de nuevo, con el aviso delante (`Sesion._decir_codigo`). También el código de enlace del PC. Antes iba en una frase con comas y sonaba seguido.
+- **La app no se rinde si se corta el Bluetooth** al agregar el robot (`conexionBle` en `web/aparatos.js`): se vuelve a conectar sola. Antes, un corte hacía que la app pidiera el botón BOOT, que tampoco podía llegar.
+- Firmware del robot (fuera de este repositorio):
+    - tras un corte vuelve a anunciarse por Bluetooth (antes desaparecía hasta reiniciarlo);
+    - no busca otros aparatos mientras la app está conectada;
+    - usa una sola conexión segura con la nube y mira las órdenes cada 1,5 s (dos conexiones no le cabían en la memoria).
 
 ### 2.4.1 · 13 de noviembre de 2026
 

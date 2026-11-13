@@ -303,7 +303,40 @@
 
   // ------------------------------------------------------------------ agregar el ESP32 por Bluetooth (Web Bluetooth)
   const enc = new TextEncoder(), dec = new TextDecoder();
-  async function leerBle(c) { try { return JSON.parse(dec.decode(await c.readValue())); } catch (e) { return {}; } }
+
+  // 13 nov (el usuario: "le doy repetir el código y se pierde la conexión"): si el Bluetooth se corta, se vuelve a
+  // conectar solo en vez de rendirse. Antes un corte hacía que la lectura diera {} y la app pedía el botón BOOT,
+  // que tampoco podía llegar. -> {leer, escribir, cerrar}; leer y escribir lanzan un error si no hay manera.
+  function conexionBle(disp, paso) {
+    let c = null;
+    async function abrir() {
+      for (let i = 0; i < 4; i++) {
+        try {
+          if (i) paso('<div class="buscando"><span class="giro"></span>Se cortó el Bluetooth con el robot Píxel. Reconectando…</div>');
+          const gatt = disp.gatt.connected ? disp.gatt : await disp.gatt.connect();
+          c = await (await gatt.getPrimaryService(BLE_SERVICIO)).getCharacteristic(BLE_NUBE);
+          return;
+        } catch (e) { c = null; await N.esperar(1500); }
+      }
+      throw new Error("Se perdió el Bluetooth con el robot Píxel. Acércate a él y vuelve a tocar «Agregar».");
+    }
+    async function conReintento(hacer) {
+      for (let i = 0; ; i++) {
+        try {
+          if (!c || !disp.gatt.connected) await abrir();
+          return await hacer(c);
+        } catch (e) {
+          if (i >= 2 || /Se perdió el Bluetooth/.test(e.message || "")) throw e;
+          c = null;                       // se cortó: abrir() lo vuelve a conectar
+        }
+      }
+    }
+    return {
+      leer: () => conReintento(async (x) => { const t = dec.decode(await x.readValue()); try { return JSON.parse(t); } catch (e) { return {}; } }),
+      escribir: (o) => conReintento((x) => x.writeValue(enc.encode(JSON.stringify(o)))),
+      cerrar() { try { if (disp.gatt.connected) disp.gatt.disconnect(); } catch (e) { /* nada */ } },
+    };
+  }
 
   async function agregarEsp32() {
     const caja = $("#ap-ble");
@@ -315,19 +348,18 @@
     } catch (e) { if (e.name !== "NotFoundError") paso(`<p class="aviso">${esc(e.message)}</p>`); return; }
     try {
       paso('<div class="buscando"><span class="giro"></span>Conectando con ' + esc(disp.name || "Píxel") + "…</div>");
-      const gatt = await disp.gatt.connect();
-      const c = await (await gatt.getPrimaryService(BLE_SERVICIO)).getCharacteristic(BLE_NUBE);
-      let info = await leerBle(c);
+      const ble = conexionBle(disp, paso);
+      let info = await ble.leer();
       if (!info.wifi) {
         // sin WiFi: se le pasa la red desde aqui (sin el portal)
         const red = await pedirWifi(paso, info.red || "");
-        if (!red) { gatt.disconnect(); caja.hidden = true; return; }
-        await c.writeValue(enc.encode(JSON.stringify({ssid: red.ssid, clave: red.clave})));
+        if (!red) { ble.cerrar(); caja.hidden = true; return; }
+        await ble.escribir({ssid: red.ssid, clave: red.clave});
         paso('<div class="buscando"><span class="giro"></span>El robot Píxel se está conectando a ' + esc(red.ssid) + "…</div>");
       }
       // espera a que tenga WiFi y su cuenta de Firebase (la crea al tener internet)
       const t0 = Date.now();
-      while (Date.now() - t0 < 45000 && (!info.wifi || !info.id)) { await N.esperar(2000); info = await leerBle(c); }
+      while (Date.now() - t0 < 45000 && (!info.wifi || !info.id)) { await N.esperar(2000); info = await ble.leer(); }
       if (!info.wifi) throw new Error("El robot Píxel no pudo conectarse a esa red WiFi. Revisa el nombre y la clave.");
       if (!info.id) throw new Error("El robot Píxel tiene WiFi pero no llega a internet (Firebase).");
       // el permiso para que este robot Píxel entre en la lista de esta cuenta (las reglas lo piden: 15 min)
@@ -336,28 +368,29 @@
       // 12 nov (pedido: "el robot físico debe darme un autenticador"): Píxel inventa un código de 6 cifras y,
       // con el PC conectado, el PC lo dice por su altavoz. Sin el PC, vale su botón BOOT (como antes).
       for (let intento = 0; ; intento++) {
-        await c.writeValue(enc.encode(JSON.stringify({pedir_codigo: true})));
+        await ble.escribir({pedir_codigo: true});
         await N.esperar(1500);
-        info = await leerBle(c);
+        info = await ble.leer();
         if (!info.pc) {
-          const listo = await pedirBoot(paso, c);
-          if (!listo) { gatt.disconnect(); caja.hidden = true; return; }
-          await c.writeValue(enc.encode(JSON.stringify({dueno: nube.uid, nombre})));
+          const listo = await pedirBoot(paso, ble);
+          if (listo instanceof Error) throw listo;
+          if (!listo) { ble.cerrar(); caja.hidden = true; return; }
+          await ble.escribir({dueno: nube.uid, nombre});
           break;
         }
         const r = await pedirCodigo(paso, intento > 0);
-        if (r === null) { gatt.disconnect(); caja.hidden = true; return; }
+        if (r === null) { ble.cerrar(); caja.hidden = true; return; }
         if (r === "otra") continue;
-        await c.writeValue(enc.encode(JSON.stringify({dueno: nube.uid, nombre, codigo: r})));
+        await ble.escribir({dueno: nube.uid, nombre, codigo: r});
         await N.esperar(1200);
-        info = await leerBle(c);
+        info = await ble.leer();
         if (info.codigo === "pedido" || info.codigo === "bloqueado") { if (intento >= 4) throw new Error("Demasiados códigos equivocados. Vuelve a empezar."); continue; }
         break;
       }
       paso('<div class="buscando"><span class="giro"></span>Enlazando el robot Píxel con tu cuenta…</div>');
       const t1 = Date.now();
       while (Date.now() - t1 < 30000 && !ap.puentes[info.id]) await N.esperar(1000);
-      gatt.disconnect();
+      ble.cerrar();
       if (!ap.puentes[info.id]) throw new Error("El robot Píxel no confirmó el enlace. Mira que tenga internet e inténtalo otra vez.");
       paso('<div class="vacio" style="border-style:solid;background:var(--green-soft);color:var(--green);font-weight:650">¡Listo! El robot Píxel ya es tu puente. Ahora agrega los aparatos que maneja.</div>');
     } catch (e) {
@@ -385,7 +418,7 @@
   }
 
   // Sin el PC, Píxel no puede decir el código: se enlaza con su botón BOOT (prueba de que lo tienes delante)
-  function pedirBoot(paso, c) {
+  function pedirBoot(paso, ble) {
     return new Promise((ok) => {
       paso(`<div class="grupo"><p class="sub">Píxel no está conectado a tu PC, así que no puede decirte el código. Pulsa <b>una vez</b> su botón <b>BOOT</b> (la luz se pone celeste) y espera.</p>
         <div class="buscando"><span class="giro"></span>Esperando el botón…</div><button class="btn" type="button" id="ap-boot-no">Cancelar</button></div>`);
@@ -394,7 +427,8 @@
       (async () => {
         const t0 = Date.now();
         while (!fin && Date.now() - t0 < 120000) {
-          const i = await leerBle(c);
+          let i = {};
+          try { i = await ble.leer(); } catch (e) { fin = true; ok(e); return; }     // el que llama lo muestra
           if (i.emparejar) { fin = true; ok(true); return; }
           await N.esperar(1500);
         }

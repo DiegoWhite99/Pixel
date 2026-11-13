@@ -1093,10 +1093,25 @@ El usuario: «el robot no toma ni los sonidos ni nada de Píxel de la web, te re
     - Las campanitas no mueven la boca (`es_sonido`).
 - Probado con el servidor de prueba aislado y `tools/cliente_prueba.py`: entrada, 16 notas mientras Ollama pensaba, la voz y la salida, sin trabarse. Falta: el interruptor «Sonidos» de Ajustes de la app todavía no llega al PC.
 
+### 13 nov (2.4.2): enlazar el robot, el código y el Bluetooth
+
+El usuario: «va muy rápido con lo del código, le doy repetir el código y se pierde la conexión».
+- En el robot, a las 11:15 y 11:50: dos códigos dichos y ningún «la app pide enlazar». Después, BOOT pulsado seis veces sin nada de la app. El Bluetooth se cortaba antes de mandar el código, y entonces:
+    - el core de BLE (NimBLE, Arduino 3.3.12) trae `advertiseOnDisconnect` apagado (`m_advertiseOnDisconnect = false` en `BLEServer.cpp`). Tras el primer corte, el robot dejaba de anunciarse hasta reiniciarlo. Ahora `srv->advertiseOnDisconnect(true)`, con avisos por el puerto serie al conectar y desconectar, y BOOT también vuelve a anunciarlo;
+    - la búsqueda de aparatos BLE (3 s cada 30 s) ya no corre mientras la app está conectada (`getConnectedCount()`);
+    - en la app, `leerBle` daba `{}` al cortarse; `!info.pc` mandaba al camino del botón BOOT, que tampoco podía leer nada. Ahora `conexionBle` (en `web/aparatos.js`) vuelve a conectar sola (4 intentos) o da un error claro. Probado en Node con un robot falso que se corta cada 2 operaciones.
+- El código: Supertonic dice la frase entera de corrido y le pone casi 1 s de silencio a una palabra sola. Ahora `_decir_codigo` dice la intro, cada cifra sola sin su silencio (`_sin_bordes`, guardadas en `_CIFRAS_CACHE`) más 0,55 s, «Otra vez.» y las cifras. Unos 18,6 s en total; el robot empieza a hablar enseguida. Lo usan el código del robot (`codigo_esp32`) y el del PC (`nube.decir_codigo`, `codigo`). Prueba: `tests/test_codigo_despacio.py`.
+- Con dos Píxel del PC (este y el Windows, 192.168.1.94), al reiniciar el servicio el robot se pasa al otro (lo encuentra por difusión UDP y se queda con él). Por eso el arreglo del PC tiene que ir en una versión.
+
 ### 13 nov: el robot no entraba en Firebase
 
 - El robot decía «Firebase: no pude entrar (HTTP -1)» y por eso no se podía enlazar desde la app. Con una línea más en `https()` de `puente.ino`, salió la causa: «SSL - Memory allocation failed», con 43 KB internos libres y como mucho 27 KB seguidos (8 MB libres en la PSRAM). El TLS del core (`CONFIG_MBEDTLS_INTERNAL_MEM_ALLOC=y`) solo usa la RAM interna.
 - El anillo del micro USB (32 KB, `xStreamBufferCreate`) se llevaba esa RAM. Ahora va en la PSRAM (`xStreamBufferCreateWithCaps(..., MALLOC_CAP_SPIRAM)`). Tras cargarlo: «Firebase: dentro» y el micro sigue con 10 000 paquetes bien cada 10 s. Copias: `puente.ino.respaldo-13nov` y `micro_usb.ino.respaldo-13nov`.
+- Con eso entraba, pero no abría la segunda conexión (el streaming de las órdenes): «SSL - Memory allocation failed» con 30 KB internos libres y bloques de 12 KB. Cada conexión TLS pide ~33 KB (dos búferes de 16 KB seguidos) y antes había dos abiertas a la vez (`escritor` y el streaming).
+    - Las pilas de las 4 tareas del USB van a la PSRAM (`crearTareaPsram`, `xTaskCreatePinnedToCoreWithCaps`; no escriben en la flash) y `heap_caps_malloc_extmem_enable(512)` al empezar `setup()`. Quedó en 55 KB libres y bloques de 32 KB: todavía no daba para dos.
+    - `escucharOrdenes()` ya no usa streaming: mira `pixeles/<id>/ordenes` cada `ORDENES_MS` (1,5 s) con un GET por la misma conexión con la que escribe (`dbCuerpo`). Un solo TLS. Las órdenes tardan hasta 1,5 s en empezar; las últimas 8 hechas no se repiten si su DELETE falló. Gasta unos 25 MB al día de descarga de Firebase por robot (el plan gratis da 10 GB al mes).
+    - `avisoTls()` dice el error de TLS y la memoria cuando una conexión no abre; `publicarDueno` dice sus códigos HTTP si falla, y el Bluetooth dice si el código llegó bien o mal.
+    - Tras cargarlo (11:29): «Firebase: dentro», «enlazado con la app», sin errores de órdenes y el micrófono bien. Copia del portal: `Pixel_portal.ino.respaldo-13nov`.
 
 ## (antes CLAUDE.md)
 
