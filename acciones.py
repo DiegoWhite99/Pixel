@@ -72,6 +72,7 @@ _RE_BORRAR = re.compile(r"\b(?:borr|elimin|quit|cancel)\w*\b.*?\b%s\b"
 # Whisper lo rompe ("que recordato Dios tengo")
 _RE_VER_COSA = re.compile(r"\b(?:recordat\w*|alarmas?)\b")
 _RE_VER_PREGUNTA = re.compile(r"\b(?:tengo|hay|mis|cuales|cuantos|cuantas|dime|lista)\b")
+_RE_VER_FUERTE = re.compile(r"\b(?:tengo|hay|cuales|cuantos|cuantas|dime|lista)\b")
 # "recuerda me comprar café" (Whisper parte "recuérdame"), "que llame a mamá", y la orden
 # cuando el modelo la deja en el texto: "anotar en el calendario el dentista"
 _EN_CALENDARIO = r"\s+en\s+(?:el|la|mi)\s+(?:calendario|agenda)"
@@ -98,7 +99,13 @@ def detectar_borrar_recordatorio(texto):
 
 def detectar_ver_recordatorios(texto):
     p = plano(texto)
-    return {} if _RE_VER_COSA.search(p) and _RE_VER_PREGUNTA.search(p) else None
+    if not (_RE_VER_COSA.search(p) and _RE_VER_PREGUNTA.search(p)):
+        return None
+    # 13 nov: "enviamos un recordatorio a las tres de la tarde de como manejar mis finanzas" se tomaba por "ver" (solo
+    # por "mis"). Sin una palabra de pregunta ("tengo", "hay"...) y con un cuando, es para crear uno.
+    if not _RE_VER_FUERTE.search(p) and recordatorios.extraer_hora(texto):
+        return None
+    return {}
 
 
 def detectar_recordatorio(texto):

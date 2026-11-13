@@ -92,7 +92,7 @@
           }
         },
         "recordatorios": {
-          ".write": "auth != null && auth.uid === $uid",
+          ".read": "auth != null && root.child('usuarios/' + $uid + '/pixeles/' + auth.uid).exists()", ".write": "auth != null && (auth.uid === $uid || root.child('usuarios/' + $uid + '/pixeles/' + auth.uid).exists())",
           "$id": {
             ".validate": "newData.hasChildren(['texto', 'cuando']) && newData.child('cuando').isNumber() && (!newData.child('creado').exists() || newData.child('creado').isNumber())",
             "texto": {

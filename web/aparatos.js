@@ -149,7 +149,8 @@
               const e = JSON.parse(v.json), p = e.puente || e;          // el PC lo trae en "puente"; el robot Píxel es todo puente
               Object.assign(ap.puentes[pid], {capacidades: p.capacidades || [], tvs: p.tvs || [], mac: p.mac || "", ip: p.ip || (e.servidor && e.servidor.ip) || "",
                 panel: (e.servidor && e.servidor.panel) || 0, version: p.version || "", rssi: p.rssi || 0,
-                ir_rx: !!p.ir_rx, wifi: (e.wifi && e.wifi.dispositivos) || []});
+                ir_rx: !!p.ir_rx, wifi: (e.wifi && e.wifi.dispositivos) || [],
+                pc: p.pc || "", pc_conectado: p.pc_conectado});     // 2.4.3: el robot, con que PC piensa
             } catch (er) { /* estado roto: se ignora */ }
             pintar();
           }, () => {}),
@@ -458,6 +459,30 @@
     luz: ["encender", "apagar"], enchufe: ["encender", "apagar"], aire: ["encender", "apagar"], ventilador: ["encender", "apagar"], otro: ["encender", "apagar"]};
   const ETIQUETA = {encender: "Encender", apagar: "Apagar", bajar_volumen: "Vol −", subir_volumen: "Vol +", pausa: "⏯", bloquear: "Bloquear"};
 
+  // 2.4.3 (el usuario: "se supone que enlacé el robot desde el Windows pero me controla el Ubuntu"): el robot se
+  // queda con SU PC (firmware: cfg.pcId) y aquí se ve y se cambia. pid del PC -> "Nombre (IP)"
+  const nombrePc = (pid) => { const x = ap.puentes[pid]; return x ? x.nombre + (x.ip ? ` (${x.ip})` : "") : "un PC que no está en tu cuenta"; };
+  function robotPc(pid, p, pcs) {
+    let h = `<br>Piensa con: <b>${p.pc ? esc(nombrePc(p.pc)) : "el PC que encontró primero"}</b>${p.pc && p.pc_conectado === false ? " (lo está esperando)" : ""}`;
+    if (pcs.length && enLinea(pid)) {
+      h += ` <select data-robot-pc="${esc(pid)}" aria-label="Con qué PC piensa el robot"><option value="">Cambiar de PC…</option>` +
+        pcs.map(([q]) => `<option value="${esc(q)}" ${q === p.pc ? "disabled" : ""}>${esc(nombrePc(q))}</option>`).join("") + "</select>";
+    }
+    return h;
+  }
+
+  async function cambiarPcRobot(sel) {
+    const pid = sel.dataset.robotPc, pc = sel.value;
+    if (!pc) return;
+    sel.disabled = true;
+    try {
+      const r = await mandar(pid, "/api/servidor", {id: pc}, 15000);
+      toast(r && r.ok === false ? (r.error || "El robot no cambió de PC.") : `El robot Píxel ahora piensa con ${nombrePc(pc)}.`, r && r.ok === false);
+    } catch (e) { toast("No pude cambiarlo: " + (e.message || e), true); }
+    sel.disabled = false;
+    sel.value = "";
+  }
+
   function pintar() {
     if (!document.getElementById("card-aparatos")) return;
     const u = nube.usuario;
@@ -466,9 +491,9 @@
     // lo del Pixel del PC (Bluetooth y WiFi del PC, ESP32 conectados al servidor) solo si hay PC enlazado
     document.querySelectorAll("#v-dispositivos .solo-pc").forEach((e) => { e.hidden = !nube.estado; });
     if (!u) return;
-    const ps = Object.entries(ap.puentes);
+    const ps = Object.entries(ap.puentes), pcs = ps.filter(([, x]) => x.tipo !== "puente");
     const hp = ps.length ? ps.map(([pid, p]) => `<div class="fila"><span class="ico ${enLinea(pid) ? "verde" : ""}">${svg(p.tipo === "puente" ? "otro" : "pc")}</span>
-        <div class="txt"><b>${esc(p.nombre)}</b><small>${p.tipo === "puente" ? "Robot Píxel" : "PC con el servidor"} · ${enLinea(pid) ? "conectado" : "desconectado"}${p.capacidades.length ? " · " + esc(p.capacidades.join(", ")) : ""}</small></div>
+        <div class="txt"><b>${esc(p.nombre)}</b><small>${p.tipo === "puente" ? "Robot Píxel" : "PC con el servidor" + (p.ip ? " · " + esc(p.ip) : "")} · ${enLinea(pid) ? "conectado" : "desconectado"}${p.capacidades.length ? " · " + esc(p.capacidades.join(", ")) : ""}${p.tipo === "puente" ? robotPc(pid, p, pcs) : ""}</small></div>
         <span class="chip ${enLinea(pid) ? "ok" : "warn"}">${enLinea(pid) ? "En línea" : "Sin conexión"}</span>
         <button class="btn suave" type="button" data-probar-puente="${esc(pid)}">Probar</button>
         <button class="btn" type="button" data-quitar-puente="${esc(pid)}">Quitar</button></div>`).join("")
@@ -573,6 +598,10 @@
       b.disabled = true;
       pintarPrueba(b.dataset.probarPuente, null);
       try { pintarPrueba(b.dataset.probarPuente, await probarPuente(b.dataset.probarPuente)); } finally { b.disabled = false; }
+    });
+    $("#ap-puentes").addEventListener("change", (e) => {           // 2.4.3: con qué PC piensa el robot
+      const sel = e.target.closest("select[data-robot-pc]");
+      if (sel) cambiarPcRobot(sel);
     });
     $("#ap-lista").addEventListener("click", async (e) => {
       const b = e.target.closest("button");

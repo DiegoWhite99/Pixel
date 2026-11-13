@@ -1209,6 +1209,27 @@ def vigilar_recordatorios():
             log("ERROR vigilando recordatorios: %s: %s" % (type(e).__name__, e))
 
 
+def id_pc():
+    """2.4.3 (el usuario: "se supone que enlace el robot desde el Windows pero me controla el Ubuntu"): la identidad
+    de este PC para el robot. Es la de su cuenta en Firebase (pixeles/<pid>), la que la app conoce; sin nube aun, la
+    de su archivo de identidad; sin nada, vacia (el robot lo trata como un PC de antes)."""
+    nube = sys.modules.get("nube")
+    if nube is not None and nube._auth.get("uid"):
+        return nube._auth["uid"]
+    try:
+        with open(os.path.join(BASE_DIR, NUBE_TOKEN), encoding="utf-8") as f:
+            return str(json.load(f).get("uid") or "")[:64]
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
+def respuesta_descubrimiento():
+    """"PIXEL <puerto> <id>": el robot se queda con SU PC aunque otro conteste antes. El firmware de antes solo lee
+    el puerto (atol), asi que el id no le estorba."""
+    i = "".join(c for c in id_pc() if c.isalnum())
+    return (b"PIXEL %d %s" % (PORT, i.encode("ascii"))) if i else (b"PIXEL %d" % PORT)
+
+
 def responder_descubrimiento():
     """Hilo: contesta a los ESP32 que buscan el servidor ("PIXEL? <nombre>" -> "PIXEL <PORT>").
 
@@ -1228,7 +1249,7 @@ def responder_descubrimiento():
             datos, origen = s.recvfrom(256)
             if not datos.startswith(b"PIXEL?"):
                 continue
-            s.sendto(b"PIXEL %d" % PORT, origen)
+            s.sendto(respuesta_descubrimiento(), origen)
             nombre = datos[6:].decode("utf-8", "replace").strip()[:40] or "ESP32"
             if PIXELES_VISTOS.get(origen[0]) != nombre:
                 log("descubrimiento: %s (%s) busca el servidor; le digo el puerto %d" % (origen[0], nombre, PORT))
@@ -1402,6 +1423,9 @@ def main():
     if NUBE_DB:
         import nube
         nube.iniciar(sys.modules[__name__], panel)
+        import agenda_nube              # 2.4.3: los recordatorios son los de la app (una sola lista)
+        AGENDA = agenda_nube.AgendaNube(AGENDA, nube, log)
+        acciones.AGENDA = AGENDA
         import obsidian                 # Fase 13: el cerebro de la app en una boveda de Obsidian
         obsidian.iniciar(sys.modules[__name__], nube)
         log("nube: conectando con %s en segundo plano" % NUBE_DB)

@@ -1093,6 +1093,19 @@ El usuario: «el robot no toma ni los sonidos ni nada de Píxel de la web, te re
     - Las campanitas no mueven la boca (`es_sonido`).
 - Probado con el servidor de prueba aislado y `tools/cliente_prueba.py`: entrada, 16 notas mientras Ollama pensaba, la voz y la salida, sin trabarse. Falta: el interruptor «Sonidos» de Ajustes de la app todavía no llega al PC.
 
+### 13 nov (2.4.3): el robot se queda con su PC; una sola lista de recordatorios
+
+El usuario: «se supone que enlacé el robot desde el Windows pero me controla el Ubuntu» y «la ESP32 no está mandando los recordatorios ni nada».
+- **Su PC.** Al instalar la 2.4.2 en el Windows, Píxel se cerró allí un momento; el robot buscó por difusión y le contestó primero este Ubuntu. Cambios:
+    - el PC contesta `PIXEL <puerto> <id>` (el pid de su cuenta de Firebase). El firmware de antes solo lee el puerto (`atol`), así que no le estorba;
+    - el firmware guarda `pcid`. `conectar()` siempre busca primero; se queda con el que tenga ese id. Sin `pcid`, prefiere el de la IP guardada y acepta otro solo tras unas 6 búsquedas sin él. Un PC de antes (sin id) solo vale en la IP guardada. Conectado sin `pcid`, `aprenderIdPc()` pregunta una vez por minuto (0,2 s, hasta 10 veces);
+    - la orden `/api/servidor {id}` lo cambia: la aplica `loop()` (`tomarCambioPc`), que corta la conexión y busca el nuevo. El estado del robot lleva `pc` y `pc_conectado`, y se publica en cuanto cambian;
+    - probado (12:48): al reiniciar el servicio del Ubuntu, el robot dijo «su PC no contesta: lo espero (no me voy con otro)» y volvió a él; con el firmware que aprende el id: «encontrado en 192.168.1.216:8765, id 'z1UAW2'». El Windows seguía en la 2.4.2 (contesta sin id).
+- **Recordatorios.** La app guardaba los suyos en `usuarios/<uid>/recordatorios` y los decía solo con la app abierta; el PC, en `recordatorios.json`. No se veían entre sí. Ahora el PC usa la lista de la app (`agenda_nube.py`).
+    - Se dicen una vez con un borrado condicional (ETag). Probado con Firebase de verdad en `pixeles/<pid>/prueba_etag` (luego borrado): el primer borrado lo dice, el segundo no, y si cambió entre medias da 412.
+    - En el robot, a las 12:41: «enviamos un recordatorio a las tres de la tarde de cómo manejar mis finanzas» se tomaba por «ver» (por «mis»). Ahora, sin palabra de pregunta y con un cuándo, es para crear (`tests/test_ver_recordatorios.py`).
+    - «Recordatorio» a secas tardó 14 s con Ollama, porque la clave de Gemini de este PC está mala, y el 3B se inventó «pagar la luz».
+
 ### 13 nov (2.4.2): enlazar el robot, el código y el Bluetooth
 
 El usuario: «va muy rápido con lo del código, le doy repetir el código y se pierde la conexión».
