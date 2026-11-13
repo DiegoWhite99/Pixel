@@ -432,7 +432,7 @@
       if (v.configurada && v.modelo) det.push(`Modelo: ${v.modelo}.`);
       if (v.configurada && v.error && nivel === "mal") det.push(`Último error: ${v.error}`);
       if (!v.configurada) det.push(api === "gemini" ? "Pega tu clave para que Píxel piense con Google Gemini." : "Pega tu clave para que Píxel piense con Groq.");
-      if (v.configurada && v.modelo && nivel !== "mal") det.push("También la usa la app de las cuentas vinculadas.");
+      if (v.configurada && v.modelo && nivel !== "mal") det.push("Se copia sola con la app de tus cuentas vinculadas, en los dos sentidos.");
       $("[data-detalle]", tarjeta).textContent = det.join(" ");
       $("[data-probar]", tarjeta).hidden = !v.configurada;
       $("[data-quitar]", tarjeta).hidden = !v.configurada;
@@ -442,7 +442,7 @@
     // Google en el PC (12 nov: "no esta vinculado Google: lo que le pido por voz no llega a la app")
     const g = c.google || {}, chipG = $("#chip-google"), detG = $("#google-detalle"), botonG = $("#google-conectar");
     const [nivelG, textoG, detalleG] = !g.credenciales
-      ? ["aviso", "Falta un paso", "Este programa todavía no trae la credencial de Google. Cuando la tenga, aquí conectas tu cuenta y lo que le pidas por voz (eventos, correos) irá a tu Google Calendar y Gmail, los mismos de la app."]
+      ? ["aviso", "Falta un paso", "Para conectar tu cuenta, este programa necesita una credencial de Google (un archivo .json). Se crea una sola vez:"]
       : g.estado === "esperando" ? ["aviso", "Esperando…", "Se abrió Google en el navegador de este computador: entra con tu cuenta y acepta."]
       : g.vinculada ? ["bien", "Conectada", "Lo que le pidas por voz al robot o a este computador va a tu Google Calendar y Gmail, los mismos de la app." + (g.autorizado ? " Conectada el " + g.autorizado + "." : "")]
       : g.estado === "error" ? ["mal", "Con error", "No se pudo conectar: " + (g.error || "inténtalo otra vez") + "."]
@@ -451,6 +451,8 @@
     chipG.textContent = textoG;
     detG.textContent = detalleG;
     botonG.hidden = !g.credenciales || g.estado === "esperando";
+    $("#google-pasos").hidden = !!g.credenciales;       // 2.4.0: la credencial se carga aqui (guardar_credencial_google)
+    $("#google-cargar").hidden = !!g.credenciales;
     botonG.textContent = g.vinculada ? "Conectar otra cuenta" : "Conectar con Google";
     const local = $("#chip-local");
     local.className = "chip " + (E.servidor && E.servidor.ollama ? "bien" : "");
@@ -528,6 +530,11 @@
     if (!vozPintada || sel.options.length !== (ag.voces || []).length) {
       sel.innerHTML = (ag.voces || []).map((v) => `<option value="${esc(v.id)}">${esc(v.nombre)}</option>`).join("");
     }
+    // 2.4.0: el perfil que mando la app (web/espejo.js): aqui solo se ve, se cambia en la app
+    const pf = ag.perfil || {};
+    const lineas = String(pf.texto || "").split("\n").map((l) => l.replace(/^- /, "")).filter(Boolean);
+    $("#perfil-pc").textContent = lineas.length ? lineas.join("\n") : "Todavía no hay perfil. Escríbelo en la app de Píxel, en Perfil: el robot y este computador lo usan.";
+    $("#perfil-de").textContent = (pf.de ? `De la cuenta de ${pf.de}. ` : "") + "Lo escribes en la app de Píxel, en tu Perfil, y se copia solo aquí y al robot.";
     if (vozTocada && vozPintada) return;
     const f = $("#f-voz");
     for (const nombre of ["salida_voz", "respuesta"]) {
@@ -645,6 +652,14 @@
 
   $("#buscar-red").addEventListener("click", () => { formRed = ""; enviar("/api/wifi/buscar", {}); });
   $("#google-conectar").addEventListener("click", () => enviar("/api/google/vincular", {}));
+  $("#google-cargar").addEventListener("click", () => $("#google-archivo").click());
+  $("#google-archivo").addEventListener("change", async (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    if (f.size > 20000) { toast("Ese archivo es muy grande para ser la credencial.", true); return; }
+    await enviar("/api/google/credencial", {json: await f.text()});
+  });
 
   const fVoz = $("#f-voz");
   fVoz.addEventListener("input", () => { vozTocada = true; contarPersonalidad(); });

@@ -6,7 +6,7 @@ archivos en una carpeta temporal. Deja en <carpeta>/pc.json su id y el codigo de
 <carpeta>/frase.wav una frase dicha con su voz ("Píxel, recuérdame ...") para el microfono falso de Chrome.
 Al crear <carpeta>/parar (o a los 10 min) borra de Firebase todo lo de este Pixel de prueba y sale.
 
-  .venv/bin/python tools/pc_de_prueba.py <carpeta>
+  .venv/bin/python tools/pc_de_prueba.py <carpeta> [--ia-simulada] [--puerto 8799] [--panel 8081] [--nombre "..."]
   (en otra terminal) PUPPETEER=... node tools/prueba_oido.js <carpeta>
 """
 import json
@@ -24,18 +24,33 @@ import servidor  # noqa: E402
 FRASE = "Píxel, recuérdame tomar agua en diez minutos."
 
 
-def main(carpeta):
+def simular_ia():
+    """--ia-simulada (2.4.0, prueba del espejo): las claves se "prueban" sin llamar a Gemini ni a Groq."""
+    import gemini
+    import groq_ia
+    gemini.probar = lambda: (True, "listo (simulado)")
+    gemini.clave_rechazada = lambda: False
+    groq_ia.probar = lambda: (True, "listo (simulado)")
+    groq_ia.clave_rechazada = lambda: False
+    groq_ia.modelo = lambda: "modelo-de-prueba" if groq_ia.hay_clave() else None
+
+
+def main(carpeta, ia_simulada=False, puerto=8799, panel=8081, nombre_pc="Pixel de prueba"):
     os.makedirs(carpeta, exist_ok=True)
-    servidor.PORT, servidor.PANEL_PORT, servidor.DESCUBRIR_PORT = 8799, 8081, 0
+    if ia_simulada:
+        simular_ia()
+    servidor.PORT, servidor.PANEL_PORT, servidor.DESCUBRIR_PORT = puerto, panel, 0
     for nombre, archivo in (("RECORDATORIOS_ARCHIVO", "recordatorios.json"), ("EVENTOS_ARCHIVO", "eventos.json"),
                             ("AJUSTES_ARCHIVO", "ajustes.json"), ("DISPOSITIVOS_ARCHIVO", "dispositivos.json"),
                             ("CONTACTOS_ARCHIVO", "contactos.json"), ("GOOGLE_TOKEN", "google_token.json"),
                             ("GOOGLE_CLIENTE", "google_cliente.json"), ("GEMINI_CLAVE", "gemini_clave.json"),
+                            ("GROQ_CLAVE", "groq_clave.json"),    # 12 nov: si no, leeria la clave de Groq de este PC
+                            ("PERFIL_ARCHIVO", "perfil.json"),
                             ("NUBE_TOKEN", "nube_token.json")):
         setattr(servidor, nombre, os.path.join(carpeta, archivo))      # absolutas: join(BASE_DIR, x) da x
     servidor.CAPTURE_DIR = os.path.join(carpeta, "capturas")
     servidor.OBSIDIAN_BOVEDA = os.path.join(carpeta, "boveda")
-    servidor.NUBE_NOMBRE = "Pixel de prueba"
+    servidor.NUBE_NOMBRE = nombre_pc
     acciones._abrir = lambda url: 0
     threading.Thread(target=servidor.main, daemon=True).start()
 
@@ -67,5 +82,11 @@ def main(carpeta):
     return 0
 
 
+def _opcion(nombre, defecto):
+    return sys.argv[sys.argv.index(nombre) + 1] if nombre in sys.argv[2:-1] else defecto
+
+
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1]))
+    # un segundo PC de prueba a la vez (prueba_espejo.js): --puerto 8798 --panel 8082 --nombre "Pixel de prueba 2"
+    sys.exit(main(sys.argv[1], "--ia-simulada" in sys.argv[2:], int(_opcion("--puerto", 8799)), int(_opcion("--panel", 8081)),
+                  _opcion("--nombre", "Pixel de prueba")))

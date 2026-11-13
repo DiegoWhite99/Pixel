@@ -211,6 +211,9 @@
           },
           "tono": {
             ".validate": "newData.val() === 'normal' || newData.val() === 'infantil' || newData.val() === 'muy_infantil'"
+          },
+          "t": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
           }
         },
         "cerebro": {

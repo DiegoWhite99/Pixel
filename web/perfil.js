@@ -154,6 +154,7 @@ ${s(p.reglas)}
     pf.quitar = nube.d.onValue(ref(), (s) => {
       if (!s.exists()) { registrar(u); return; }
       pf.perfil = s.val() || {};
+      if (window.Espejo) Espejo.revisar();           // 2.4.0: el perfil va tambien al programa del PC (y al robot)
       pintar();
       if (!pf.perfil.bienvenida && !pf.presentado) { pf.presentado = true; setTimeout(() => presentarse(false), 1200); }
     }, (e) => console.warn("perfil:", e));

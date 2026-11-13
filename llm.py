@@ -33,7 +33,7 @@ def hay_clave():
     return any(m.hay_clave() for m in PROVEEDORES)
 
 SYSTEM_PROMPT = (
-    "Te llamas Píxel y eres el asistente de voz de una demo en una feria tecnológica; hablas en español. "
+    "Te llamas Píxel y eres un asistente de voz con inteligencia artificial; hablas en español. "
     "Responde en 2 a 4 frases. "
     "Sé concreto: da datos específicos como cifras, nombres, fechas o ejemplos, "
     "en vez de generalidades. "
@@ -54,10 +54,35 @@ MESES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
          "agosto", "septiembre", "octubre", "noviembre", "diciembre")
 
 
+def fecha_dicha(hoy):
+    """La fecha de hoy escrita en espanol (sin depender del locale): "jueves 12 de noviembre de 2026"."""
+    return "%s %d de %s de %d" % (DIAS[hoy.weekday()], hoy.day, MESES[hoy.month - 1], hoy.year)
+
+
 def prompt_con_fecha(hoy):
-    """SYSTEM_PROMPT + la fecha de hoy, escrita en espanol (sin depender del locale)."""
-    fecha = "%s %d de %s de %d" % (DIAS[hoy.weekday()], hoy.day, MESES[hoy.month - 1], hoy.year)
-    return "%s Hoy es %s." % (SYSTEM_PROMPT, fecha)
+    """SYSTEM_PROMPT + la fecha de hoy (el de respaldo, si no esta web/agente.md)."""
+    return "%s Hoy es %s." % (SYSTEM_PROMPT, fecha_dicha(hoy))
+
+
+# 2.4.0 (12 nov, el usuario: "el Pixel de la ESP32 es uno viejo... tiene que ser igual lo que esta en la app, la web y
+# el robot"): el PC usa las mismas instrucciones que la app (web/agente.md). Sin las secciones de las funciones y de la
+# memoria de la app: aqui la IA no llama funciones (las acciones las hace el programa antes, con palabras fijas).
+SECCIONES_SOLO_APP = ("Cómo usas las herramientas", "Memoria y personalidad")
+
+
+def instrucciones(plantilla, hoy, activacion, perfil, largo, estilo, capacidades):
+    """web/agente.md rellenado para el PC: {{ACTIVACION}}, {{PERFIL}}, {{LARGO}}, {{CAPACIDADES}}, {{ESTILO}}, {{FECHA}}."""
+    partes, quitar = [], False
+    for linea in plantilla.splitlines():
+        if linea.startswith("## "):
+            quitar = linea[3:].strip() in SECCIONES_SOLO_APP
+        if not quitar:
+            partes.append(linea)
+    texto = "\n".join(partes).strip()
+    for clave, valor in (("ACTIVACION", activacion), ("PERFIL", perfil), ("LARGO", largo), ("CAPACIDADES", capacidades),
+                         ("ESTILO", estilo), ("FECHA", fecha_dicha(hoy))):
+        texto = texto.replace("{{%s}}" % clave, valor)
+    return texto
 
 
 

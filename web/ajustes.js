@@ -277,12 +277,14 @@
     if (!caja) return;
     const lista = P.pcTiene(), a = P.actual(), propia = P.propia();
     if (!lista.length) { caja.hidden = true; caja.innerHTML = ""; return; }
+    const cfg = P.leer(), mismas = lista.every((x) => cfg.claves[x.id] === P.clavePc(x.id));     // 2.4.0: espejo
     const pc = (a.delPc || (nube.estado && nube.estado.nube && nube.estado.nube.nombre) || "tu PC");
     const h = `<b>IA del programa de tu PC «${esc(pc)}»</b>` + lista.map((x) => {
-      const enUso = !propia && a.delPc && a.proveedor === x.id;
+      const enUso = (!propia && a.delPc && a.proveedor === x.id) || (mismas && propia && propia.proveedor === x.id);
       return `<div class="fila"><span class="ia-nombre">${esc(P.LISTA[x.id].nombre.split(" (")[0])}</span><small>${esc(x.modelo)}</small>
         <span class="chip ${enUso ? "ok" : ""}">${enUso ? "En uso" : "Lista, de respaldo"}</span></div>`;
-    }).join("") + `<small class="sub">${propia ? "Tienes una clave propia en este aparato: Píxel usa esa. Bórrala para usar la del PC." : "Píxel la usa aquí porque no pusiste una clave propia en este aparato."}</small>`;
+    }).join("") + `<small class="sub">${mismas ? "Son las mismas claves del PC: se copian solas entre la app y el programa del PC, en los dos sentidos."
+      : propia ? "Tienes una clave propia en este aparato: Píxel usa esa. Bórrala para usar la del PC." : "Píxel la usa aquí porque no pusiste una clave propia en este aparato."}</small>`;
     if (caja.innerHTML !== h) caja.innerHTML = h;
     caja.hidden = false;
   }
@@ -366,7 +368,8 @@
     $("#ia-borrar").addEventListener("click", () => {
       const p = $("#ia-proveedor").value, cfg = P.leer();
       delete cfg.claves[p];
-      P.guardar(cfg);
+      P.guardar(P.marcar(cfg, p));
+      if (window.Espejo) Espejo.revisar();          // 2.4.0: tambien se quita en el PC enlazado
       formularioIA(p);
       N.pintar();
       pintar();
@@ -382,6 +385,8 @@
       if (!a.clave) { resultadoIA(false, "Escribe tu clave."); return; }
       if (!a.modelo) { resultadoIA(false, "Elige un modelo."); return; }
       if (p === "otro" && !/^https:\/\//.test(a.base)) { resultadoIA(false, "La dirección tiene que empezar por https://"); return; }
+      if (nueva || cfg.modelos[p] !== a.modelo) P.marcar(cfg, p);
+      if (cfg.proveedor !== p) P.marcar(cfg, "proveedor");
       if (nueva) cfg.claves[p] = nueva;
       cfg.modelos[p] = a.modelo;
       if (p === "otro") cfg.bases.otro = a.base;
@@ -396,7 +401,8 @@
       pintar();
       if (window.pintarPasos) window.pintarPasos();
       const listo = `Píxel piensa con ${P.nombreModelo(P.sanear(a.modelo))}, con tu clave.`;
-      if (!nueva) { resultadoIA(true, "Listo: " + listo); return; }
+      const avisar = () => { if (window.Espejo) Espejo.revisar(); };   // 2.4.0: al acabar, al PC enlazado
+      if (!nueva) { resultadoIA(true, "Listo: " + listo); avisar(); return; }
       // una clave nueva se prueba al momento: el servicio dice si vale (no el formato)
       const boton = e.submitter;
       if (boton) boton.disabled = true;
@@ -406,6 +412,7 @@
       if (r.ok) {
         if (r.uso) N.contarUso("prueba", P.claveUso(a), r.uso);
         resultadoIA(true, `Listo: ${L.nombre} aceptó tu clave y contestó «${r.texto}». ${listo}`);
+        avisar();
       } else if ([400, 401, 403].includes(r.status) && /key|clave|auth|permis|invalid|no v[aá]lid/i.test(r.texto)) {
         P.guardar(antes);                  // la clave que el servicio rechaza no se queda
         formularioIA(p);
@@ -415,6 +422,7 @@
         resultadoIA(false, `${L.nombre} no aceptó esa clave, así que no la guardé. Lo que dijo: ${r.texto}`);
       } else {
         resultadoIA(false, `Guardé la clave, pero la prueba no salió: ${r.texto}. Toca «Probar» en un rato.`);
+        avisar();
       }
     });
   }

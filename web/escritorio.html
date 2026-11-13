@@ -182,7 +182,16 @@
             <div><h2>Google: calendario y correo</h2><span class="chip" id="chip-google">…</span></div>
           </div>
           <p class="sub" id="google-detalle"></p>
-          <div class="acciones"><button class="btn primario" type="button" id="google-conectar" hidden>Conectar con Google</button></div>
+          <ol class="pasos" id="google-pasos" hidden>
+            <li>En <a href="https://console.cloud.google.com/auth/clients?project=pixelassitance" target="_blank" rel="noopener"><b>Google Cloud → Clientes</b></a>, toca «Crear cliente».</li>
+            <li>En «Tipo de aplicación» elige <b>App de escritorio</b>, ponle un nombre (por ejemplo «Píxel programa») y toca «Crear».</li>
+            <li>Toca «Descargar JSON» y carga ese archivo aquí.</li>
+          </ol>
+          <div class="acciones">
+            <button class="btn primario" type="button" id="google-conectar" hidden>Conectar con Google</button>
+            <button class="btn" type="button" id="google-cargar" hidden>Cargar la credencial (.json)</button>
+            <input type="file" id="google-archivo" accept=".json,application/json" hidden>
+          </div>
         </article>
         <article class="tarjeta ancha local">
           <div class="api-cab">
@@ -229,6 +238,12 @@
           </label>
           <small class="sub" id="personalidad-cuenta"></small>
         </article>
+        <article class="tarjeta">
+          <h2>Lo que Píxel sabe de ti</h2>
+          <p class="perfil-pc" id="perfil-pc">…</p>
+          <small class="sub" id="perfil-de">Lo escribes en la app de Píxel, en tu Perfil, y se copia solo aquí y al robot.</small>
+        </article>
+        <p class="sub ancha">La voz, el tipo de voz, el largo de las respuestas y la personalidad se copian solos con la app de tus cuentas vinculadas, en los dos sentidos.</p>
         <div class="acciones ancha">
           <button class="btn primario grande" type="submit">Guardar</button>
           <button class="btn suave grande" type="button" id="probar-voz">Guardar y probar la voz</button>
