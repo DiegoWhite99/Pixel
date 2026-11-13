@@ -891,7 +891,8 @@ document.addEventListener("click", async (e) => {
   if (p) { irA(p.dataset.paso); return; }
   if (t.closest("[data-probar]")) { if (EN_INTERNET && window.Agente) window.Agente.probar(); else enviar("/api/agente/probar"); }
   const b = t.closest("[data-borrar]");
-  if (b) enviar("/api/agenda/borrar", {tipo: b.dataset.borrar, id: Number(b.dataset.id)});
+  // 2.4.3: los recordatorios que el PC guarda en la nube tienen id de texto ("<uid>/<clave>")
+  if (b) enviar("/api/agenda/borrar", {tipo: b.dataset.borrar, id: /^\d+$/.test(b.dataset.id) ? Number(b.dataset.id) : b.dataset.id});
   const c = t.closest("[data-borrar-contacto]");
   if (c) enviar("/api/contactos/borrar", {nombre: c.dataset.borrarContacto});
   if (t.closest("[data-bt-iniciar]")) { iniciarBt(); return; }

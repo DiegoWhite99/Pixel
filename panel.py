@@ -382,7 +382,8 @@ def borrar_contacto(d):
 
 def borrar_agenda(d):
     agenda = {"recordatorio": acciones.AGENDA, "evento": acciones.EVENTOS}.get(d.get("tipo"))
-    if agenda is None or not isinstance(d.get("id"), int):
+    # 2.4.3: los recordatorios de la nube tienen id de texto ("<uid>/<clave>", agenda_nube.py)
+    if agenda is None or not (isinstance(d.get("id"), int) or (d.get("tipo") == "recordatorio" and isinstance(d.get("id"), str))):
         raise ErrorPanel("No sé qué borrar.")
     if not agenda.borrar({d["id"]}):
         raise ErrorPanel("Ya no estaba.")

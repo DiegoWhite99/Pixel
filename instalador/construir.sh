@@ -14,7 +14,7 @@
 # Descargas y herramientas: $PIXEL_CACHE (por defecto ~/.cache/pixel-instalador).
 set -euo pipefail
 
-VERSION=2.4.2
+VERSION=2.4.3
 RAIZ=$(cd "$(dirname "$0")/.." && pwd)
 INST=$RAIZ/instalador
 DIST=$RAIZ/dist

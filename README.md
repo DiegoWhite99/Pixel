@@ -3,8 +3,8 @@
 Píxel es un agente de inteligencia artificial creado por Divergencia IA, con cara de robot, hecho para una feria de tecnología. Vive en una aplicación web que se instala en el celular: oye la palabra **«Píxel»**, piensa con la inteligencia artificial que elijas (cada persona pone su clave), contesta con una voz natural de alta calidad y mueve su cara en 3D. Se entra con la cuenta de Google y cada persona tiene su perfil. Un computador y un ESP32 son opcionales: le dan micrófono y altavoz propios y le dejan manejar los aparatos de la casa.
 
 - **Aplicación:** https://pixelassitance.web.app (en el celular, con Chrome).
-- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.4.2/pixel_2.4.2_amd64.deb) y [Windows (.exe)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.4.2/Pixel-2.4.2-Setup.exe), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
-- **Versión actual:** 2.4.2, del 13 de noviembre de 2026.
+- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.4.3/pixel_2.4.3_amd64.deb) y [Windows (.exe)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.4.3/Pixel-2.4.3-Setup.exe), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
+- **Versión actual:** 2.4.3, del 13 de noviembre de 2026.
 - **Cómo está hecho por dentro:** `CLAUDE.md`. **Mediciones y decisiones:** `memoria.md`.
 
 ## Qué puede hacer
@@ -38,6 +38,7 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 
 | Versión | Fecha | Qué trae |
 |---|---|---|
+| **2.4.3** | 13 nov 2026 | El robot se queda con su PC (aunque haya otro Píxel en la red) y se cambia desde la app. Los recordatorios son una sola lista: los de la app los dice el robot y los que le pides al robot salen en la app. |
 | **2.4.2** | 13 nov 2026 | Enlazar el robot desde la app: el código se dice despacio (cifra por cifra, dos veces) y, si el Bluetooth se corta, la app se vuelve a conectar sola. |
 | **2.4.1** | 13 nov 2026 | El robot y el programa del PC suenan como la app: la campanita al llamarlo, las notas suaves mientras piensa, la campanita al terminar y el aviso de los recordatorios. |
 | **2.4.0** | 12 nov 2026 | Un solo Píxel: el programa del PC (y el robot) y la app copian entre sí, en los dos sentidos, las claves de IA, la IA preferida, la voz, el tipo de voz, la personalidad y el largo de las respuestas; el perfil de la app llega al PC. El robot usa las mismas instrucciones que la app. Google se conecta en el programa cargando su credencial. Windows ya no es «versión de prueba». |
@@ -54,6 +55,22 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 | **1.0.0** | 10 nov 2026 | Píxel entero en el celular: Gemini, Calendar, Gmail, Pomodoro, Eisenhower, cerebro, aparatos, música, notas y voz infantil. |
 
 No hay 1.1.0: la segunda fase salió directamente como 1.2.1.
+
+### 2.4.3 · 13 de noviembre de 2026
+
+Pedidos del usuario: «se supone que enlacé el robot desde el Windows pero me controla el Ubuntu» y «la ESP32 no está mandando los recordatorios ni nada».
+
+- **El robot se queda con su PC.** Antes, con dos Píxel del PC en la red, el robot se iba con el primero que le contestara cuando el suyo se reiniciaba. Ahora:
+    - cada PC contesta a la búsqueda del robot con su identidad (`PIXEL <puerto> <id>`, `servidor.respuesta_descubrimiento`);
+    - el robot guarda la de su PC y solo se conecta a ese; si está apagado, lo espera;
+    - en la app, la tarjeta del robot en Dispositivos dice «Piensa con: <PC> (IP)» y deja elegir otro PC (orden `/api/servidor` al robot).
+- **Los recordatorios son una sola lista** (`agenda_nube.py`): con la cuenta enlazada, el PC usa la de la app (`usuarios/<uid>/recordatorios`).
+    - Lo que pides al robot sale en la app, y lo que creas en la app lo dice el robot.
+    - Cada recordatorio se dice una sola vez: quien lo va a decir lo borra antes, solo si sigue igual (ETag). Así lo hace también la app.
+    - Los que estaban guardados en el PC pasan a la lista de la app.
+    - Las reglas de la base de datos dejan leer y escribir esa lista a los PC y robots enlazados a la cuenta.
+- «Recuérdame … a las tres … mis finanzas» ya no se toma por «qué recordatorios tengo».
+- Firmware del robot (fuera de este repositorio): la identidad de su PC (`pcid`), la orden `/api/servidor` y el PC con el que piensa en su estado.
 
 ### 2.4.2 · 13 de noviembre de 2026
 
