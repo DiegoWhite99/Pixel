@@ -3,8 +3,8 @@
 Píxel es un agente de inteligencia artificial creado por Divergencia IA, con cara de robot, hecho para una feria de tecnología. Vive en una aplicación web que se instala en el celular: oye la palabra **«Píxel»**, piensa con la inteligencia artificial que elijas (cada persona pone su clave), contesta con una voz natural de alta calidad y mueve su cara en 3D. Se entra con la cuenta de Google y cada persona tiene su perfil. Un computador y un ESP32 son opcionales: le dan micrófono y altavoz propios y le dejan manejar los aparatos de la casa.
 
 - **Aplicación:** https://pixelassitance.web.app (en el celular, con Chrome).
-- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.4.0/pixel_2.4.0_amd64.deb) y [Windows (.exe)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.4.0/Pixel-2.4.0-Setup.exe), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
-- **Versión actual:** 2.4.0, del 12 de noviembre de 2026.
+- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.4.1/pixel_2.4.1_amd64.deb) y [Windows (.exe)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.4.1/Pixel-2.4.1-Setup.exe), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
+- **Versión actual:** 2.4.1, del 13 de noviembre de 2026.
 - **Cómo está hecho por dentro:** `CLAUDE.md`. **Mediciones y decisiones:** `memoria.md`.
 
 ## Qué puede hacer
@@ -38,6 +38,7 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 
 | Versión | Fecha | Qué trae |
 |---|---|---|
+| **2.4.1** | 13 nov 2026 | El robot y el programa del PC suenan como la app: la campanita al llamarlo, las notas suaves mientras piensa, la campanita al terminar y el aviso de los recordatorios. |
 | **2.4.0** | 12 nov 2026 | Un solo Píxel: el programa del PC (y el robot) y la app copian entre sí, en los dos sentidos, las claves de IA, la IA preferida, la voz, el tipo de voz, la personalidad y el largo de las respuestas; el perfil de la app llega al PC. El robot usa las mismas instrucciones que la app. Google se conecta en el programa cargando su credencial. Windows ya no es «versión de prueba». |
 | **2.3.0** | 12 nov 2026 | En Windows el PC se maneja como en Linux (volumen, música, bloquear, suspender, su MAC). La música suena en una pestaña, siempre la misma. La IA del programa del PC llega a la app con su indicador «En uso». El robot se llama Píxel, se puede quitar y pide un código al agregarlo. Google en el programa, a un paso. |
 | **2.2.1** | 12 nov 2026 | La primera descarga de la voz ya no se rinde si se corta internet: sigue donde iba y reintenta sola. La búsqueda en la red ignora las direcciones que el router contesta por todas. |
@@ -52,6 +53,19 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 | **1.0.0** | 10 nov 2026 | Píxel entero en el celular: Gemini, Calendar, Gmail, Pomodoro, Eisenhower, cerebro, aparatos, música, notas y voz infantil. |
 
 No hay 1.1.0: la segunda fase salió directamente como 1.2.1.
+
+### 2.4.1 · 13 de noviembre de 2026
+
+Pedido del usuario: «el robot no toma ni los sonidos ni nada de Píxel de la web, te recuerdo que deben ser iguales».
+
+- **Los mismos sonidos que la app** en el robot y en el programa del PC (`servidor.py`, igual que `SONIDOS` y `PENSAR` de `web/agente.js`: las mismas notas, el mismo armónico y el mismo volumen):
+    - al aceptar lo que dices, la campanita que sube (mi, si, mi), también en la frase que sigue al «Dime»;
+    - mientras piensa, una nota suave (do, mi, sol, mi) cada 0,42 s, desde los 0,6 s y hasta que suena la respuesta;
+    - al terminar, la campanita que baja (no tras el «Dime» ni tras un recordatorio, como en la app);
+    - antes de un recordatorio, el aviso de dos notas.
+- Antes eran dos pitidos cortos y silencio mientras pensaba.
+- Las campanitas no mueven la boca de la cara.
+- Firmware del robot (fuera de este repositorio): el audio del micrófono USB pasó a la memoria PSRAM. Ocupaba la memoria interna que necesita la conexión segura, y el robot no podía entrar en la nube ni enlazarse con la app («SSL - Memory allocation failed»).
 
 ### 2.4.0 · 12 de noviembre de 2026
 

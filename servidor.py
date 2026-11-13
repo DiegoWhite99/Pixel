@@ -87,12 +87,21 @@ NUBE_NOMBRE = "Pixel Assistance"    # como sale en la app al buscarlo
 # solo para las cuentas que lo activan en la app. Vacio = sin Obsidian. Fuera del repo: son datos personales.
 OBSIDIAN_BOVEDA = "~/Obsidian/Pixel"
 
-# Sonidos de aviso, generados con numpy (sin archivos)
-BEEP_RECIBIDO_HZ = (800.0, 1200.0)      # ascendente: frase aceptada
-BEEP_SALIDA_HZ = (1200.0, 800.0)        # descendente: fin de la respuesta, justo antes del 0x03
-BEEP_DURACION_S = 0.12
-BEEP_VOLUMEN = 0.3                      # fraccion del maximo
-BEEP_FADE_S = 0.010                     # rampa al inicio y al final, para que no chasquee
+# Sonidos (13 nov, el usuario: "el robot no toma ni los sonidos ni nada de Pixel de la web... deben ser iguales"):
+# los mismos de la app (web/agente.js, SONIDOS y PENSAR), generados con numpy igual que alli con Web Audio: cada
+# nota con un armonico un poco desafinado (campanita) que sube en 12 ms y se apaga sola. Antes eran dos barridos.
+SONIDO_NOTAS = {                        # (Hz, retraso en s)
+    "entrada": ((659.25, 0.0), (987.77, 0.08), (1318.51, 0.16)),    # mi, si, mi agudo: sube ("te escucho")
+    "salida": ((1318.51, 0.0), (987.77, 0.08), (659.25, 0.16)),     # al reves: baja ("ya termine")
+    "aviso": ((880.0, 0.0), (1174.66, 0.12)),                       # lo que dice por su cuenta (recordatorio)
+}
+SONIDO_DURA_S = 0.34
+SONIDO_VOLUMEN = 0.12                   # fraccion del maximo, como el gain de la app
+PENSAR_NOTAS = (523.25, 659.25, 783.99, 659.25)     # do, mi, sol, mi: muy bajito mientras piensa
+PENSAR_DURA_S = 0.28
+PENSAR_VOLUMEN = 0.035
+PENSAR_DESDE_S = 0.6                    # si contesta antes, no suena
+PENSAR_CADA_S = 0.42
 
 HOST = "0.0.0.0"
 PORT = 8765
@@ -381,23 +390,38 @@ def quitar_activacion(texto):
     return False, texto
 
 
-def generar_beep(f_ini, f_fin):
-    """Barrido de f_ini a f_fin Hz, PCM 16 bit LE mono a SAMPLE_RATE, con rampas."""
-    n = int(round(BEEP_DURACION_S * SAMPLE_RATE))
+def _nota(f, dura, vol):
+    """Una nota como nota() de web/agente.js: seno + armonico (x2.01, gain 0.22), sube de 0.0001 a vol en 12 ms
+    (rampa exponencial) y baja a 0.0001 al llegar a dura; se para 20 ms despues."""
+    n = int(round((dura + 0.02) * SAMPLE_RATE))
     t = np.arange(n) / float(SAMPLE_RATE)
-    fase = 2 * np.pi * (f_ini * t + (f_fin - f_ini) * t * t / (2 * BEEP_DURACION_S))
-    envolvente = np.ones(n)
-    k = int(round(BEEP_FADE_S * SAMPLE_RATE))
-    if k:
-        rampa = np.linspace(0.0, 1.0, k)
-        envolvente[:k] = rampa
-        envolvente[-k:] = rampa[::-1]
-    x = BEEP_VOLUMEN * envolvente * np.sin(fase)
-    return np.round(x * 32767).astype("<i2").tobytes()
+    sube = 0.012
+    env = np.where(t < sube, 0.0001 * (vol / 0.0001) ** (t / sube),
+                   vol * (0.0001 / vol) ** ((np.minimum(t, dura) - sube) / (dura - sube)))
+    return env * (np.sin(2 * np.pi * f * t) + 0.22 * np.sin(2 * np.pi * f * 2.01 * t))
 
 
-BEEP_RECIBIDO = generar_beep(*BEEP_RECIBIDO_HZ)
-BEEP_SALIDA = generar_beep(*BEEP_SALIDA_HZ)
+def generar_sonido(notas, dura=SONIDO_DURA_S, vol=SONIDO_VOLUMEN):
+    """Las notas [(Hz, retraso s)] mezcladas: PCM 16 bit LE mono a SAMPLE_RATE."""
+    largo = int(round((max(d for _, d in notas) + dura + 0.02) * SAMPLE_RATE))
+    x = np.zeros(largo)
+    for f, d in notas:
+        y = _nota(f, dura, vol)
+        i = int(round(d * SAMPLE_RATE))
+        x[i:i + len(y)] += y[:largo - i]
+    return np.round(np.clip(x, -1.0, 1.0) * 32767).astype("<i2").tobytes()
+
+
+BEEP_RECIBIDO = generar_sonido(SONIDO_NOTAS["entrada"])     # los nombres de antes: SesionMovil los distingue
+BEEP_SALIDA = generar_sonido(SONIDO_NOTAS["salida"])
+BEEP_AVISO = generar_sonido(SONIDO_NOTAS["aviso"])
+PENSAR_PCM = tuple(generar_sonido(((f, 0.0),), PENSAR_DURA_S, PENSAR_VOLUMEN) for f in PENSAR_NOTAS)
+_SONIDOS = {id(x) for x in (BEEP_RECIBIDO, BEEP_SALIDA, BEEP_AVISO) + PENSAR_PCM}
+
+
+def es_sonido(pcm):
+    """Una campanita (no es voz: la boca de la cara no se mueve con ella)."""
+    return id(pcm) in _SONIDOS
 
 
 # ------------------------------------------------------------------- sesion
@@ -449,6 +473,8 @@ class Sesion:
         self.llm = nuevo_llm()
 
         self._send_lock = threading.Lock()
+        self._pensando = None           # (evento para pararlo, hilo) mientras suenan las notas de "pensando"
+        self._pensar_lock = threading.Lock()
         self.respondiendo = threading.Event()
         self.cola = queue.Queue()
         self.worker = threading.Thread(target=self._worker, daemon=True)
@@ -474,19 +500,59 @@ class Sesion:
         empezar antes de enviarse ni antes de que acabe el anterior. Por el PC
         empieza LATENCIA_S mas tarde (Bluetooth), y el micro sigue sordo hasta entonces.
         """
+        p = self._pensando
+        if p is not None and threading.current_thread() is not p[1]:
+            self._parar_pensando()      # llega la respuesta: se acaban las notas de "pensando"
         self.respondiendo.set()         # el micro queda sordo desde que empieza a sonar algo
         por_pc = SALIDA_VOZ == "pc" and SALIDA_PC is not None and not self.forzar_esp32
         dur = len(pcm) / float(SAMPLE_RATE * SAMPLE_WIDTH)
         latencia = salida_pc.LATENCIA_S if por_pc else 0.0
         inicio = max(time.monotonic() + latencia, self.fin_reproduccion)
         self.fin_reproduccion = inicio + dur
-        if pcm is not BEEP_RECIBIDO and pcm is not BEEP_SALIDA:
+        if not es_sonido(pcm):
             self._apuntar_voz(pcm, inicio)
         if por_pc:
             SALIDA_PC.reproducir(pcm)
             return
         for off in range(0, len(pcm), FRAME_BYTES):
             self._enviar(MSG_AUDIO_OUT, pcm[off:off + FRAME_BYTES])
+
+    # Mientras piensa, como la app (sonarPensando de web/agente.js): tras PENSAR_DESDE_S, una nota suave cada
+    # PENSAR_CADA_S hasta que suena la respuesta. El celular (SesionMovil) pone el suyo al recibir el "oido".
+    PENSAR_SONIDO = True
+
+    def _empezar_pensando(self):
+        if not self.PENSAR_SONIDO:
+            return
+        self._parar_pensando()
+        fin = threading.Event()
+
+        def notas():
+            i = 0
+            if fin.wait(PENSAR_DESDE_S):
+                return
+            while True:
+                with self._pensar_lock:         # _parar_pensando espera a que acabe de mandar la nota
+                    if fin.is_set():
+                        return
+                    try:
+                        self.enviar_audio(PENSAR_PCM[i % len(PENSAR_PCM)])
+                    except OSError:
+                        return
+                i += 1
+                if fin.wait(PENSAR_CADA_S):
+                    return
+
+        hilo = threading.Thread(target=notas, daemon=True)
+        self._pensando = (fin, hilo)
+        hilo.start()
+
+    def _parar_pensando(self):
+        p, self._pensando = self._pensando, None
+        if p is not None:
+            p[0].set()
+            with self._pensar_lock:
+                pass
 
     def _apuntar_voz(self, pcm, inicio):
         """Volumen de la voz cada BOCA_PASO_MS, con la hora a la que empieza a sonar: la app mueve la boca con el."""
@@ -508,9 +574,10 @@ class Sesion:
     def enviar_fin_turno(self):
         self._enviar(MSG_END_TURN)
 
-    def fin_respuesta(self):
-        """Cierra una respuesta (LLM, accion o "Dime"): beep descendente y 0x03."""
-        self.enviar_audio(BEEP_SALIDA)
+    def fin_respuesta(self, cierre=True):
+        """Cierra una respuesta (LLM, accion o "Dime"): la campanita de salida (si cierre) y 0x03."""
+        if cierre:
+            self.enviar_audio(BEEP_SALIDA)
         self.enviar_fin_turno()
 
     # -- VAD --------------------------------------------------------------
@@ -703,6 +770,7 @@ class Sesion:
         try:
             funcion(*args)
         except Exception as e:
+            self._parar_pensando()
             log("%s  ERROR en el pipeline: %s: %s" % (self.peer, type(e).__name__, e))
             self.debug("error: %s" % type(e).__name__)
             try:
@@ -710,6 +778,7 @@ class Sesion:
             except OSError:
                 pass
         finally:
+            self._parar_pensando()
             # el ESP32 sigue sonando despues de que terminamos de enviar:
             # el micro sigue sordo hasta que acabe (estimado) + margen
             if self.respondiendo.is_set():
@@ -777,11 +846,11 @@ class Sesion:
             log('%s  ACTIVACION sola: "%s", pero ya sigue hablando: no digo "%s", espero la orden'
                 % (self.peer, texto, ACTIVACION_RESPUESTA))
             return
-        if activa:
-            self.enviar_audio(BEEP_RECIBIDO)    # "te escuche", antes de procesar
+        # "te escuche", antes de procesar: como la app, tambien con la frase que va dentro de la ventana del "Dime"
+        self.enviar_audio(BEEP_RECIBIDO)
         if activa and not resto:
             log('%s  ACTIVACION sola: "%s" -> respondo "%s"' % (self.peer, texto, ACTIVACION_RESPUESTA))
-            self._decir(ACTIVACION_RESPUESTA)
+            self._decir(ACTIVACION_RESPUESTA, cierre=False)     # la app no pone la campanita de salida tras el "Dime"
             self.ventana_hasta = self.fin_reproduccion + ACTIVACION_VENTANA_S
             log("%s  ventana abierta: %.0f s desde que termina de sonar \"%s\""
                 % (self.peer, ACTIVACION_VENTANA_S, ACTIVACION_RESPUESTA))
@@ -794,6 +863,7 @@ class Sesion:
 
         log('%s  TEXTO: "%s"' % (self.peer, texto))
         self.debug("tu: " + texto)
+        self._empezar_pensando()
 
         # --- intencion: reglas (filtro rapido); si no detectan nada, el clasificador LLM.
         #     Con regex, el clasificador solo corrige el nombre si la busqueda no da resultados. ---
@@ -869,17 +939,17 @@ class Sesion:
         self._decir(REPOSO_FRASE)
 
     def _recordar(self, texto):
-        """Dice un recordatorio que vencio, con el beep de aviso delante."""
+        """Dice un recordatorio que vencio, con el sonido de aviso delante (como avisar() de la app, sin el de salida)."""
         log('%s  RECORDATORIO: "%s"' % (self.peer, texto))
-        self.enviar_audio(BEEP_RECIBIDO)
-        self._decir(RECORDATORIO_FRASE % texto)
+        self.enviar_audio(BEEP_AVISO)
+        self._decir(RECORDATORIO_FRASE % texto, cierre=False)
 
-    def _decir(self, texto):
+    def _decir(self, texto, cierre=True):
         """Dice un texto fijo por voz (sin LLM) y cierra el turno."""
         audio = TTS.sintetizar(texto)
         if audio:
             self.enviar_audio(audio)
-        self.fin_respuesta()
+        self.fin_respuesta(cierre)
         self.debug("ia: " + texto)
 
     def _accion(self, hallada):
@@ -961,6 +1031,8 @@ class SesionMovil(Sesion):
     mientras toca la voz, asi que aqui no se espera a que acabe.
     """
 
+    PENSAR_SONIDO = False               # el celular pone sus notas de "pensando" al recibir el "oido"
+
     def __init__(self, uid, escribir):
         self.uid = uid
         self.escribir = escribir
@@ -993,13 +1065,13 @@ class SesionMovil(Sesion):
         dur = len(pcm) / float(SAMPLE_RATE * SAMPLE_WIDTH)
         inicio = max(time.monotonic() + MOVIL_LATENCIA_S, self.fin_reproduccion)
         self.fin_reproduccion = inicio + dur        # para la ventana del "Dime" y la del "sí, envíalo"
-        tipo = "oido" if pcm is BEEP_RECIBIDO else "cierre" if pcm is BEEP_SALIDA else "voz"
+        tipo = "oido" if pcm is BEEP_RECIBIDO else "cierre" if es_sonido(pcm) else "voz"
         self.escribir(tipo, pcm, self.dime)
 
-    def _decir(self, texto):
+    def _decir(self, texto, cierre=True):
         self.dime = texto == ACTIVACION_RESPUESTA
         try:
-            super()._decir(texto)
+            super()._decir(texto, cierre)
         finally:
             self.dime = False
 
