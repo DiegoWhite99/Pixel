@@ -901,6 +901,83 @@ if (ctx.PixelContactos) {
   });
 }
 
+// ------------------------------------------------------------------ 2.4.0: el espejo entre el PC y la app (espejo.js)
+{
+  const E = require(path.join(WEB, "espejo.js"));
+  const VW = ["st-F1", "st-F4", "st-M1"], VP = VW.concat(["claude"]);
+  const aj = (o) => Object.assign({personalidad: "", respuesta: "normal", voz: "st-F4", tono: "normal"}, o);
+  prueba("espejo: ajustes iguales no hacen nada (aunque la hora sea distinta)", () => {
+    igual(E.decidirAjustes(aj({t: 5}), aj({voz: "", t: 9}), VW, VP, 100), {web: null, pc: null});
+  });
+  prueba("espejo: el cambio del PC (mas nuevo) va a la app con la hora del PC", () => {
+    igual(E.decidirAjustes(aj({personalidad: "Seria", t: 50}), aj({t: 10}), VW, VP, 100),
+      {web: {personalidad: "Seria", respuesta: "normal", voz: "st-F4", tono: "normal", t: 50}, pc: null});
+  });
+  prueba("espejo: el cambio de la app (mas nuevo) va al PC con la hora de la app", () => {
+    igual(E.decidirAjustes(aj({t: 10}), aj({tono: "infantil", respuesta: "corta", t: 60}), VW, VP, 100),
+      {web: null, pc: {personalidad: "", respuesta: "corta", voz: "st-F4", tono: "infantil", t: 60}});
+  });
+  prueba("espejo: una voz que la app no tiene no se copia (se queda la suya)", () => {
+    const r = E.decidirAjustes(aj({voz: "claude", t: 50}), aj({voz: "st-M1", t: 10}), VW, VP, 100);
+    igual(r, {web: null, pc: null});
+    const r2 = E.decidirAjustes(aj({voz: "claude", personalidad: "X", t: 50}), aj({voz: "st-M1", t: 10}), VW, VP, 100);
+    assert.strictEqual(r2.web.voz, "st-M1");
+  });
+  prueba("espejo: sin horas (antes de la 2.4.0) se juntan: lo del PC que no es de fabrica, si no lo de la app", () => {
+    const r = E.decidirAjustes(aj({personalidad: "Amable"}), aj({respuesta: "corta", tono: "infantil"}), VW, VP, 100);
+    const m = {personalidad: "Amable", respuesta: "corta", voz: "st-F4", tono: "infantil", t: 100};
+    igual(r, {web: m, pc: m});
+  });
+  const cfg = (o) => Object.assign({proveedor: "gemini", claves: {}, modelos: {}, bases: {}, precios: {}, t: {}}, o);
+  const MG = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
+  prueba("espejo: la clave nueva del PC llega a la app (con su modelo de Groq)", () => {
+    const r = E.decidirIa({groq: {clave: "gsk_PC_0123456789abcdef", modelo: "llama-x", t: 70}}, cfg({}), 100, MG);
+    assert.strictEqual(r.cfg.claves.groq, "gsk_PC_0123456789abcdef");
+    assert.strictEqual(r.cfg.modelos.groq, "llama-x");
+    assert.strictEqual(r.cfg.t.groq, 70);
+    igual(r.ordenes, []);
+  });
+  prueba("espejo: la clave nueva de la app va al PC; una quitada aqui se quita alla", () => {
+    const r = E.decidirIa({gemini: {clave: "VIEJA-0123456789abcd", t: 10}}, cfg({claves: {gemini: "NUEVA-0123456789abcd"}, t: {gemini: 80}}), 100, MG);
+    assert.strictEqual(r.cfg, null);
+    igual(r.ordenes, [{ruta: "/api/gemini/clave", cuerpo: {clave: "NUEVA-0123456789abcd", t: 80}}]);
+    const q = E.decidirIa({gemini: {clave: "VIEJA-0123456789abcd", t: 10}}, cfg({t: {gemini: 90}}), 100, MG);
+    igual(q.ordenes, [{ruta: "/api/gemini/clave", cuerpo: {clave: "", t: 90}}]);
+  });
+  prueba("espejo: la clave quitada en el PC (mas nuevo) se quita en la app", () => {
+    const r = E.decidirIa({gemini: {clave: "", t: 95}}, cfg({claves: {gemini: "K-0123456789abcdefg"}, t: {gemini: 20}}), 100, MG);
+    assert.ok(!r.cfg.claves.gemini && r.cfg.t.gemini === 95);
+  });
+  prueba("espejo: sin horas, manda la clave del PC; si el PC no tiene, la de la app va al PC", () => {
+    const r = E.decidirIa({gemini: {clave: "PC-0123456789abcdefg", modelo: "gemini-3.5-flash-lite", t: 0}, groq: {clave: "", t: 0}},
+      cfg({claves: {gemini: "WEB-0123456789abcdefg", groq: "gsk_WEB_0123456789ab"}}), 500, MG);
+    assert.strictEqual(r.cfg.claves.gemini, "PC-0123456789abcdefg");
+    igual(r.ordenes, [{ruta: "/api/groq/clave", cuerpo: {clave: "gsk_WEB_0123456789ab", t: 500}}]);
+    assert.strictEqual(r.cfg.t.groq, 500);
+  });
+  prueba("espejo: la IA preferida va y viene; si aqui se usa Claude, un empate no la cambia", () => {
+    const pc = {preferida: "groq", preferida_t: 60, gemini: {clave: "G-0123456789abcdefgh", t: 1}, groq: {clave: "Q-0123456789abcdefgh", modelo: "m", t: 1}};
+    const base = {claves: {gemini: "G-0123456789abcdefgh", groq: "Q-0123456789abcdefgh"}, modelos: {groq: "m"}, t: {gemini: 1, groq: 1}};
+    assert.strictEqual(E.decidirIa(pc, cfg(Object.assign({}, base, {t: {gemini: 1, groq: 1, proveedor: 10}})), 100, MG).cfg.proveedor, "groq");
+    igual(E.decidirIa(pc, cfg(Object.assign({}, base, {t: {gemini: 1, groq: 1, proveedor: 99}})), 100, MG).ordenes, [{ruta: "/api/ia", cuerpo: {ia: "gemini", t: 99}}]);
+    const claude = cfg(Object.assign({}, base, {proveedor: "claude", claves: Object.assign({claude: "sk-ant-0123456789abc"}, base.claves)}));
+    assert.strictEqual(E.decidirIa(Object.assign({}, pc, {preferida_t: 0}), claude, 100, MG).cfg, null);
+  });
+  prueba("espejo: el perfil va de la app al PC; el de otra cuenta mas nuevo no se pisa", () => {
+    const tx = "- Su nombre: Ana Prueba.";
+    igual(E.decidirPerfil({texto: "", t: 0}, {actualizado: 40}, tx, "Ana", 100), {ruta: "/api/perfil", cuerpo: {texto: tx, t: 40, de: "Ana"}});
+    assert.strictEqual(E.decidirPerfil({texto: tx, t: 40}, {actualizado: 90}, tx, "Ana", 100), null);          // ya esta
+    igual(E.decidirPerfil({texto: "- Otro.", t: 40}, {actualizado: 90}, tx, "Ana", 100).cuerpo.t, 90);        // el mio es mas nuevo
+    assert.strictEqual(E.decidirPerfil({texto: "- Otro.", t: 95}, {actualizado: 90}, tx, "Ana", 100), null);   // el del PC, mas nuevo
+    assert.strictEqual(E.decidirPerfil({texto: "", t: 0}, {}, "", "Ana", 100), null);                         // sin perfil escrito
+    igual(E.decidirPerfil(null, {}, tx, "", 100).cuerpo.t, 100);                                             // sin hora: la de ahora
+  });
+  prueba("espejo: index.html carga espejo.js antes de app.js", () => {
+    const html = fs.readFileSync(path.join(WEB, "index.html"), "utf8");
+    assert.ok(html.indexOf('src="espejo.js"') > 0 && html.indexOf('src="espejo.js"') < html.indexOf('src="app.js"'));
+  });
+}
+
 Promise.all(esperando).then(() => {
   console.log(fallos ? `${fallos} fallo(s), ${hechas} bien` : `todo bien (${hechas} pruebas)`);
   process.exit(fallos ? 1 : 0);

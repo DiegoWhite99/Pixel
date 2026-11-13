@@ -1062,6 +1062,21 @@ Pedidos del usuario tras probar la 2.2.1 en su Windows, y lo que se decidió:
 - Pruebas antes de armar: ruff, pytest (31), `prueba_modulos.js` (85), las cuatro pruebas de la app en Chrome y `prueba_escritorio.js`, todas bien. La animación de entrada de la ventana falló una vez por tiempo (251 → 250 px); la prueba ahora mide varias veces.
 
 
+## 2.4.0: un solo Píxel (12 nov, tarde)
+
+El usuario: «las configuraciones deben ser un espejo de uno al otro», «el Píxel de la ESP32 es uno viejo… esto ya no va para una feria… tiene que ser igual lo que está en la app, la web y el robot», «en Windows ya no sea la versión de prueba».
+- **Decisión:** la app hace de centro del espejo. Cada lado guarda la hora de su último cambio, y gana la más reciente. Se descartó que el PC leyera directo `usuarios/<uid>`: habría pedido reglas nuevas para las cuentas del PC, y la app ya está abierta cuando se cambia algo en ella. La clave de IA de la app sigue en `localStorage`, pero ahora también va al PC enlazado, y el PC la publica para sus dueños.
+- **Las claves dejan de ser solo locales en el PC:** `/api/gemini/clave` y las demás pasan a `RUTAS_POST`. Antes la nube no podía tocarlas a propósito (ver «Gemini» más abajo). Las órdenes solo se aceptan de los dueños.
+- **Lo que encontró la prueba de punta a punta** (`tools/prueba_espejo.js`, 8 vueltas):
+    1. `const Espejo` no queda en `window`, y los avisos lo buscaban ahí.
+    2. La regla `$otro: false` de `ajustes` rechazaba `t`. Habría roto guardar los ajustes en la app publicada. Se publicó la regla con el permiso del usuario.
+    3. `get()` de Firebase da lo escrito en la página antes de que el servidor lo rechace (un «bien» falso). La prueba ahora lee el servidor por REST.
+    4. Un fallo en los ajustes cortaba el espejo de las claves; ahora van por separado.
+    5. El aviso al espejo salía solo si la prueba de la clave iba bien; ahora sale al final, en todos los casos.
+    6. El espejo trabajaba solo con el PC elegido. El robot piensa con su PC y el usuario tiene otro (Windows), así que ahora trabaja con todos.
+- **Medido:** cada orden de la app la hace el PC en 0,4 a 2,4 s. Con dos PC de prueba, el segundo, que no es el elegido, queda igual que el primero en unos segundos.
+- **El robot:** ahora usa `web/agente.md`, unos 3,9 mil caracteres. Antes eran unos 600. Con Ollama de respaldo, la primera palabra tardará más.
+
 ---
 
 # Apendice: referencia detallada (movida desde CLAUDE.md el 11 nov)
@@ -1236,6 +1251,17 @@ La parte `musica` necesita que YouTube suene en Chrome sin pantalla. Tras muchas
     - Si no encuentra la red, o si se mantiene BOOT 3 s, abre la red `Pixel asistente de voz` (clave `[clave del portal: notas privadas]`) con un formulario en `192.168.4.1`, y el LED se pone morado.
     - **Código al enlazarlo desde la app (12 nov, 2.3.0):** la app escribe `{"pedir_codigo": true}` por BLE. `atenderPedirCodigo()` (en `loop()`, que es quien habla con el PC) inventa 6 cifras con `esp_random`, válidas 3 minutos y con 5 intentos, y manda el debug `codigo:NNNNNN`; el PC lo dice por el altavoz. El BLE ya no acepta un dueño sin el código o sin el modo emparejar (BOOT). Además da `"codigo"` (`pedido` o `bloqueado`, nunca las cifras) y `"pc"` (`pcConectado`, que pone `loop()`). La orden `/api/olvidar` borra el dueño. Cargado el 12 nov a las 13:49.
     - **Luz (12 nov, para usarlo con batería):** al encender parpadea 4 veces en verde y queda **verde** (encendido, sin el PC); conectado al servidor del PC, **azul**; si se pierde el PC, vuelve a verde. Además, amarillo mientras habla, morado en el portal, cian al emparejar y rojo solo si falla el micro o el parlante. Copia de antes en `Pixel_portal.ino.respaldo-12nov` y `puente.ino.respaldo-12nov`. Sin carga por WiFi: para cambiarlo hay que conectarlo por USB.
+    - **Placa nueva y micrófono USB (12 nov, tarde):**
+        - La placa es una ESP32-S3 (QFN56, rev. 0.2) con 16 MB de flash y 8 MB de PSRAM en el chip. Sirve el mismo `--fqbn esp32:esp32:esp32s3:PartitionScheme=huge_app,PSRAM=opi`. Al PC va por el puerto COM (puente CH343, `/dev/ttyACM0`).
+        - El micrófono no es el INMP441: es un micrófono USB («MUSIC-BOOST USB Microphone», `1b3f:0004`, audio USB 1, mono, 16 bits, 44,1 o 48 kHz). Va en el puerto 4 de un hub `1a40:0801` de 4 puertos, enchufado al puerto USB nativo. El hub tiene la corriente de un powerbank.
+        - Con el programa de antes daba «piso de ruido=0». Una prueba con resistencias internas en IO6 lo confirmó: ese pin estaba al aire en los dos canales. Las ráfagas con «pico=32768» eran interferencia, no audio: casi todo silencio exacto y solo de 18 a 65 valores distintos.
+        - `micro_usb.ino` lo lee con el anfitrión USB del core (ESP-IDF 5.5.5, que trae los hubs activados: `CONFIG_USB_HOST_HUBS_SUPPORTED=y`). Lo pone a 48 kHz, le pasa un paso bajo FIR (63 coeficientes, Hamming, 7,2 kHz) y lo baja a 16 kHz. Sin micrófono USB, `loop()` sigue con el I2S de antes. La «sensibilidad» del portal multiplica por 1, 2, 4 u 8.
+        - **Dos trampas:**
+            - `usb_host_interface_claim()` no manda SET_INTERFACE. Sin esa orden, el micrófono sigue en la alterna 0 y contesta cada milisegundo con paquetes vacíos. Hay que mandarla aparte (`0x01, 0x0B`).
+            - Sin la función `enum_filter_cb`, en 5 arranques el micrófono no apareció; en los que se pudo medir, solo se reconoció el hub. Con ella, se reconoció en los 4 arranques que hubo. Es una coincidencia observada, no una causa probada. Por si acaso, si hay hub pero no micrófono, `musbTareaVigia` reinicia el puerto (hasta 5 veces).
+        - **Medido:** 1000 paquetes por segundo, 96 000 bytes/s, unas 15 984 muestras/s de salida. En el servidor, piso de ruido de 336 a 448 y una frase de 1,9 s con pico 18 234. Whisper oyó «Hola, hola, hola, hola». El volumen del micrófono es 22,5 dB (de −12 a 33).
+        - Los avisos van al servidor como debug «micro USB: …» (reconociendo, listo, desconectado). Copia del programa anterior en `*.respaldo-12nov-tarde`. Las pruebas que se usaron (`Prueba_mic`, `Prueba_usb`) quedaron fuera de `~/Arduino`.
+        - El parlante MAX98357A va en BCLK=IO17, LRC=IO14 y DIN=IO7. **Con VIN a 5 V no sonaba:** el pin de 5 V de esta placa recibe corriente pero no la entrega. **A 3,3 V suena** (16:20). Con la prueba del pitido (`Prueba_parlante`: 1 kHz por el MAX, medido con el micrófono USB), el tono subió entre 56 y 531 veces sobre el silencio con los pines del programa, y nada con BCLK y LRC cruzados.
 - `Etb_boot/Etb_boot.ino` es el básico del 21 oct:
     - Red e IP del servidor fijas (`SERVER_IP` = [IP del servidor: notas privadas]), sin portal, sin Bluetooth y sin descubrimiento.
     - Su `sendDebug` solo manda el primer byte del largo: un texto de más de 255 bytes rompe el protocolo.

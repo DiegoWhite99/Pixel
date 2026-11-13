@@ -64,7 +64,24 @@ TONOS = {"normal": 1.0, "infantil": 1.32, "muy_infantil": 1.55}
 # 2.0.0: el tono propio de cada voz, como base en web/voz.js. La de hombre (~160 Hz) un 8 % mas grave.
 BASE_VOZ = {"ald": 0.92}
 AJUSTES = {"voz": "st-F4", "personalidad": "", "respuesta": "normal", "salida_voz": "esp32", "tono": "normal",
-           "ia": "gemini"}        # Fase 15: la IA de internet que contesta primero si hay clave de las dos
+           "ia": "gemini",        # Fase 15: la IA de internet que contesta primero si hay clave de las dos
+           # 2.4.0, espejo con la app (web/espejo.js): la hora de Firebase (ms) del ultimo cambio de los ajustes del
+           # agente (personalidad, respuesta, voz, tono) y de cada clave de IA y de la preferida. Gana el mas reciente.
+           "t": 0, "ia_t": {}}
+CAMPOS_ESPEJO = ("personalidad", "respuesta", "voz", "tono")
+# 2.4.0: el perfil del usuario que escribio en la app (el texto de PixelPerfil.paraPrompt), para que el robot y el PC
+# lo traten igual que la app. Lo manda la app de la cuenta que lo cambio mas recientemente (web/espejo.js).
+PERFIL = {"texto": "", "t": 0, "de": ""}
+PERFIL_MAX = 4000
+# Lo que el PC hace por la IA (web/agente.md, {{CAPACIDADES}}): aqui la IA no llama funciones
+CAPACIDADES_PC = (
+    "- Te oyen por el robot Píxel o por los altavoces del computador, y te hablan por el micrófono del robot o del celular.\n"
+    "- El programa hace estas cosas antes de llegar a ti, cuando el usuario las pide con estas palabras: «recuérdame…» y "
+    "«qué recordatorios tengo»; «agenda…» y «qué tengo en el calendario» (en su Google Calendar si lo conectó en el "
+    "programa); «manda un correo a…» (siempre lo lee antes y espera su «sí»); «pon … en YouTube» (en el computador).\n"
+    "- Tú no ejecutas acciones ni tienes funciones: nunca digas que hiciste algo. Si te piden una de esas cosas con otras "
+    "palabras, di que lo repitan empezando así, por ejemplo «Píxel, recuérdame…».\n"
+    "- Lo demás (aparatos de la casa, música en el celular, notas, WhatsApp, el modo enfoque) lo hace Píxel en la app del celular.")
 IAS = ("gemini", "groq")
 # Donde escucha el panel. El programa instalado (instalador/pixel_lanzador.py) pone 127.0.0.1: su panel es la
 # ventana de Pixel en ese PC, no una pagina para toda la red (pedido del 12 nov: "no desplegar un servidor web").
@@ -129,9 +146,8 @@ def aplicar_ajustes():
     elif (voz[2], voz[3]) != (S.TTS_VOZ, S.TTS_HABLANTE) or S.TTS is None:
         S.TTS = Tts(_ruta(voz[2]), hablante=voz[3]) if voz[3] else Tts(_ruta(voz[2]))
         S.TTS_VOZ, S.TTS_HABLANTE = voz[2], voz[3]
-    system = prompt_con_fecha(date.today()).replace(RESPUESTAS["normal"], RESPUESTAS[AJUSTES["respuesta"]])
-    if AJUSTES["personalidad"]:
-        system += " Tu estilo: %s" % AJUSTES["personalidad"]
+    system = instrucciones_pc() or prompt_con_fecha(date.today()).replace(RESPUESTAS["normal"], RESPUESTAS[AJUSTES["respuesta"]]) \
+        + (" Tu estilo: %s" % AJUSTES["personalidad"] if AJUSTES["personalidad"] else "")
     S.LLM_SYSTEM = system
     with S._sesiones_lock:
         for sesion in S.SESIONES + list(S.MOVILES.values()):
@@ -139,8 +155,25 @@ def aplicar_ajustes():
     S.SALIDA_VOZ = AJUSTES["salida_voz"]
     llm.PREFERIDA = AJUSTES.get("ia") if AJUSTES.get("ia") in IAS else "gemini"
     S.TTS.agudo = TONOS.get(AJUSTES.get("tono"), 1.0) * BASE_VOZ.get(voz[0], 1.0)
-    S.log("panel: voz %s (%s) por %s, respuestas %s, personalidad %r"
-          % (voz[0], AJUSTES.get("tono", "normal"), AJUSTES["salida_voz"], AJUSTES["respuesta"], AJUSTES["personalidad"]))
+    S.log("panel: voz %s (%s) por %s, respuestas %s, personalidad %r; instrucciones %s (%d caracteres)%s"
+          % (voz[0], AJUSTES.get("tono", "normal"), AJUSTES["salida_voz"], AJUSTES["respuesta"], AJUSTES["personalidad"],
+             "de la app (web/agente.md)" if "Divergencia IA" in system else "de respaldo", len(system),
+             ", con el perfil de " + (PERFIL["de"] or "la app") if PERFIL["texto"] else ", sin perfil"))
+
+
+def instrucciones_pc(hoy=None):
+    """2.4.0: las mismas instrucciones que la app (web/agente.md) con el perfil, el largo y el estilo de aqui. Sin el
+    archivo (no deberia pasar: va con el programa), "" y aplicar_ajustes usa las de antes."""
+    import llm
+    try:
+        with open(os.path.join(_ruta(WEB_DIR), "agente.md"), encoding="utf-8") as f:
+            plantilla = f.read()
+    except OSError:
+        return ""
+    perfil = PERFIL["texto"] or "Todavía no escribió su perfil. Puede hacerlo en la app de Píxel, en Perfil."
+    estilo = "Estilo que pidió el usuario: " + AJUSTES["personalidad"] if AJUSTES["personalidad"] else "Sin estilo especial: amable y natural."
+    return llm.instrucciones(plantilla, hoy or date.today(), S.ACTIVACION, perfil, RESPUESTAS[AJUSTES["respuesta"]],
+                             estilo, CAPACIDADES_PC)
 
 
 def cargar_ajustes():
@@ -148,6 +181,13 @@ def cargar_ajustes():
     if os.path.exists(ruta):
         with open(ruta, encoding="utf-8") as f:
             AJUSTES.update({k: v for k, v in json.load(f).items() if k in AJUSTES})
+    ruta = _ruta(getattr(S, "PERFIL_ARCHIVO", "perfil.json"))
+    if os.path.exists(ruta):
+        try:
+            with open(ruta, encoding="utf-8") as f:
+                PERFIL.update({k: v for k, v in json.load(f).items() if k in PERFIL})
+        except (OSError, ValueError):
+            pass
     aplicar_ajustes()
 
 
@@ -222,7 +262,7 @@ def estado():
         "puente": puente_pc.estado(),       # Fase 13: lo que este PC sabe hacer como puente de aparatos
         "obsidian": _obsidian(),
         "portal": {"red": "Pixel asistente de voz", "clave": "pixel2026", "direccion": "192.168.4.1"},
-        "agente": {"activacion": S.ACTIVACION, "ajustes": dict(AJUSTES),
+        "agente": {"activacion": S.ACTIVACION, "ajustes": dict(AJUSTES), "perfil": dict(PERFIL),
                    "voces": [{"id": v[0], "nombre": v[1]} for v in VOCES],
                    "personalidad_max": PERSONALIDAD_MAX},
         "cuentas": {
@@ -261,6 +301,19 @@ class ErrorPanel(Exception):
     pass
 
 
+def _hora(d):
+    """La hora del cambio: la que trae la orden de la app (espejo) o la de ahora, con el reloj de Firebase."""
+    t = d.get("t")
+    return int(t) if isinstance(t, (int, float)) and not isinstance(t, bool) and t > 0 else nube.ahora_ms()
+
+
+def _marcar_ia(cual, d):
+    """Apunta la hora del cambio de una clave (gemini, groq) o de la preferida, para el espejo con la app."""
+    with _lock:
+        AJUSTES["ia_t"] = dict(AJUSTES.get("ia_t") or {}, **{cual: _hora(d)})
+        _guardar_json(_ruta(S.AJUSTES_ARCHIVO), AJUSTES)
+
+
 def guardar_agente(d):
     voz, respuesta = d.get("voz"), d.get("respuesta")
     salida = d.get("salida_voz") or AJUSTES["salida_voz"]
@@ -270,8 +323,11 @@ def guardar_agente(d):
         raise ErrorPanel("Voz, tipo de voz, salida o largo de respuesta desconocidos.")
     if len(personalidad) > PERSONALIDAD_MAX:
         raise ErrorPanel("La personalidad admite hasta %d caracteres." % PERSONALIDAD_MAX)
+    nuevos = dict(voz=voz, respuesta=respuesta, personalidad=personalidad, tono=tono)
     with _lock:
-        AJUSTES.update(voz=voz, respuesta=respuesta, personalidad=personalidad, salida_voz=salida, tono=tono)
+        if any(AJUSTES.get(k) != nuevos[k] for k in CAMPOS_ESPEJO) or "t" in d:
+            AJUSTES["t"] = _hora(d)              # 2.4.0: el espejo con la app compara esta hora
+        AJUSTES.update(nuevos, salida_voz=salida)
         _guardar_json(_ruta(S.AJUSTES_ARCHIVO), AJUSTES)
         aplicar_ajustes()
     return {"mensaje": "Guardado. Las próximas respuestas ya lo usan."}
@@ -425,6 +481,48 @@ def vincular_google(d):
     return {"mensaje": "Se abrió Google en el navegador del PC. Entra con la cuenta y acepta."}
 
 
+def guardar_perfil(d):
+    """2.4.0: el perfil del usuario desde la app (orden de la nube, solo de las cuentas enlazadas): el robot y este PC
+    lo tratan igual que la app (instrucciones_pc). Lo cambia la app, no la ventana: aqui solo se muestra."""
+    texto = d.get("texto")
+    if not isinstance(texto, str) or len(texto) > PERFIL_MAX:
+        raise ErrorPanel("Ese perfil no se puede guardar.")
+    with _lock:
+        PERFIL.update(texto=texto.strip(), t=_hora(d), de=str(d.get("de") or "")[:60])
+        _guardar_json(_ruta(S.PERFIL_ARCHIVO), PERFIL)
+        aplicar_ajustes()
+    return {"mensaje": "Perfil al día: Píxel ya lo usa también aquí."}
+
+
+def guardar_credencial_google(d):
+    """2.4.0: la credencial de "App de escritorio" de Google Cloud, cargada desde la ventana del programa (el
+    usuario: "te pedi que se vinculara en la aplicacion de escritorio la cuenta de Google y no lo hace"). Sin ella
+    "Conectar con Google" no puede abrir el permiso. Se guarda como google_cliente.json en la carpeta de datos."""
+    texto = d.get("json")
+    try:
+        cred = json.loads(texto) if isinstance(texto, str) and len(texto) < 20000 else None
+    except ValueError:
+        cred = None
+    if not isinstance(cred, dict):
+        raise ErrorPanel("Ese archivo no es la credencial: es el .json que bajas de Google Cloud al crear el cliente.")
+    if "web" in cred and "installed" not in cred:
+        raise ErrorPanel("Esa credencial es de tipo «Aplicación web». Crea una de tipo «App de escritorio» y carga esa.")
+    datos = cred.get("installed")
+    if not isinstance(datos, dict) or not str(datos.get("client_id", "")).endswith(".apps.googleusercontent.com") \
+            or not datos.get("client_secret"):
+        raise ErrorPanel("A ese archivo le falta el cliente de Google («installed»). Bájalo otra vez desde Google Cloud.")
+    with _lock:
+        S.GOOGLE_CLIENTE = "google_cliente.json"     # la de la carpeta de datos manda sobre la del paquete
+        ruta = _ruta(S.GOOGLE_CLIENTE)
+        _guardar_json(ruta, {"installed": datos})
+        try:
+            os.chmod(ruta, 0o600)
+        except OSError:
+            pass
+    S.log("panel: credencial de Google cargada (%s…)" % datos["client_id"][:12])
+    return {"mensaje": "Credencial guardada. Ahora toca «Conectar con Google»."}
+
+
 def guardar_gemini(d):
     """Guarda la clave de Gemini (vacia = quitarla) y la prueba. Se usa desde ya, sin reiniciar."""
     clave = (d.get("clave") or "").strip()
@@ -433,16 +531,18 @@ def guardar_gemini(d):
     gemini.guardar(clave)
     if not clave:
         S.log("panel: clave de Gemini quitada; responde Ollama")
+        _marcar_ia("gemini", d)
         nube.publicar_ia()
         return {"mensaje": "Clave quitada. Píxel vuelve a usar la IA local."}
     S.log("panel: clave de Gemini guardada")
     ok, texto = gemini.probar()
     S.log("panel: prueba de Gemini: %s" % texto)
-    nube.publicar_ia()                          # 12 nov: que la app de las cuentas vinculadas la tenga
     if not ok and gemini.clave_rechazada():       # 12 nov: una clave que Google no acepta no se queda
         gemini.guardar("")
         nube.publicar_ia()
         raise ErrorPanel(texto)
+    _marcar_ia("gemini", d)
+    nube.publicar_ia()                          # 12 nov: que la app de las cuentas vinculadas la tenga
     if not ok:
         raise ErrorPanel("Clave guardada, pero falla. " + texto)
     return {"mensaje": "Clave guardada. " + texto}
@@ -464,16 +564,18 @@ def guardar_groq(d):
     groq_ia.guardar(clave)
     if not clave:
         S.log("panel: clave de Groq quitada")
+        _marcar_ia("groq", d)
         nube.publicar_ia()
         return {"mensaje": "Clave de Groq quitada."}
     S.log("panel: clave de Groq guardada")
     ok, texto = groq_ia.probar()
     S.log("panel: prueba de Groq: %s" % texto)
-    nube.publicar_ia()
     if not ok and groq_ia.clave_rechazada():      # una clave que Groq no acepta no se queda
         groq_ia.guardar("")
         nube.publicar_ia()
         raise ErrorPanel(texto)
+    _marcar_ia("groq", d)
+    nube.publicar_ia()
     if not ok:
         raise ErrorPanel("Clave guardada, pero falla. " + texto)
     return {"mensaje": "Clave guardada. " + texto}
@@ -496,6 +598,7 @@ def elegir_ia(d):
         AJUSTES["ia"] = ia
         _guardar_json(_ruta(S.AJUSTES_ARCHIVO), AJUSTES)
         aplicar_ajustes()
+    _marcar_ia("preferida", d)
     nube.publicar_ia()
     return {"mensaje": "Primero contesta %s." % ("Gemini" if ia == "gemini" else "Groq")}
 
@@ -527,12 +630,18 @@ RUTAS_POST.update(puente_pc.rutas(ErrorPanel))
 
 # Solo desde el panel local: no van en RUTAS_POST porque nube.py ejecuta esas como ordenes
 # que llegan de internet, y la clave de Gemini solo se pone o se quita desde la red de casa.
-RUTAS_SOLO_LOCAL = {
+# 2.4.0: las claves de IA y la preferida ya se pueden cambiar desde la app de las cuentas vinculadas (nube.py solo
+# ejecuta ordenes de los duenos). Antes eran solo locales; el usuario pidio que el PC y la app sean un espejo.
+RUTAS_POST.update({
+    "/api/perfil": guardar_perfil,
     "/api/gemini/clave": guardar_gemini,
     "/api/gemini/probar": probar_gemini,
     "/api/groq/clave": guardar_groq,
     "/api/groq/probar": probar_groq,
     "/api/ia": elegir_ia,
+})
+RUTAS_SOLO_LOCAL = {
+    "/api/google/credencial": guardar_credencial_google,     # un archivo de este PC: no llega por la nube
 }
 
 

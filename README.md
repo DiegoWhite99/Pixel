@@ -3,8 +3,8 @@
 Píxel es un agente de inteligencia artificial creado por Divergencia IA, con cara de robot, hecho para una feria de tecnología. Vive en una aplicación web que se instala en el celular: oye la palabra **«Píxel»**, piensa con la inteligencia artificial que elijas (cada persona pone su clave), contesta con una voz natural de alta calidad y mueve su cara en 3D. Se entra con la cuenta de Google y cada persona tiene su perfil. Un computador y un ESP32 son opcionales: le dan micrófono y altavoz propios y le dejan manejar los aparatos de la casa.
 
 - **Aplicación:** https://pixelassitance.web.app (en el celular, con Chrome).
-- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.3.0/pixel_2.3.0_amd64.deb) y [Windows (.exe, versión de prueba)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.3.0/Pixel-2.3.0-Setup.exe), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
-- **Versión actual:** 2.3.0, del 12 de noviembre de 2026.
+- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.4.0/pixel_2.4.0_amd64.deb) y [Windows (.exe)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.4.0/Pixel-2.4.0-Setup.exe), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
+- **Versión actual:** 2.4.0, del 12 de noviembre de 2026.
 - **Cómo está hecho por dentro:** `CLAUDE.md`. **Mediciones y decisiones:** `memoria.md`.
 
 ## Qué puede hacer
@@ -38,6 +38,7 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 
 | Versión | Fecha | Qué trae |
 |---|---|---|
+| **2.4.0** | 12 nov 2026 | Un solo Píxel: el programa del PC (y el robot) y la app copian entre sí, en los dos sentidos, las claves de IA, la IA preferida, la voz, el tipo de voz, la personalidad y el largo de las respuestas; el perfil de la app llega al PC. El robot usa las mismas instrucciones que la app. Google se conecta en el programa cargando su credencial. Windows ya no es «versión de prueba». |
 | **2.3.0** | 12 nov 2026 | En Windows el PC se maneja como en Linux (volumen, música, bloquear, suspender, su MAC). La música suena en una pestaña, siempre la misma. La IA del programa del PC llega a la app con su indicador «En uso». El robot se llama Píxel, se puede quitar y pide un código al agregarlo. Google en el programa, a un paso. |
 | **2.2.1** | 12 nov 2026 | La primera descarga de la voz ya no se rinde si se corta internet: sigue donde iba y reintenta sola. La búsqueda en la red ignora las direcciones que el router contesta por todas. |
 | **2.2.0** | 12 nov 2026 | El programa del computador se abre en su propia ventana: un panel de control azul, con Píxel que llega desde el fondo y saluda. Icono e instalador nuevos. Groq como otra IA (en el programa y en la app). Arreglada la búsqueda de aparatos en Windows. La app ya acepta claves de Google que no empiezan por «AIza». |
@@ -51,6 +52,20 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 | **1.0.0** | 10 nov 2026 | Píxel entero en el celular: Gemini, Calendar, Gmail, Pomodoro, Eisenhower, cerebro, aparatos, música, notas y voz infantil. |
 
 No hay 1.1.0: la segunda fase salió directamente como 1.2.1.
+
+### 2.4.0 · 12 de noviembre de 2026
+
+Pedido del usuario: «las configuraciones deben ser un espejo de uno al otro», «tiene que ser igual lo que está en la app, la web y el robot». Ya no es una demo de feria.
+
+- **Un espejo entre el programa del PC y la app** (`web/espejo.js`), con todos los PC enlazados a la cuenta, no solo el elegido:
+    - las claves de Gemini y Groq y cuál contesta primero: puestas o quitadas en un lado, aparecen o se quitan en el otro;
+    - la voz, el tipo de voz, la personalidad y el largo de las respuestas;
+    - gana el cambio más reciente (cada lado guarda la hora del cambio con el reloj de la nube). La app hace de centro: lo que cambia en un PC llega a la app y de ahí a los demás PC.
+- **El robot es el mismo Píxel que la app:** el programa del PC usa las mismas instrucciones (`web/agente.md`), sin las partes que solo tiene la app, y el perfil que escribiste en la app («Lo que Píxel sabe de ti» en la ventana del programa). Antes el robot se presentaba como «el asistente de una demo en una feria».
+- **Google en el programa:** la tarjeta de Google trae los pasos para crear la credencial de «App de escritorio» en Google Cloud y un botón para cargar el archivo. Después, «Conectar con Google».
+- **Windows** ya no se presenta como versión de prueba.
+- **Robot nuevo:** micrófono USB detrás de un hub (`micro_usb.ino`, fuera de este repositorio) y luz verde o azul.
+- Pruebas: `tests/test_espejo_v24.py`, las del espejo en `tools/prueba_modulos.js` y `tools/prueba_espejo.js` (de punta a punta, con dos PC de prueba y una cuenta anónima que se borra al final).
 
 ### 2.3.0 · 12 de noviembre de 2026
 

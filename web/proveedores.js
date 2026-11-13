@@ -56,13 +56,14 @@ const Proveedores = (function () {
     const k = llave();
     try { v = k ? JSON.parse(localStorage.getItem(k) || "null") : null; } catch (e) { v = null; }
     v = v && typeof v === "object" ? v : {};
-    return {proveedor: LISTA[v.proveedor] ? v.proveedor : "gemini", modelos: v.modelos || {}, claves: v.claves || {}, bases: v.bases || {}, precios: v.precios || {}};
+    return {proveedor: LISTA[v.proveedor] ? v.proveedor : "gemini", modelos: v.modelos || {}, claves: v.claves || {}, bases: v.bases || {}, precios: v.precios || {},
+      t: v.t && typeof v.t === "object" ? v.t : {}};   // 2.4.0: hora (Firebase) del ultimo cambio de cada clave y del proveedor (espejo.js)
   }
   function guardar(cfg) {
     const k = llave();
     if (!k) return false;
     try {
-      localStorage.setItem(k, JSON.stringify({proveedor: cfg.proveedor, modelos: cfg.modelos || {}, claves: cfg.claves || {}, bases: cfg.bases || {}, precios: cfg.precios || {}}));
+      localStorage.setItem(k, JSON.stringify({proveedor: cfg.proveedor, modelos: cfg.modelos || {}, claves: cfg.claves || {}, bases: cfg.bases || {}, precios: cfg.precios || {}, t: cfg.t || {}}));
       return true;
     } catch (e) { return false; }
   }
@@ -87,6 +88,7 @@ const Proveedores = (function () {
     return {proveedor: p, modelo: String(delPc[p].modelo), clave: String(delPc[p].clave), base: LISTA[p].base || "", propio: true,
       delPc: String(delPc.pc || "tu PC")};
   }
+  const clavePc = (p) => (delPc && delPc[p] && delPc[p].clave) || "";
   const pcTiene = () => (delPc ? ["gemini", "groq"].filter((k) => delPc[k] && delPc[k].clave).map((k) => ({id: k, modelo: String(delPc[k].modelo || "")})) : []);
   function propia() {
     const cfg = leer(), p = cfg.proveedor;
@@ -100,6 +102,12 @@ const Proveedores = (function () {
   // 12 nov (el usuario: "dice que la clave empieza por AIza, entonces no deja"): antes cada proveedor exigia su
   // comienzo de siempre (AIza..., sk-ant-..., gsk_...) y una clave de otro formato no se podia ni guardar. Ahora
   // solo se mira que este entera (sin espacios, de un largo razonable): si vale o no lo dice el servicio al probarla.
+  // 2.4.0: apunta que algo cambio aqui (una clave o "proveedor"), con la hora de Firebase: el espejo con el PC copia lo mas reciente
+  function marcar(cfg, que) {
+    const offset = (typeof nube !== "undefined" && nube && nube.offset) || 0;
+    cfg.t = Object.assign({}, cfg.t, {[que]: Date.now() + offset});
+    return cfg;
+  }
   const claveValida = (p, clave) => !!LISTA[p] && (!LISTA[p].clave || /^[\x21-\x7e]{16,400}$/.test(String(clave || "").trim()));
   const tapada = (clave) => { const c = String(clave || ""); return c.length > 10 ? c.slice(0, 6) + "…" + c.slice(-4) : c ? "…" : ""; };   // "sk-ant-…a9F2"
 
@@ -289,8 +297,8 @@ const Proveedores = (function () {
     }
   }
 
-  return {LISTA, leer, guardar, actual, modeloDe, baseDe, claveValida, tapada, motor, probar, buscarModelos, registrar,
-    ponerDelPc, iaDelPc, pcTiene, propia,
+  return {LISTA, leer, guardar, marcar, actual, modeloDe, baseDe, claveValida, tapada, motor, probar, buscarModelos, registrar,
+    ponerDelPc, iaDelPc, pcTiene, clavePc, propia,
     sanear, claveUso, nombreModelo, precioDe,
     texto: {extraerJSON, entradaValida, aMensajesOpenAI, aHerramientasOpenAI, leerSSE, trozosOpenAI}};
 })();

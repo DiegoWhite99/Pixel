@@ -1021,7 +1021,8 @@
     const nuevo = {personalidad: String(a.personalidad !== undefined ? a.personalidad : est.ajustes.personalidad).trim().slice(0, 300),
       respuesta: (a.respuesta || est.ajustes.respuesta) === "corta" ? "corta" : "normal",
       voz: String(voz || "").slice(0, 200), tono: TONOS[tono] ? tono : TONO_DEFECTO};
-    est.ajustes = nuevo;                       // vale ya en este celular aunque no se pueda guardar
+    est.ajustes = Object.assign({}, nuevo);
+    nuevo.t = nube.d ? nube.d.serverTimestamp() : Date.now();   // 2.4.0: la hora del cambio, para el espejo con el PC                       // vale ya en este celular aunque no se pueda guardar
     agenteTocado = false;
     pintar();
     prepararVoz(true);

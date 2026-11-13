@@ -405,3 +405,6 @@ body.con-intro .app { opacity: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* 2.4.0: el perfil que llega de la app, linea por linea */
+.perfil-pc { margin: 8px 0; white-space: pre-line; color: var(--texto); font-size: 14px; line-height: 1.5; }

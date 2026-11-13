@@ -167,6 +167,11 @@ def _ahora_ms():
     return int(time.time() * 1000)
 
 
+def ahora_ms():
+    """La hora de Firebase en ms (la de aqui corregida con el latido): la del espejo con la app (panel._hora)."""
+    return int(_ahora_ms() + _reloj["offset"])
+
+
 # ------------------------------------------------------------------ enlace
 
 def nombre():
@@ -495,17 +500,20 @@ def publicar_ia():
     import gemini
     import groq_ia
     import llm
-    d = {"preferida": llm.PREFERIDA, "pc": nombre(), "t": SV}
-    if gemini.hay_clave():
-        d["gemini"] = {"clave": gemini.clave(), "modelo": gemini.MODELO}
-    if groq_ia.hay_clave() and groq_ia.modelo():
-        d["groq"] = {"clave": groq_ia.clave(), "modelo": groq_ia.modelo()}
-    hay = "gemini" in d or "groq" in d
+    # 2.4.0 (espejo, web/espejo.js): cada clave con la hora de su ultimo cambio, tambien la que se quito (clave
+    # vacia), para que la app copie lo mas reciente en los dos sentidos
+    marcas = P.AJUSTES.get("ia_t") or {}
+    d = {"preferida": llm.PREFERIDA, "preferida_t": int(marcas.get("preferida") or 0), "pc": nombre(), "t": SV,
+         "gemini": {"clave": gemini.clave() if gemini.hay_clave() else "", "modelo": gemini.MODELO,
+                    "t": int(marcas.get("gemini") or 0)},
+         "groq": {"clave": groq_ia.clave() if groq_ia.hay_clave() and groq_ia.modelo() else "",
+                  "modelo": groq_ia.modelo() or "", "t": int(marcas.get("groq") or 0)}}
+    hay = [k for k in ("gemini", "groq") if d[k]["clave"]]
 
     def hilo():
         try:
-            _db("PUT" if hay else "DELETE", "pixeles/%s/ia" % _pid(), d if hay else None)
-            S.log("nube: IA de este PC %s para las apps enlazadas" % ("publicada (%s)" % ", ".join(k for k in ("gemini", "groq") if k in d) if hay else "quitada"))
+            _db("PUT", "pixeles/%s/ia" % _pid(), d)
+            S.log("nube: IA de este PC publicada para las apps enlazadas (%s)" % (", ".join(hay) or "sin claves"))
         except Exception as e:
             S.log("nube: no pude publicar la IA de este PC: %s" % e)
     threading.Thread(target=hilo, daemon=True).start()

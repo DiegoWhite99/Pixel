@@ -628,16 +628,18 @@ function elegirPixel() {
     if (!v || !v.json) return;
     try { nube.estado = JSON.parse(v.json); } catch (e) { return; }
     pintar(nube.estado);
+    if (window.Espejo) Espejo.revisar();                 // 2.4.0: los ajustes del agente, en los dos sentidos
   }, errorNube));
   nube.quitar.push(d.onValue(d.ref(nube.db, `pixeles/${pid}/vivo`), (s) => { nube.vivo = s.val() || 0; revisarNube(); }, errorNube));
   // 12 nov: las claves de IA que se pusieron en el programa del PC (proveedores.js las usa sin clave propia)
   if (typeof Proveedores !== "undefined") {
     nube.quitar.push(d.onValue(d.ref(nube.db, `pixeles/${pid}/ia`), (s) => {
       Proveedores.ponerDelPc(s.val());
+      if (window.Espejo) Espejo.ponerIaPc(s.val());     // 2.4.0: las claves se copian en los dos sentidos
       if (window.PixelAjustes && window.PixelAjustes.pintarIA) window.PixelAjustes.pintarIA();
       if (window.pintarPasos) window.pintarPasos();
     }, () => Proveedores.ponerDelPc(null)));
-    nube.quitar.push(() => Proveedores.ponerDelPc(null));
+    nube.quitar.push(() => { Proveedores.ponerDelPc(null); if (window.Espejo) Espejo.olvidarPc(); });
   }
   nube.quitar.push(d.onValue(d.ref(nube.db, `pixeles/${pid}/voz`), (s) => {
     const v = s.val();
@@ -690,7 +692,9 @@ function revisarNube() {
   // el Pixel del PC (ESP32 y panel) es opcional: solo su pildora y la tarjeta de Cuentas
   // en Cuentas, Gemini, Google y los contactos son del Pixel del PC: sin el, no se ensenan
   ["#card-gemini", "#card-google", "#card-contactos"].forEach((id) => { $(id).hidden = !nube.estado; });
+  const antes = nube.enLinea;
   nube.enLinea = !!nube.pid && !!nube.vivo && Date.now() + nube.offset - nube.vivo < 40000;
+  if (nube.enLinea && !antes && window.Espejo) Espejo.revisar();   // 2.4.0: lo cambiado aqui mientras el PC no estaba
   pill("#pill-servidor", !nube.pid ? "" : nube.enLinea ? "ok" : "warn",
     !nube.pid ? "PC sin enlazar" : nube.enLinea ? "PC · " + ((nube.estado && nube.estado.nube.nombre) || "Píxel") : "PC desconectado");
   pintarNube(nube.estado);

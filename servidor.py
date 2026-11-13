@@ -70,6 +70,7 @@ CONFIRMAR_S = 20.0                          # tras leer el borrador, cuanto espe
 # Panel de administracion (Fase 8): http://<IP del PC>:PANEL_PORT, tambien desde el movil
 PANEL_PORT = 8080
 AJUSTES_ARCHIVO = "ajustes.json"            # voz, personalidad y largo de respuesta elegidos en el panel
+PERFIL_ARCHIVO = "perfil.json"              # 2.4.0: el perfil del usuario que manda la app (web/espejo.js)
 DISPOSITIVOS_ARCHIVO = "dispositivos.json"  # dispositivos Bluetooth aceptados en el panel
 
 # Por donde habla Pixel: "esp32" (su altavoz) o "pc" (salida de audio del PC: el altavoz
