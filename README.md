@@ -3,8 +3,8 @@
 Píxel es un agente de inteligencia artificial creado por Divergencia IA, con cara de robot, hecho para una feria de tecnología. Vive en una aplicación web que se instala en el celular: oye la palabra **«Píxel»**, piensa con la inteligencia artificial que elijas (cada persona pone su clave), contesta con una voz natural de alta calidad y mueve su cara en 3D. Se entra con la cuenta de Google y cada persona tiene su perfil. Un computador y un ESP32 son opcionales: le dan micrófono y altavoz propios y le dejan manejar los aparatos de la casa.
 
 - **Aplicación:** https://pixelassitance.web.app (en el celular, con Chrome).
-- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.4.3/pixel_2.4.3_amd64.deb) y [Windows (.exe)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.4.3/Pixel-2.4.3-Setup.exe), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
-- **Versión actual:** 2.4.3, del 13 de noviembre de 2026.
+- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.5.0/pixel_2.5.0_amd64.deb) y [Windows (.exe)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.5.0/Pixel-2.5.0-Setup.exe), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
+- **Versión actual:** 2.5.0, del 15 de noviembre de 2026.
 - **Cómo está hecho por dentro:** `CLAUDE.md`. **Mediciones y decisiones:** `memoria.md`.
 
 ## Qué puede hacer
@@ -38,6 +38,7 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 
 | Versión | Fecha | Qué trae |
 |---|---|---|
+| **2.5.0** | 15 nov 2026 | Un solo Píxel, más firme: las claves de IA de la app quedan guardadas en tu cuenta y vuelven solas en otro navegador o aparato. Una sola voz, la de mujer. La ventana del programa saluda con voz. El PC sale en la app como «Panel de control» y el robot se llama «Pixel». El aviso del Bluetooth dice la causa real. |
 | **2.4.3** | 13 nov 2026 | El robot se queda con su PC (aunque haya otro Píxel en la red) y se cambia desde la app. Los recordatorios son una sola lista: los de la app los dice el robot y los que le pides al robot salen en la app. |
 | **2.4.2** | 13 nov 2026 | Enlazar el robot desde la app: el código se dice despacio (cifra por cifra, dos veces) y, si el Bluetooth se corta, la app se vuelve a conectar sola. |
 | **2.4.1** | 13 nov 2026 | El robot y el programa del PC suenan como la app: la campanita al llamarlo, las notas suaves mientras piensa, la campanita al terminar y el aviso de los recordatorios. |
@@ -55,6 +56,17 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 | **1.0.0** | 10 nov 2026 | Píxel entero en el celular: Gemini, Calendar, Gmail, Pomodoro, Eisenhower, cerebro, aparatos, música, notas y voz infantil. |
 
 No hay 1.1.0: la segunda fase salió directamente como 1.2.1.
+
+### 2.5.0 · 15 de noviembre de 2026
+
+Pedidos del usuario: «siempre me bota las claves de Gemini… las claves de Gemini deben estar», «vamos a usar la de mujer, solo esa», «en la app de escritorio quiero que Píxel hable, tenga voz en esa parte de hola soy Píxel», «que el ESP32 se llame Pixel, se encuentre por Bluetooth y se enlace por la WiFi del cliente» y «el panel de control se llama así, es lo que controla el PC».
+
+- **Las claves de IA ya no se pierden.** Antes la clave de la app vivía solo en ese navegador: en otro navegador, en otro aparato o tras borrar los datos, la cuenta quedaba sin clave. Ahora también se guarda en la cuenta (`usuarios/<uid>/ia`, que solo esa cuenta puede leer) y vuelve sola al entrar. Si se cambia o se borra en un aparato, gana el cambio más nuevo y llega a los demás.
+- **Una sola voz, la de mujer**, en el programa del PC y en la app. Quien tenía otra voz guardada pasa a esta.
+- **La ventana del programa saluda con voz.** «Hola, soy Píxel…» suena con la voz del PC (`/api/voz/saludo`) y las letras se escriben a su ritmo.
+- **«Panel de control».** El PC sale con ese nombre en la app, también en las cuentas que ya estaban enlazadas.
+- **El robot se llama «Pixel»** en Bluetooth y en su red de configuración. Ahora encuentra las redes WiFi cuyo nombre termina en espacio, que la app y su página de configuración recortaban (firmware fuera de este repositorio).
+- **El aviso del Bluetooth dice la causa real.** En Chrome de Linux el Bluetooth web viene apagado: el aviso explica cómo prenderlo, en vez de decir «usa Chrome». Con el Bluetooth del aparato apagado, ahora también avisa.
 
 ### 2.4.3 · 13 de noviembre de 2026
 
