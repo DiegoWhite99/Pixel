@@ -32,7 +32,7 @@ El navegador del celular no puede hablar directamente con los aparatos de la cas
 
 ## Cómo agregar el ESP32 como puente
 
-En la página Dispositivos se toca «Agregar puente ESP32» con el celular cerca del ESP32. Chrome muestra «Pixel asistente de voz», se elige y la app le pasa la cuenta. Si el ESP32 todavía no tiene WiFi, la misma pantalla pide la red y la clave. Si ya tenía otro dueño, hay que mantener pulsado su botón BOOT 3 segundos antes. El ESP32 necesita el firmware Pixel_portal con la parte de puente.
+En la página Dispositivos se toca «Agregar puente ESP32» con el celular cerca del ESP32. Chrome muestra «Pixel», se elige y la app le pasa la cuenta. Si el ESP32 todavía no tiene WiFi, la misma pantalla pide la red y la clave. Si ya tenía otro dueño, hay que mantener pulsado su botón BOOT 3 segundos antes. El ESP32 necesita el firmware Pixel_portal con la parte de puente.
 
 ## Cómo enseñarle un botón del control remoto
 

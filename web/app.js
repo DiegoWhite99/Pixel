@@ -587,9 +587,19 @@ function sesion(u) {
   if (window.PixelOido) window.PixelOido.parar();      // el microfono del PC era de la cuenta anterior
   nube.quitar.forEach((f) => f());
   if (nube.quitarMios) nube.quitarMios();
-  Object.assign(nube, {usuario: u, uid: u ? u.uid : "", quitar: [], quitarMios: null, mios: null, pid: null, estado: null, vivo: 0});
+  if (nube.quitarIa) nube.quitarIa();
+  Object.assign(nube, {usuario: u, uid: u ? u.uid : "", quitar: [], quitarMios: null, quitarIa: null, mios: null, pid: null, estado: null, vivo: 0});
   if (window.Agente) window.Agente.usuario(u);
   if (!u) { revisarNube(); return; }
+  // 15 nov (el usuario: "siempre me bota las claves de Gemini"): las claves de IA de la cuenta tambien estan en
+  // usuarios/<uid>/ia (proveedores.js): vuelven solas en otro navegador o aparato, y un cambio en uno llega a los demas
+  if (typeof Proveedores !== "undefined") {
+    nube.quitarIa = nube.d.onValue(nube.d.ref(nube.db, `usuarios/${nube.uid}/ia`), (s) => {
+      if (!Proveedores.desdeNube(s.val())) return;
+      if (window.PixelAjustes && window.PixelAjustes.pintarIA) window.PixelAjustes.pintarIA();
+      if (window.pintarPasos) window.pintarPasos();
+    }, (e) => console.warn("claves en la nube:", e.message || e));
+  }
   nube.quitarMios = nube.d.onValue(nube.d.ref(nube.db, `usuarios/${nube.uid}/pixeles`), (s) => { nube.mios = s.val() || {}; elegirPixel(); }, errorNube);
 }
 

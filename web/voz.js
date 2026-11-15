@@ -13,20 +13,19 @@ const VozPixel = (function () {
   // el modelo oficial (huggingface.co/Supertone/supertonic-3), en una version fija
   const BASE = "https://huggingface.co/Supertone/supertonic-3/resolve/3cadd1ee6394adea1bd021217a0e650ede09a323/";
   const MB = 398;
-  const VOCES = [
-    ...[1, 2, 3, 4, 5].map((i) => ({id: "st-F" + i, estilo: "F" + i, nombre: "Mujer " + i, tipo: "mujer"})),
-    ...[1, 2, 3, 4, 5].map((i) => ({id: "st-M" + i, estilo: "M" + i, nombre: "Hombre " + i, tipo: "hombre"})),
-  ];
-  VOCES[3].nombre = "Mujer 4 (la elegida)";
+  // 15 nov (el usuario: "vamos a disminuir las voces, vamos a usar la de mujer, solo esa"): antes 10 (5 de mujer
+  // y 5 de hombre). Las otras ya guardadas (st-F1, st-M3...) y las de Piper de antes pasan a esta (normal()).
+  // La del celular ("celular" o la de su sistema) sigue de respaldo para un aparato lento.
+  const VOCES = [{id: "st-F4", estilo: "F4", nombre: "Mujer", tipo: "mujer"}];
   const DEFECTO = "st-F4";
-  const ALIAS = {"mx-mujer": "st-F4", "mx-hombre": "st-M1"};   // las de Piper de antes (ajustes ya guardados)
+  const ALIAS = {"mx-mujer": "st-F4", "mx-hombre": "st-F4"};   // las de Piper de antes (ajustes ya guardados)
   const VELOCIDAD = 1.05;                       // la del ejemplo oficial y la de las muestras
   // Tipo de voz, como panel.TONOS en el PC: mas aguda sin hablar mas rapido (se alarga y luego se acelera)
   const AGUDO = {normal: 1, infantil: 1.32, muy_infantil: 1.55};
   const PASO_BOCA = 0.04;                       // s por cada nivel de la boca
   const PASOS = {inicio: 5, min: 4, max: 8};
 
-  const normal = (id) => ALIAS[id] || id;
+  const normal = (id) => { const x = ALIAS[id] || id; return /^st-[FM][1-5]$/.test(x) ? DEFECTO : x; };
   const de = (id) => VOCES.find((v) => v.id === normal(id)) || null;
   const agudo = (tono) => AGUDO[tono] || 1;
 

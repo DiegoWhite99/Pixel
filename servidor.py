@@ -82,7 +82,7 @@ SALIDA_VOZ = "esp32"
 NUBE_API_KEY = "AIzaSyAKcuXL3qvNDCUPUlZXjrSOUKW3k4z2hZ8"    # publica: la seguridad esta en database.rules.json
 NUBE_DB = "https://pixelassitance-default-rtdb.firebaseio.com"
 NUBE_TOKEN = "nube_token.json"      # la identidad de este Pixel en Firebase: no se comparte
-NUBE_NOMBRE = "Pixel Assistance"    # como sale en la app al buscarlo
+NUBE_NOMBRE = "Panel de control"    # como sale en la app (15 nov, pedido del usuario; antes "Pixel Assistance")
 # Fase 13 (obsidian.py): boveda de Obsidian sincronizada con el cerebro de la app (usuarios/<uid>/cerebro),
 # solo para las cuentas que lo activan en la app. Vacio = sin Obsidian. Fuera del repo: son datos personales.
 OBSIDIAN_BOVEDA = "~/Obsidian/Pixel"
@@ -493,7 +493,7 @@ class Sesion:
         self.piso = None                # piso de ruido calibrado
         self.ultimo_texto = ""          # ultima frase que entendio Whisper
         self.ultimo_audio = time.monotonic()
-        self.ble_yo = None              # nombre Bluetooth del ESP32 ("Pixel asistente de voz")
+        self.ble_yo = None              # nombre Bluetooth del ESP32 ("Pixel"; antes "Pixel asistente de voz")
         self.ble = []                   # dispositivos Bluetooth que ve: [{"nombre", "mac", "rssi"}]
         self.ble_t = None               # cuando llego la ultima lista
 

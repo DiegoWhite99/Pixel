@@ -198,7 +198,8 @@
     let h = `<label class="voz-px${alta ? " elegida" : ""}">
         <input type="radio" name="aj-voz" value="alta"${alta ? " checked" : ""}${VP.soportada() ? "" : " disabled"}>
         <span class="txt"><b>Voz de alta calidad</b><small>Supertonic 3: natural y clara. Funciona sin internet una vez bajada.</small>
-          <select id="aj-voz-alta" aria-label="Voz de alta calidad">${opciones}</select>
+          ${VP.VOCES.length > 1 ? `<select id="aj-voz-alta" aria-label="Voz de alta calidad">${opciones}</select>`
+            : `<input type="hidden" id="aj-voz-alta" value="${esc(elegida.id)}"><small>Voz de mujer: la voz de Píxel.</small>`}
           <small class="estado ${e.c}">${esc(e.t)}</small>${e.p !== undefined ? `<span class="barra"><i style="width:${Math.round(e.p * 100)}%"></i></span>` : ""}
           ${e.bajar && VP.soportada() ? '<button class="btn suave" type="button" data-voz-bajar>Bajar ahora</button>' : ""}${lenta}</span>
         <button class="btn" type="button" data-escuchar="alta">Escuchar</button></label>`;

@@ -23,7 +23,7 @@ const ESTADO = {
   nube: {activa: true, conectada: true, error: "", pid: "p-prueba", nombre: "Píxel de prueba",
     duenos: [{uid: "u-prueba", nombre: "Ana Prueba", desde: 1762900000000}], enlace: {codigo: "482913", quedan_s: 271}},
   agente: {activacion: "Píxel", ajustes: {voz: "st-F4", personalidad: "Amable.", respuesta: "normal", salida_voz: "pc", tono: "normal"},
-    voces: [{id: "st-F4", nombre: "Alta calidad · Mujer 4"}, {id: "st-M1", nombre: "Alta calidad · Hombre 1"}], personalidad_max: 300},
+    voces: [{id: "st-F4", nombre: "Mujer"}], personalidad_max: 300},
   cuentas: {gemini: {configurada: true, modelo: "gemini-3.5-flash-lite", error: "", hace_error: null, hace_ok: 30},
     groq: {configurada: false, modelo: "", error: "", hace_error: null, hace_ok: null}, ia: "gemini"},
 };

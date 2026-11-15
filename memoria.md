@@ -1126,6 +1126,17 @@ El usuario: «va muy rápido con lo del código, le doy repetir el código y se 
     - `avisoTls()` dice el error de TLS y la memoria cuando una conexión no abre; `publicarDueno` dice sus códigos HTTP si falla, y el Bluetooth dice si el código llegó bien o mal.
     - Tras cargarlo (11:29): «Firebase: dentro», «enlazado con la app», sin errores de órdenes y el micrófono bien. Copia del portal: `Pixel_portal.ino.respaldo-13nov`.
 
+### 15 nov: el robot rearmado en casa, un solo nombre, una sola voz y las claves en la nube
+
+- **WiFi:** el robot seguía con la red WiFi de antes. La de la casa tiene un espacio al final del nombre (visto letra por letra con `nmcli`); el portal (`guardarPortal`) y la app (`aparatos.js`) recortan los espacios, así que nunca la encontraba. `corregirNombreRed()` en `Pixel_portal.ino`: si la red guardada no aparece tal cual, busca una igual salvo espacios y guarda su nombre exacto. A pedido del usuario se le pasó la red desde el PC (el PC entró un momento a la red del portal y mandó el formulario). Conectado a las 13:01, con este PC (en el campo servidor se puso la IP de este PC, así se borró su `pcid`).
+- **Nombre:** el robot se llama «Pixel» (Bluetooth y red del portal). Comprobado: el PC lo ve por Bluetooth como «Pixel» y el servidor anota «ESP32-S3 conectado: Pixel». Copias: `Pixel_portal.ino.respaldo-15nov` y `.respaldo-15nov-tarde`.
+- **Micrófono:** el «hub» de ahora es un adaptador USB-C con HDMI (`05e3:0608` + `343c:0000` «USB Type-C Digital AV Adapter»). En el portátil funciona (hub y micrófono reconocidos), pero el S3 no lo ve nunca (0 aparatos; una vez «Root port reset failed»). El que funcionó el 12 nov era `1a40:0801`. Queda para el martes 17.
+- **Parlante:** suena. Con solo el cable del PC, el robot se reinició al conectar el WiFi («Brownout detector was triggered») y al empezar a sonar: hace falta la power bank. Si sigue, alimentar el MAX98357A con 5 V directos.
+- **Panel de control:** `NUBE_NOMBRE` = «Panel de control»; `nube.nombre_a_duenos()` lo pone en cada cuenta enlazada al conectar (la app lee el nombre de `usuarios/<uid>/pixeles/<pid>`).
+- **Bluetooth web:** en Chrome de Linux, `navigator.bluetooth` no existe sin `chrome://flags/#enable-experimental-web-platform-features` (Chrome 156 sin pantalla: `undefined`, y `object` con la opción). El aviso decía «usa Chrome» estando en Chrome; ahora `porQueSinBluetooth` dice la causa. Publicado en Hosting con su permiso.
+- **Voz:** una sola, la de mujer (`st-F4`), en el PC y en la app. La ventana del programa dice el saludo con la voz del PC (`/api/voz/saludo`, 9,1 s con la voz real).
+- **Claves de IA:** en el PC no se perdió ninguna (el registro no tiene ningún «quitada»; el instalador de Windows no borra `datos`). En la app vivían solo en el navegador: ahora también en `usuarios/<uid>/ia` (regla nueva).
+
 ## (antes CLAUDE.md)
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.

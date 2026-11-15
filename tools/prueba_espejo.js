@@ -85,7 +85,7 @@ async function hasta(f, segundos) {
   try {
 
   // ---- 2. del PC a la app: ajustes del agente
-  const AJ_PC = {voz: "st-M1", respuesta: "corta", tono: "infantil", personalidad: "Prueba del espejo: desde el PC", salida_voz: "esp32"};
+  const AJ_PC = {voz: "st-F4", respuesta: "corta", tono: "infantil", personalidad: "Prueba del espejo: desde el PC", salida_voz: "esp32"};
   const r2 = await panel("/api/agente", AJ_PC);
   ok(!r2.error, "2: el PC guarda sus ajustes (" + (r2.mensaje || r2.error) + ")");
   // del servidor (REST con el token de la cuenta), no de la pagina: Firebase muestra antes lo que luego puede rechazar
@@ -98,7 +98,7 @@ async function hasta(f, segundos) {
     return v && v.personalidad === "Prueba del espejo: desde el PC" ? v : null;
   }, 30);
   ok(!!aj, "2: los ajustes del PC llegan a la cuenta en la app");
-  ok(aj && aj.voz === "st-M1" && aj.tono === "infantil" && aj.respuesta === "corta", "2: con la voz, el tipo de voz y el largo del PC (" + JSON.stringify(aj) + ")");
+  ok(aj && aj.voz === "st-F4" && aj.tono === "infantil" && aj.respuesta === "corta", "2: con la voz, el tipo de voz y el largo del PC (" + JSON.stringify(aj) + ")");
 
   // ---- 3. del PC a la app: una clave de Gemini
   const r3 = await panel("/api/gemini/clave", {clave: CLAVE_PC});
@@ -130,7 +130,7 @@ async function hasta(f, segundos) {
   const escrito = await p.evaluate(async (u) => {
     try {
       await nube.d.set(nube.d.ref(nube.db, `usuarios/${u}/ajustes`), {personalidad: "Prueba del espejo: desde la app",
-        respuesta: "normal", voz: "st-F2", tono: "normal", t: nube.d.serverTimestamp()});
+        respuesta: "normal", voz: "st-F4", tono: "normal", t: nube.d.serverTimestamp()});
       return "ok";
     } catch (e) { return String(e.message || e); }
   }, uid);
@@ -141,7 +141,7 @@ async function hasta(f, segundos) {
     return a && a.personalidad === "Prueba del espejo: desde la app" ? a : null;
   }, 40);
   ok(!!ajPc, "5: los ajustes de la app llegan al PC");
-  ok(ajPc && ajPc.voz === "st-F2" && ajPc.tono === "normal" && ajPc.respuesta === "normal" && ajPc.salida_voz === "esp32",
+  ok(ajPc && ajPc.voz === "st-F4" && ajPc.tono === "normal" && ajPc.respuesta === "normal" && ajPc.salida_voz === "esp32",
     "5: con la voz y el tono de la app, y la salida del PC sin tocar (" + JSON.stringify(ajPc) + ")");
 
   // ---- 6. quitada en el PC, quitada en la app

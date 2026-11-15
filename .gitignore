@@ -38,3 +38,6 @@ recordatorios.json
 
 # instaladores armados (instalador/construir.sh): pesan cientos de MB
 dist/
+
+# 2.4.0: el perfil del usuario que manda la app (datos personales)
+perfil.json
