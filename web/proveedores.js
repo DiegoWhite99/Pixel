@@ -59,13 +59,76 @@ const Proveedores = (function () {
     return {proveedor: LISTA[v.proveedor] ? v.proveedor : "gemini", modelos: v.modelos || {}, claves: v.claves || {}, bases: v.bases || {}, precios: v.precios || {},
       t: v.t && typeof v.t === "object" ? v.t : {}};   // 2.4.0: hora (Firebase) del ultimo cambio de cada clave y del proveedor (espejo.js)
   }
-  function guardar(cfg) {
+  function guardarAqui(cfg) {
     const k = llave();
     if (!k) return false;
     try {
       localStorage.setItem(k, JSON.stringify({proveedor: cfg.proveedor, modelos: cfg.modelos || {}, claves: cfg.claves || {}, bases: cfg.bases || {}, precios: cfg.precios || {}, t: cfg.t || {}}));
       return true;
     } catch (e) { return false; }
+  }
+  function guardar(cfg) {
+    const ok = guardarAqui(cfg);
+    if (ok) subir(cfg);
+    return ok;
+  }
+
+  // 15 nov (el usuario: "siempre me bota las claves de Gemini... tienes que reforzar eso, las claves de Gemini
+  // deben estar"): antes la clave vivia solo en este navegador. En otro aparato, en otro navegador o tras borrar
+  // los datos del navegador, la cuenta quedaba sin clave. Ahora tambien va a usuarios/<uid>/ia, que solo esa cuenta
+  // puede leer (database.rules.json), y app.js la trae al entrar y cuando cambia en otro aparato (desdeNube).
+  // Gana, clave por clave, la que se cambio despues (cfg.t, igual que el espejo con el PC). Un borrado hecho a
+  // proposito tambien viaja: sin clave y con una hora mas nueva. Los precios no van (sus nombres de modelo llevan
+  // puntos y barras, que Firebase no admite como nombre).
+  const num = (x) => (typeof x === "number" && isFinite(x) ? x : 0);
+  function paraNube(cfg) {
+    return {proveedor: cfg.proveedor || "gemini", modelos: cfg.modelos || {}, claves: cfg.claves || {}, bases: cfg.bases || {}, t: cfg.t || {}};
+  }
+  function subir(cfg) {
+    try {
+      if (typeof nube === "undefined" || !nube || !nube.uid || !nube.d) return;
+      nube.d.set(nube.d.ref(nube.db, `usuarios/${nube.uid}/ia`), paraNube(cfg)).catch((e) => console.warn("claves en la nube:", e.message || e));
+    } catch (e) { console.warn("claves en la nube:", e.message || e); }
+  }
+  // Funcion pura (tools/prueba_modulos.js): local = lo de este navegador, remota = usuarios/<uid>/ia.
+  // -> {cfg, aqui: cambio lo de este navegador, nube: hay que subir lo de aqui}
+  function mezclarNube(local, remota) {
+    const cfg = JSON.parse(JSON.stringify({proveedor: local.proveedor, modelos: local.modelos || {}, claves: local.claves || {},
+      bases: local.bases || {}, precios: local.precios || {}, t: local.t || {}}));
+    const r = remota && typeof remota === "object" ? remota : {};
+    const rc = r.claves || {}, rm = r.modelos || {}, rb = r.bases || {}, rt = r.t || {};
+    let aqui = false, subirla = false;
+    const ids = new Set([...Object.keys(cfg.claves), ...Object.keys(rc), ...Object.keys(cfg.t), ...Object.keys(rt)].filter((p) => LISTA[p]));
+    for (const p of ids) {
+      const cl = String(cfg.claves[p] || ""), cr = String(rc[p] || ""), tl = num(cfg.t[p]), tr = num(rt[p]);
+      if (cl === cr) {
+        if (cr && rm[p] && !cfg.modelos[p]) { cfg.modelos[p] = String(rm[p]); aqui = true; }
+        continue;
+      }
+      if (tr > tl || (tr === tl && cr && !cl)) {          // la de la nube es mas nueva (o aqui no hay ninguna)
+        if (cr) cfg.claves[p] = cr; else delete cfg.claves[p];
+        if (rm[p]) cfg.modelos[p] = String(rm[p]);
+        if (rb[p]) cfg.bases[p] = String(rb[p]);
+        cfg.t[p] = tr;
+        aqui = true;
+      } else if (tl > tr || (tl === tr && cl && !cr)) {
+        subirla = true;
+      }
+    }
+    const tl = num(cfg.t.proveedor), tr = num(rt.proveedor);
+    if (LISTA[r.proveedor] && r.proveedor !== cfg.proveedor) {
+      if (tr > tl) { cfg.proveedor = r.proveedor; cfg.t.proveedor = tr; aqui = true; } else if (tl > tr) subirla = true;
+    }
+    if (!remota && Object.keys(cfg.claves).length) subirla = true;   // la cuenta aun no tenia copia en la nube
+    return {cfg, aqui, nube: subirla};
+  }
+  // app.js, con lo que hay en usuarios/<uid>/ia (al entrar y cada vez que cambia). true si cambio lo de aqui.
+  function desdeNube(remota) {
+    if (!llave()) return false;
+    const m = mezclarNube(leer(), remota);
+    if (m.aqui) guardarAqui(m.cfg);
+    if (m.nube) subir(m.cfg);
+    return m.aqui;
   }
   const baseDe = (cfg, p) => String((p === "otro" ? cfg.bases.otro : LISTA[p].base) || "").replace(/\/+$/, "");
   function modeloDe(cfg, p) {
@@ -297,7 +360,7 @@ const Proveedores = (function () {
     }
   }
 
-  return {LISTA, leer, guardar, marcar, actual, modeloDe, baseDe, claveValida, tapada, motor, probar, buscarModelos, registrar,
+  return {LISTA, leer, guardar, mezclarNube, desdeNube, marcar, actual, modeloDe, baseDe, claveValida, tapada, motor, probar, buscarModelos, registrar,
     ponerDelPc, iaDelPc, pcTiene, clavePc, propia,
     sanear, claveUso, nombreModelo, precioDe,
     texto: {extraerJSON, entradaValida, aMensajesOpenAI, aHerramientasOpenAI, leerSSE, trozosOpenAI}};

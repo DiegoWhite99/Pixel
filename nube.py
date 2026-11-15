@@ -489,6 +489,22 @@ def _escribir_habla():
             S.log("nube: no pude dejar la voz para el celular: %s" % e)
 
 
+def nombre_a_duenos():
+    """15 nov (el usuario: "te habia dicho que lo renombres a panel de control"): la app muestra el nombre que el PC
+    dejo en usuarios/<uid>/pixeles/<pid> al enlazarse, asi que un cambio de NUBE_NOMBRE no se veia nunca. Al
+    conectar se pone el de ahora en cada cuenta enlazada (PATCH: no toca "desde"; las reglas dejan al PC escribir
+    ahi si ya existe)."""
+    puestos = 0
+    for uid, d in list(_estado["duenos"].items()):
+        try:
+            _db("PATCH", "usuarios/%s/pixeles/%s" % (uid, _pid()), {"nombre": nombre()})
+            puestos += 1
+        except Exception as e:
+            S.log("nube: no pude poner el nombre en la cuenta de %s: %s" % ((d or {}).get("nombre") or uid, e))
+    if puestos:
+        S.log("nube: nombre '%s' puesto en %d cuenta(s) enlazada(s)" % (nombre(), puestos))
+
+
 def publicar_ia():
     """Las IA de este PC para sus cuentas vinculadas: pixeles/<pid>/ia (las reglas: solo ellas lo leen).
 
@@ -597,6 +613,7 @@ def _publicar():
                 S.log("nube: conectada como %s (%s), %d app(s) enlazada(s)" % (nombre(), _pid(), len(_estado["duenos"])))
                 _estado["conectada"] = True
                 publicar_ia()
+                nombre_a_duenos()
             _estado.update(conectada=True, error="")
         except Exception as e:
             if _estado["conectada"] or _estado["error"] != str(e)[:200]:

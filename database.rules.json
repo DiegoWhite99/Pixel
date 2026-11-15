@@ -92,7 +92,8 @@
           }
         },
         "recordatorios": {
-          ".read": "auth != null && root.child('usuarios/' + $uid + '/pixeles/' + auth.uid).exists()", ".write": "auth != null && (auth.uid === $uid || root.child('usuarios/' + $uid + '/pixeles/' + auth.uid).exists())",
+          ".read": "auth != null && root.child('usuarios/' + $uid + '/pixeles/' + auth.uid).exists()",
+          ".write": "auth != null && (auth.uid === $uid || root.child('usuarios/' + $uid + '/pixeles/' + auth.uid).exists())",
           "$id": {
             ".validate": "newData.hasChildren(['texto', 'cuando']) && newData.child('cuando').isNumber() && (!newData.child('creado').exists() || newData.child('creado').isNumber())",
             "texto": {
@@ -475,6 +476,10 @@
               ".validate": false
             }
           }
+        },
+        "ia": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.hasChildren(['proveedor'])"
         }
       }
     }

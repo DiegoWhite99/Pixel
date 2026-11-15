@@ -110,10 +110,45 @@
 
   let introAcabada = false, introCielo = null;
 
+  // 15 nov (el usuario: "quiero que Pixel hable, tenga voz en esa parte de 'hola soy Pixel'"): el saludo con la voz
+  // del PC (GET /api/voz/saludo, panel.saludo_wav), y las letras salen al ritmo de la voz. Mientras el programa
+  // prepara la voz (503), o si el navegador no deja sonar sin un toque, el saludo sale solo escrito, como antes.
+  let vozSaludo = null;
+  function prepararVoz() {
+    try {
+      const a = new Audio("/api/voz/saludo");
+      a.preload = "auto";
+      const lista = new Promise((r) => {
+        const si = () => r(true), no = () => r(false);
+        a.addEventListener("canplaythrough", si, {once: true});
+        a.addEventListener("error", no, {once: true});
+        setTimeout(() => r(a.readyState >= 3), 6000);
+      });
+      vozSaludo = {a, lista};
+    } catch (e) { vozSaludo = null; }
+  }
+  async function hablarSaludo() {                 // -> lo que dura en ms si empezo a sonar; 0 si no
+    if (!vozSaludo || !(await vozSaludo.lista) || introAcabada) return 0;
+    try { await vozSaludo.a.play(); } catch (e) {
+      // el navegador no deja sonar sin un toque: suena con el primero (salvo el de saltar o entrar)
+      addEventListener("pointerdown", (ev) => {
+        if (!introAcabada && !ev.target.closest("#intro-saltar, #intro-entrar")) vozSaludo.a.play().catch(() => {});
+      }, {once: true});
+      return 0;
+    }
+    return isFinite(vozSaludo.a.duration) ? vozSaludo.a.duration * 1000 : 0;
+  }
+  const sonando = () => !!vozSaludo && !vozSaludo.a.paused && !vozSaludo.a.ended;
+  function callarSaludo() { if (vozSaludo) try { vozSaludo.a.pause(); } catch (e) { /* nada */ } }
+
   async function escribir(destino, figura) {
     const cursor = document.createElement("span");
     cursor.className = "cursor";
     figura.classList.add("hablando");
+    const dura = await hablarSaludo();
+    const letras = FRASES.reduce((n, l) => n + l.reduce((m, p) => m + p.t.length, 0), 0);
+    const comas = FRASES.reduce((n, l) => n + l.reduce((m, p) => m + (p.t.match(/,/g) || []).length, 0), 0);
+    const paso = dura ? Math.max(24, Math.min(110, (dura * 0.92 - FRASES.length * 260 - comas * 140) / letras)) : 24;
     for (const linea of FRASES) {
       if (introAcabada) return;
       const l = document.createElement("span");
@@ -127,12 +162,13 @@
           if (introAcabada) return;
           s.textContent += letra;
           l.appendChild(cursor);
-          await esperar(letra === "," ? 140 : 24);
+          await esperar(letra === "," ? 140 : paso);
         }
       }
       await esperar(260);
     }
     cursor.remove();
+    while (sonando() && !introAcabada) await esperar(100);    // la boca se mueve hasta que acaba de hablar
     figura.classList.remove("hablando");
   }
 
@@ -141,11 +177,13 @@
     $("#intro-saltar").addEventListener("click", terminarIntro);
     entrar.addEventListener("click", terminarIntro);
     addEventListener("keydown", (e) => { if (!introAcabada && (e.key === "Escape" || e.key === "Enter")) { e.preventDefault(); terminarIntro(); } });
+    prepararVoz();
     if (reducir) {
       texto.innerHTML = FRASES.map((l) => `<span class="linea">${l.map((p) => p.c ? `<span class="${p.c}">${esc(p.t)}</span>` : esc(p.t)).join("")}</span>`).join("");
       figura.style.cssText = "opacity:1;transform:none;filter:none";
       entrar.classList.add("ver");
       entrar.focus();
+      hablarSaludo();
       return;
     }
     introCielo = estrellas($("#estrellas"));
@@ -170,6 +208,7 @@
   function terminarIntro() {
     if (introAcabada) return;
     introAcabada = true;
+    callarSaludo();
     const capa = $("#intro"), figura = $("#intro-pixel"), avatar = $("#avatar"), app = $("#app");
     document.body.classList.remove("con-intro");
     app.classList.add("entra");
@@ -530,6 +569,8 @@
     if (!vozPintada || sel.options.length !== (ag.voces || []).length) {
       sel.innerHTML = (ag.voces || []).map((v) => `<option value="${esc(v.id)}">${esc(v.nombre)}</option>`).join("");
     }
+    // 15 nov: una sola voz (la de mujer, pedido del usuario): no hay nada que elegir; el formulario la manda igual
+    sel.closest("label").hidden = (ag.voces || []).length <= 1;
     // 2.4.0: el perfil que mando la app (web/espejo.js): aqui solo se ve, se cambia en la app
     const pf = ag.perfil || {};
     const lineas = String(pf.texto || "").split("\n").map((l) => l.replace(/^- /, "")).filter(Boolean);

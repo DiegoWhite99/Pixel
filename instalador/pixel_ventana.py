@@ -84,6 +84,8 @@ def _pywebview(url, datos, app):
     except (AttributeError, OSError):
         pass
     icono = os.path.normpath(os.path.join(app, "..", "pixel.ico"))
+    # 15 nov: el saludo de la bienvenida suena solo, sin esperar un toque (web/escritorio.js, /api/voz/saludo)
+    os.environ.setdefault("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--autoplay-policy=no-user-gesture-required")
     webview.create_window(TITULO, url, width=ANCHO, height=ALTO, min_size=MINIMO, background_color=FONDO,
                           js_api=_Api(app))
     LOG("ventana: abierta (motor de Edge de Windows)")
@@ -105,7 +107,10 @@ def _modo_aplicacion(url):
     exe = _ruta_edge() if WINDOWS else next((shutil.which(n) for n in NAVEGADORES_APP if shutil.which(n)), None)
     if not exe:
         return False
-    subprocess.Popen([exe, "--app=" + url, "--window-size=%d,%d" % (ANCHO, ALTO), "--disable-features=Translate"],
+    # 15 nov: --autoplay-policy para que el saludo suene solo (si el navegador ya estaba abierto no aplica: entonces
+    # web/escritorio.js lo dice al primer toque)
+    subprocess.Popen([exe, "--app=" + url, "--window-size=%d,%d" % (ANCHO, ALTO), "--disable-features=Translate",
+                      "--autoplay-policy=no-user-gesture-required"],
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                      **({} if WINDOWS else {"start_new_session": True}))
     LOG("ventana: abierta en modo aplicación con %s" % os.path.basename(exe))

@@ -39,20 +39,21 @@ S = None           # el modulo del servidor en marcha; lo pone iniciar()
 # voces que se ofrecen: id, nombre para la pantalla, modelo, hablante (o estilo). Desde la 2.0.0 (10 nov) van
 # primero las de alta calidad, Supertonic 3 (tts_supertonic.py; las mismas que la app, web/voz.js): el
 # usuario dijo que las de Piper estaban "del asco" y eligio la F4. Todas usan el mismo modelo (una carpeta);
-# cambiar entre ellas no lo recarga. Las de Piper siguen para elegirlas en el panel.
+# cambiar entre ellas no lo recarga.
+# 15 nov (el usuario: "vamos a disminuir las voces, vamos a usar la de mujer, solo esa"): queda solo la F4, la
+# misma de la app (web/voz.js). Antes habia 9 Supertonic mas y 4 de Piper. Un ajuste guardado con otra voz cae en
+# esta (VOCES[0], en aplicar_ajustes), y el espejo no le pasa al PC una voz que no esta aqui.
 SUPERTONIC = "voces/supertonic3"
-VOCES = [("st-F4", "Alta calidad · Mujer 4 (la elegida)", SUPERTONIC, "F4")] + [
-    ("st-%s" % e, "Alta calidad · %s %s" % ("Mujer" if e[0] == "F" else "Hombre", e[1]), SUPERTONIC, e)
-    for e in ("F1", "F2", "F3", "F5", "M1", "M2", "M3", "M4", "M5")] + [
-    ("claude", "Mujer · México", "voces_prueba/modelos/es_MX-claude-high.onnx", None),
-    ("ald", "Hombre · México", "voces/es_MX-ald-medium.onnx", None),
-    ("sharvard-f", "Sharvard · mujer · España", "voces/es_ES-sharvard-medium.onnx", "F"),
-    ("daniela", "Daniela · mujer · Argentina (lenta)", "voces_prueba/modelos/es_AR-daniela-high.onnx", None),
-]
+VOCES = [("st-F4", "Mujer", SUPERTONIC, "F4")]
 RESPUESTAS = {"corta": "Responde en 1 o 2 frases.", "normal": "Responde en 2 a 4 frases."}
 PERSONALIDAD_MAX = 300
 PRUEBA_VOZ = "Hola, soy %s. Así sueno ahora."
 PRUEBA_PC = "Hola, así suenan los altavoces del PC."     # sin "Píxel": el micro sigue abierto y no debe activarse
+# 15 nov (el usuario: "en la app de escritorio quiero que Pixel hable, tenga voz en esa parte de 'hola soy Pixel'"):
+# el saludo de la bienvenida de la ventana (web/escritorio.js, FRASES), dicho con la voz del PC. Tiene que ser el
+# mismo texto, letra por letra (lo comprueba tests/test_saludo_ventana.py). GET /api/voz/saludo da el WAV.
+SALUDO_VENTANA = ("Hola, soy Píxel, un agente creado por Divergency IA. Bienvenido al panel de control. "
+                  "Aquí puedes vincular tus dispositivos y guardar tus APIs.")
 WEB_DIR = "web"
 TIPOS_MIME = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
               ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
@@ -261,7 +262,7 @@ def estado():
         "nube": nube.estado_local(),
         "puente": puente_pc.estado(),       # Fase 13: lo que este PC sabe hacer como puente de aparatos
         "obsidian": _obsidian(),
-        "portal": {"red": "Pixel asistente de voz", "clave": "pixel2026", "direccion": "192.168.4.1"},
+        "portal": {"red": "Pixel", "clave": "pixel2026", "direccion": "192.168.4.1"},
         "agente": {"activacion": S.ACTIVACION, "ajustes": dict(AJUSTES), "perfil": dict(PERFIL),
                    "voces": [{"id": v[0], "nombre": v[1]} for v in VOCES],
                    "personalidad_max": PERSONALIDAD_MAX},
@@ -646,6 +647,32 @@ RUTAS_SOLO_LOCAL = {
 }
 
 
+_saludo = {"clave": None, "wav": b""}
+_saludo_lock = threading.Lock()
+
+
+def saludo_wav():
+    """El saludo de la ventana (SALUDO_VENTANA) como WAV, con la voz y el tono de ahora; None mientras la voz del PC
+    no este cargada. Se sintetiza una vez por voz y tono (tarda ~1 s) y se guarda en memoria."""
+    tts = S.TTS if S else None
+    if tts is None:
+        return None
+    clave = (AJUSTES.get("voz"), AJUSTES.get("tono"), id(tts))
+    with _saludo_lock:
+        if _saludo["clave"] != clave:
+            import io
+            import wave
+            pcm = tts.sintetizar(SALUDO_VENTANA)
+            caja = io.BytesIO()
+            with wave.open(caja, "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(int(getattr(tts, "sr_destino", 0) or S.SAMPLE_RATE))
+                w.writeframes(pcm)
+            _saludo.update(clave=clave, wav=caja.getvalue())
+        return _saludo["wav"]
+
+
 class Manejador(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
@@ -671,6 +698,17 @@ class Manejador(BaseHTTPRequestHandler):
             return
         if ruta == "/api/voz":
             self._responder(200, voz())
+            return
+        if ruta == "/api/voz/saludo":
+            try:
+                wav = saludo_wav()
+            except Exception as e:
+                S.log("panel: no pude decir el saludo de la ventana: %s: %s" % (type(e).__name__, e))
+                wav = None
+            if wav is None:
+                self._responder(503, {"error": "La voz de Píxel aún no está lista."})
+            else:
+                self._responder(200, wav, "audio/wav")
             return
         nombre = "index.html" if ruta == "/" else ruta[1:]
         carpeta = _ruta(WEB_DIR)

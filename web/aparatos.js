@@ -339,14 +339,54 @@
     };
   }
 
+  // 15 nov (captura del usuario): en Chrome del PC con Ubuntu salia "Este navegador no tiene Bluetooth web. Usa
+  // Chrome en Android (o en el PC)", y ya estaba en Chrome en el PC. Cada causa con su aviso. En Linux, Chrome trae
+  // el Bluetooth web apagado: comprobado en Chrome 156, navigator.bluetooth no existe sin la opcion experimental.
+  // Funcion pura (se prueba en tools/prueba_modulos.js): {texto, copiar?}.
+  function porQueSinBluetooth(ua, seguro, host, brave) {
+    ua = ua || "";
+    if (!seguro) {
+      return {texto: "El Bluetooth del navegador solo funciona en una dirección segura. Abre la app en https://pixelassitance.web.app, " +
+        `o en http://localhost:8080 en el mismo PC donde está Píxel (ahora estás en ${host}).`};
+    }
+    if (/iPhone|iPad|iPod/.test(ua)) return {texto: "En el iPhone y el iPad ningún navegador tiene Bluetooth web. Usa Chrome en un celular Android o en un PC."};
+    if (brave) {
+      return {texto: "Brave trae el Bluetooth web apagado. Para prenderlo, copia esta dirección, pégala en la barra de Brave, ponla en «Enabled» y reinicia Brave. O usa Chrome.",
+        copiar: "brave://flags/#brave-web-bluetooth-api"};
+    }
+    if (/SamsungBrowser\//.test(ua)) return {texto: "El navegador de Samsung no tiene Bluetooth web. Abre la app en Chrome."};
+    const chrome = /Chrome\/|Chromium\/|Edg\//.test(ua) && !/Firefox\/|FxiOS\//.test(ua);
+    if (!chrome) return {texto: "Este navegador no tiene Bluetooth web. Abre la app en Chrome o en Edge (en el PC o en un celular Android)."};
+    if (/Linux/.test(ua) && !/Android/.test(ua)) {
+      const nav = /Edg\//.test(ua) ? "Edge" : "Chrome";
+      return {texto: `En Linux, ${nav} trae el Bluetooth web apagado. Para prenderlo, copia esta dirección, pégala en la barra de ${nav}, ` +
+        `pon «Experimental Web Platform features» en «Enabled» y reinicia ${nav}. O usa Chrome en tu celular Android.`,
+        copiar: (/Edg\//.test(ua) ? "edge" : "chrome") + "://flags/#enable-experimental-web-platform-features"};
+    }
+    return {texto: "Este navegador no deja usar el Bluetooth en esta página. Actualiza Chrome, o usa Chrome en tu celular Android."};
+  }
+
   async function agregarEsp32() {
     const caja = $("#ap-ble");
     const paso = (h) => { caja.innerHTML = h; caja.hidden = false; };
-    if (!navigator.bluetooth) { paso('<p class="aviso">Este navegador no tiene Bluetooth web. Usa Chrome en Android (o en el PC).</p>'); return; }
+    if (!navigator.bluetooth) {
+      const p = porQueSinBluetooth(navigator.userAgent, window.isSecureContext, location.host, !!navigator.brave);
+      paso(`<p class="aviso">${esc(p.texto)}</p>` + (p.copiar ? `<p class="aviso"><code>${esc(p.copiar)}</code> <button type="button" class="btn suave" id="ap-copiar-bt">Copiar</button></p>` : ""));
+      const b = $("#ap-copiar-bt");
+      if (b) b.addEventListener("click", () => navigator.clipboard.writeText(p.copiar).then(() => { b.textContent = "Copiada"; }, () => { b.textContent = "Cópiala a mano"; }));
+      return;
+    }
+    // el Bluetooth del aparato apagado (o sin Bluetooth): antes no salia nada al tocar el boton
+    const apagado = '<p class="aviso">El Bluetooth de este aparato está apagado, o no tiene. Préndelo y vuelve a tocar el botón.</p>';
+    try { if (navigator.bluetooth.getAvailability && !(await navigator.bluetooth.getAvailability())) { paso(apagado); return; } } catch (e) { /* se intenta igual */ }
     let disp;
     try {
       disp = await navigator.bluetooth.requestDevice({filters: [{services: [BLE_SERVICIO]}], optionalServices: [BLE_SERVICIO]});
-    } catch (e) { if (e.name !== "NotFoundError") paso(`<p class="aviso">${esc(e.message)}</p>`); return; }
+    } catch (e) {
+      if (/adapter/i.test(e.message || "")) paso(apagado);                 // "Bluetooth adapter not available."
+      else if (e.name !== "NotFoundError") paso(`<p class="aviso">${esc(e.message)}</p>`);   // NotFoundError: cerro la lista
+      return;
+    }
     try {
       paso('<div class="buscando"><span class="giro"></span>Conectando con ' + esc(disp.name || "Píxel") + "…</div>");
       const ble = conexionBle(disp, paso);
@@ -664,7 +704,7 @@
     contexto: () => (lista().length ? "## Aparatos\n" + lista().map((a) => `- ${a.nombre} (${TIPOS[a.tipo] || a.tipo}): ${accionesDe(a).join(", ").replace(/_/g, " ") || "sin botones aprendidos"}${enLinea(a.puente) ? "" : "; su puente está desconectado"}.`).join("\n") : ""),
   });
 
-  window.PixelAparatos = {texto: {buscarAparato, plan, accionesDe, conArticulo}, TIPOS, METODOS, mandar, probar: probarPuente,
+  window.PixelAparatos = {texto: {buscarAparato, plan, accionesDe, conArticulo, porQueSinBluetooth}, TIPOS, METODOS, mandar, probar: probarPuente,
     // el primer puente en linea que sabe hacer algo ("youtube": el PC busca videos con yt-dlp)
     puenteCon: (cap) => Object.keys(ap.puentes).find((pid) => capacidades(pid).includes(cap) && enLinea(pid)) || ""};
 })();

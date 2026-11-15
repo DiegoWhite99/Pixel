@@ -233,6 +233,21 @@ if (ctx.PixelAparatos) {
     assert.strictEqual(D.buscarAparato(aparatos, "la luz").id, "l");
     assert.strictEqual(D.buscarAparato(aparatos, "la nevera"), null);
   });
+  prueba("porQueSinBluetooth: cada causa con su aviso (15 nov: en Chrome del PC decia 'usa Chrome')", () => {
+    const B = D.porQueSinBluetooth;
+    const chromeLinux = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36";
+    const linux = B(chromeLinux, true, "localhost:8080", false);
+    assert.ok(/Linux, Chrome trae el Bluetooth web apagado/.test(linux.texto), linux.texto);
+    assert.strictEqual(linux.copiar, "chrome://flags/#enable-experimental-web-platform-features");
+    assert.ok(!/no tiene Bluetooth web/.test(linux.texto), "en Chrome no se dice que el navegador no lo tiene");
+    assert.ok(/dirección segura/.test(B(chromeLinux, false, "192.168.1.50:8080", false).texto), "por IP: falta la direccion segura");
+    assert.strictEqual(B("Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0", true, "x", false).texto.indexOf("Este navegador no tiene"), 0);
+    assert.ok(/iPhone/.test(B("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 CriOS/140.0 Mobile/15E148 Safari/604.1", true, "x", false).texto));
+    assert.ok(/Brave/.test(B(chromeLinux, true, "x", true).texto));
+    assert.ok(/Linux, Edge/.test(B(chromeLinux + " Edg/156.0.0.0", true, "x", false).texto));
+    const android = B("Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Mobile Safari/537.36", true, "x", false);
+    assert.ok(!android.copiar && !/Linux/.test(android.texto), "Android no es el caso de Linux");
+  });
   prueba("conArticulo: genero y siglas", () => {
     assert.strictEqual(D.conArticulo("Tele de la sala"), "la tele de la sala");
     assert.strictEqual(D.conArticulo("Lámpara del cuarto"), "la lámpara del cuarto");
@@ -588,6 +603,33 @@ if (ctx.PixelAjustes) {
   const historia = [{role: "user", parts: [{text: "escríbele a Ana"}]},
     {role: "model", parts: [{text: "Voy."}, {functionCall: {name: "escribir_whatsapp", args: {para: "Ana", mensaje: "hola"}, id: "c1"}}]},
     {role: "user", parts: [{functionResponse: {name: "escribir_whatsapp", response: {resultado: "ok"}, id: "c1"}}]}];
+  prueba("proveedores: la clave de la cuenta en la nube (15 nov: 'siempre me bota las claves de Gemini')", () => {
+    const vacio = {proveedor: "gemini", modelos: {}, claves: {}, bases: {}, precios: {}, t: {}};
+    const nube1 = {proveedor: "gemini", modelos: {gemini: "gemini-3.5-flash-lite"}, claves: {gemini: "AQ.clave-de-prueba-123456"}, t: {gemini: 100}};
+    // otro navegador sin nada: la clave vuelve sola
+    let m = P.mezclarNube(vacio, nube1);
+    assert.ok(m.aqui && !m.nube);
+    assert.strictEqual(m.cfg.claves.gemini, "AQ.clave-de-prueba-123456");
+    assert.strictEqual(m.cfg.modelos.gemini, "gemini-3.5-flash-lite");
+    // aqui hay una clave y la nube aun no tiene copia: se sube
+    const aqui = {proveedor: "gemini", modelos: {}, claves: {gemini: "AQ.otra-clave-0000000001"}, bases: {}, precios: {}, t: {gemini: 50}};
+    m = P.mezclarNube(aqui, null);
+    assert.ok(!m.aqui && m.nube);
+    // la mas nueva gana: aqui 50, en la nube 100 -> la de la nube; aqui 200 -> se sube la de aqui
+    m = P.mezclarNube(aqui, nube1);
+    assert.strictEqual(m.cfg.claves.gemini, "AQ.clave-de-prueba-123456");
+    m = P.mezclarNube(Object.assign({}, aqui, {t: {gemini: 200}}), nube1);
+    assert.ok(!m.aqui && m.nube);
+    assert.strictEqual(m.cfg.claves.gemini, "AQ.otra-clave-0000000001");
+    // un borrado a proposito (sin clave, hora mas nueva) tambien viaja; uno viejo no borra una clave nueva
+    m = P.mezclarNube(aqui, {proveedor: "gemini", claves: {}, t: {gemini: 300}});
+    assert.ok(m.aqui && !("gemini" in m.cfg.claves));
+    m = P.mezclarNube(aqui, {proveedor: "gemini", claves: {}, t: {gemini: 10}});
+    assert.ok(!m.aqui && m.nube && m.cfg.claves.gemini);
+    // sin horas (datos de antes): si un lado no tiene clave, se queda la que hay
+    m = P.mezclarNube(vacio, {proveedor: "gemini", claves: {gemini: "AQ.clave-de-prueba-123456"}, t: {}});
+    assert.strictEqual(m.cfg.claves.gemini, "AQ.clave-de-prueba-123456");
+  });
   prueba("proveedores: OpenAI y compatibles (GPT, OpenRouter, DeepSeek)", () => {
     igual(X.aMensajesOpenAI(historia, "Eres Píxel"), [{role: "system", content: "Eres Píxel"}, {role: "user", content: "escríbele a Ana"},
       {role: "assistant", content: "Voy.", tool_calls: [{id: "c1", type: "function", function: {name: "escribir_whatsapp", arguments: '{"para":"Ana","mensaje":"hola"}'}}]},
@@ -721,12 +763,15 @@ if (ctx.Cerebro && ctx.Cerebro.texto.enlaces) {
 // ------------------------------------------------------------------ 2.0.0: la voz de Mexico (voz.js)
 {
   const V = vm.runInContext("VozPixel", ctx);      // const de arriba: no queda en window
-  prueba("voz: Supertonic 3, 10 voces, la F4 por defecto; las de Piper de antes pasan a ella", () => {
-    assert.strictEqual(V.VOCES.length, 10);
+  prueba("voz: Supertonic 3, solo la de mujer (15 nov); las otras guardadas y las de Piper pasan a ella", () => {
+    assert.strictEqual(V.VOCES.length, 1);
     assert.strictEqual(V.DEFECTO, "st-F4");
     assert.strictEqual(V.de("st-F4").estilo, "F4");
     assert.strictEqual(V.de("mx-mujer").id, "st-F4");
-    assert.strictEqual(V.de("celular"), null);
+    assert.strictEqual(V.de("mx-hombre").id, "st-F4");
+    assert.strictEqual(V.de("st-M2").id, "st-F4");
+    assert.strictEqual(V.de("st-F1").id, "st-F4");
+    assert.strictEqual(V.de("celular"), null, "la del celular sigue de respaldo");
   });
   prueba("voz: los números, horas, precios y símbolos se leen en palabras", () => {
     const L = V.texto.leer;
