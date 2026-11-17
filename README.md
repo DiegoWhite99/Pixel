@@ -3,8 +3,8 @@
 Píxel es un agente de inteligencia artificial creado por Divergencia IA, con cara de robot, hecho para una feria de tecnología. Vive en una aplicación web que se instala en el celular: oye la palabra **«Píxel»**, piensa con la inteligencia artificial que elijas (cada persona pone su clave), contesta con una voz natural de alta calidad y mueve su cara en 3D. Se entra con la cuenta de Google y cada persona tiene su perfil. Un computador y un ESP32 son opcionales: le dan micrófono y altavoz propios y le dejan manejar los aparatos de la casa.
 
 - **Aplicación:** https://pixelassitance.web.app (en el celular, con Chrome).
-- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.5.0/pixel_2.5.0_amd64.deb) **estable** y [Windows (.exe)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.5.0/Pixel-2.5.0-Setup.exe) **beta** (pasa la prueba automática en un Windows limpio, pero todavía no se ha usado en un Windows de verdad), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
-- **Versión actual:** 2.5.0, del 15 de noviembre de 2026.
+- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.6.0/pixel_2.6.0_amd64.deb) **estable** y [Windows (.exe)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.6.0/Pixel-2.6.0-Setup.exe) **beta** (pasa la prueba automática en un Windows limpio, pero todavía no se ha usado en un Windows de verdad), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
+- **Versión actual:** 2.6.0, del 17 de noviembre de 2026.
 - **Cómo está hecho por dentro:** `CLAUDE.md`. **Mediciones y decisiones:** `memoria.md`.
 
 ## Qué puede hacer
@@ -38,6 +38,7 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 
 | Versión | Fecha | Qué trae |
 |---|---|---|
+| **2.6.0** | 17 nov 2026 | El robot se vincula desde el Panel de control: Bluetooth, luego «¿el WiFi de este servidor? sí o no» con la lista de redes, y el enlace con la app. Su luz RGB dice cómo está (azul WiFi, verde todo bien, amarillo sin API, rojo un error) y el panel y la app la muestran igual. La bienvenida y el logo del panel usan la cara 3D de la app. Linux estable, Windows beta. |
 | **2.5.0** | 15 nov 2026 | Un solo Píxel, más firme: las claves de IA de la app quedan guardadas en tu cuenta y vuelven solas en otro navegador o aparato. Una sola voz, la de mujer. La ventana del programa saluda con voz. El PC sale en la app como «Panel de control» y el robot se llama «Pixel». El aviso del Bluetooth dice la causa real. |
 | **2.4.3** | 13 nov 2026 | El robot se queda con su PC (aunque haya otro Píxel en la red) y se cambia desde la app. Los recordatorios son una sola lista: los de la app los dice el robot y los que le pides al robot salen en la app. |
 | **2.4.2** | 13 nov 2026 | Enlazar el robot desde la app: el código se dice despacio (cifra por cifra, dos veces) y, si el Bluetooth se corta, la app se vuelve a conectar sola. |
@@ -56,6 +57,23 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 | **1.0.0** | 10 nov 2026 | Píxel entero en el celular: Gemini, Calendar, Gmail, Pomodoro, Eisenhower, cerebro, aparatos, música, notas y voz infantil. |
 
 No hay 1.1.0: la segunda fase salió directamente como 1.2.1.
+
+### 2.6.0 · 17 de noviembre de 2026
+
+Pedidos del usuario: «quiero que cuando esté conectado al WiFi cambie a azul, cuando entre un error de API amarillo, error de energía rojo, cuando todo esté bien verde», «una nueva adición al panel de control: establecer la conexión por Bluetooth… seleccionar la red y darle al robot la red», «si detecta API, red, y enlace con la app y el panel de control se pone verde», «los colores son los testigos de la conectividad», «si está el panel debe estar igual que en la web» y «el modelo en 3D ponlo aquí».
+
+- **La luz del robot** (un LED RGB en los pines 6, 5 y 4 del robot; firmware fuera de este repositorio). Solo cuatro colores: **azul** tiene WiFi; **verde** todo bien conectado (red, panel de control, API y enlace con la app); **amarillo** no hay API (ninguna IA de internet contesta); **rojo** hay un error (se reinició por falta de corriente, o no logra entrar a su WiFi), hasta que vuelve a estar bien conectado. La decisión está probada paso a paso en el PC (22 pasos).
+- **El PC le avisa al robot de la API enseguida**: al guardar o probar una clave en el panel, y cuando una IA falla (también una clave que Google rechaza). Antes solo al conectarse.
+- **Vincular el robot desde el Panel de control** (Dispositivos → Robot Píxel, nuevo `robot_wifi.py`, con `bleak`):
+    1. **Detectar por Bluetooth**: la lista de aparatos cercanos, con el robot primero; se elige **Pixel Assistance** (su nuevo nombre por Bluetooth) y **Vincular**.
+    2. **Vincular con WiFi**: «¿Desea vincular a Pixel Assistance con el WiFi de este servidor?». **Sí** usa la red y la contraseña que el PC ya tiene guardadas (no se muestran). **No**: la lista de redes, cada una con su señal (las de 5 GHz marcadas: el robot no las ve), y la contraseña de la elegida.
+    3. **Enlace con la app**, solo enseguida: el PC deja la marca de enlace en las cuentas con las que está enlazado (una regla nueva de la base de datos se lo permite a un PC enlazado, no a un robot). Si el robot no tiene dueño, el panel le pide su código por Bluetooth y lo recibe por la red.
+    - Si el robot se reinicia en medio (falta de corriente), reintenta y lo dice, en vez de «no es un robot Píxel».
+- **El mismo bombillo en el panel y en la app** (`web/luz_robot.js`): el robot cuenta su luz y las cuatro condiciones al PC por la red y a la app por la nube, y los dos la dibujan igual. Lo que se pide con un botón sale un momento y no se queda pegado debajo de un verde.
+- **En la app ya no sale el aviso de las opciones de Chrome** para el Bluetooth: sin Bluetooth en el navegador, el botón lleva al Panel de control.
+- **La cara 3D de la app** en la bienvenida de la ventana y en su logo.
+- **El robot con el hub nuevo** (trae un lector de memorias): ya no se queda reiniciándose al reconocer los aparatos USB; y si se queda sin corriente al prender el hub, arranca sin él para que lo demás funcione (firmware).
+- **Linux estable, Windows beta** en las descargas.
 
 ### 2.5.0 · 15 de noviembre de 2026
 

@@ -7,7 +7,9 @@
    ^ ^, triste, enojado, dormido, curioso, guino...) y como pantalla LED pueden ser corazones, X,
    "> <" o espirales. El tamano va con muelles que rebotan, parpadean, miran y, como no hay boca,
    al hablar laten con el volumen de la voz.
-   La usa app.js: CaraPixel.montar(canvas) devuelve la api, o null sin WebGL:
+   La usa app.js: CaraPixel.montar(canvas) devuelve la api, o null sin WebGL. 17 nov: montar(canvas, {soloSombra: true})
+   la dibuja sin el suelo de cuadros, solo con su sombra (la bienvenida de la ventana del programa, escritorio.js), y
+   {sinSuelo: true} ni con la sombra (el logo pequeño de la ventana):
      estado(nombre)       esperando | escuchando | pensando | hablando | sin-servidor | normal
      emocion(nombre, ms)  un gesto un rato (ms = 0 lo quita); ver GESTOS
      evento(nombre)       una animacion corta: mirar, bostezo, estornudo, tararear, mareo, risa, corazones, guino
@@ -315,7 +317,7 @@ window.CaraPixel = (function () {
   }
 
   // ---------------------------------------------------------------- montar
-  function montar(canvas) {
+  function montar(canvas, opciones = {}) {
     let gl;
     try { gl = canvas.getContext("webgl", {alpha: true, premultipliedAlpha: true, antialias: true}); } catch (e) { gl = null; }
     if (!gl) return null;
@@ -699,13 +701,16 @@ window.CaraPixel = (function () {
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-      gl.useProgram(ps.p);
-      gl.uniformMatrix4fv(ps.u.uProj, false, proy); gl.uniformMatrix4fv(ps.u.uView, false, vista);
-      gl.uniform3fv(ps.u.uCentro, centro);
-      soloSombra += ((fondo.classList.contains("con-musica") && fondo.dataset.escena ? 1 : 0) - soloSombra) * (1 - Math.exp(-dt * 2.5));
-      gl.uniform1f(ps.u.uSoloSombra, soloSombra);
-      atributo(ps, "aPos", bSuelo, 3);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      if (!opciones.sinSuelo) {
+        gl.useProgram(ps.p);
+        gl.uniformMatrix4fv(ps.u.uProj, false, proy); gl.uniformMatrix4fv(ps.u.uView, false, vista);
+        gl.uniform3fv(ps.u.uCentro, centro);
+        if (opciones.soloSombra) soloSombra = 1;
+        else soloSombra += ((fondo.classList.contains("con-musica") && fondo.dataset.escena ? 1 : 0) - soloSombra) * (1 - Math.exp(-dt * 2.5));
+        gl.uniform1f(ps.u.uSoloSombra, soloSombra);
+        atributo(ps, "aPos", bSuelo, 3);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      }
 
       gl.useProgram(pc.p);
       gl.uniformMatrix4fv(pc.u.uProj, false, proy); gl.uniformMatrix4fv(pc.u.uView, false, vista);

@@ -1,7 +1,9 @@
 aiofiles==25.1.0
 androidtvremote2==0.3.3
 anyio==4.15.1
+async-timeout==5.0.1
 av==17.1.0
+bleak==3.1.0
 cffi==2.1.1
 click==8.5.0
 coloredlogs==15.0.1

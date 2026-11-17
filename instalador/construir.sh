@@ -14,7 +14,7 @@
 # Descargas y herramientas: $PIXEL_CACHE (por defecto ~/.cache/pixel-instalador).
 set -euo pipefail
 
-VERSION=2.5.0
+VERSION=2.6.0
 RAIZ=$(cd "$(dirname "$0")/.." && pwd)
 INST=$RAIZ/instalador
 DIST=$RAIZ/dist
@@ -31,6 +31,13 @@ NUITKA=nuitka==4.3.5
 # Dependencias que solo pide Windows (marcadores sys_platform == "win32" de tqdm y humanfriendly) y, desde la 2.2.0,
 # la ventana de Pixel (instalador/pixel_ventana.py): pywebview con el motor de Edge de Windows, por pythonnet (.NET)
 SOLO_WINDOWS="colorama==0.4.6 pyreadline3==3.5.6 pywebview==6.2.1 pythonnet==3.1.0 clr_loader==0.3.1 bottle==0.13.4 proxy_tools==0.1.0"
+# 2.6.0: el Bluetooth del PC para vincular el robot (robot_wifi.py, bleak). En Windows, bleak usa WinRT: las winrt 3.2.1
+# son las ultimas con ruedas para Python 3.10 (las 4.x ya no). En Linux usa D-Bus (dbus-fast), que no va en Windows.
+SOLO_WINDOWS="$SOLO_WINDOWS winrt-runtime==3.2.1 winrt-Windows.Devices.Bluetooth==3.2.1 winrt-Windows.Devices.Bluetooth.Advertisement==3.2.1"
+SOLO_WINDOWS="$SOLO_WINDOWS winrt-Windows.Devices.Bluetooth.GenericAttributeProfile==3.2.1 winrt-Windows.Devices.Enumeration==3.2.1"
+SOLO_WINDOWS="$SOLO_WINDOWS winrt-Windows.Devices.Radios==3.2.1 winrt-Windows.Foundation==3.2.1 winrt-Windows.Foundation.Collections==3.2.1"
+SOLO_WINDOWS="$SOLO_WINDOWS winrt-Windows.Storage.Streams==3.2.1"
+SOLO_LINUX="dbus-fast==5.0.26"
 # proxy_tools (de pywebview) solo esta como codigo fuente: se baja con su huella y se arma su rueda (pura Python)
 PROXY_URL=https://files.pythonhosted.org/packages/source/p/proxy_tools/proxy_tools-0.1.0.tar.gz
 PROXY_SHA=ccb3751f529c047e2d8a58440d86b205303cf0fe8146f784d1cbcd94f0a28010
@@ -97,7 +104,7 @@ linux() {
   rm -rf "$raiz" && mkdir -p "$opt" "$raiz/DEBIAN"
   tar xzf "$CACHE/$PBS_LIN" -C "$opt"
   "$opt/python/bin/python3" -m pip install -q --disable-pip-version-check --no-warn-script-location --no-compile \
-    -r "$INST/bloqueo.txt"
+    -r "$INST/bloqueo.txt" $SOLO_LINUX
   recortar_python "$opt/python/lib/python3.10"
   rm -rf "$opt/python/include" "$opt/python/share" "$opt/python/lib"/{tcl*,tk*,itcl*,thread*,libtcl*,libtk*}
   find "$opt/python/bin" -mindepth 1 -not -name 'python3' -not -name 'python3.10' -not -name 'python' -delete

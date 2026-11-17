@@ -32,6 +32,21 @@ def motores():
 def hay_clave():
     return any(m.hay_clave() for m in PROVEEDORES)
 
+
+# 17 nov: lo ultimo que se supo de cada IA de internet (True contesto, False fallo). Lo anotan responder() y las
+# pruebas del panel. Una clave que Google rechaza (401) no pone a Gemini en pausa: sin esto seguiria contando como API.
+_resultado = {}
+
+
+def anotar(nombre, ok):
+    _resultado[nombre] = bool(ok)
+
+
+def hay_api():
+    """17 nov (luz del robot: "amarillo si no hay API"): hay una IA de internet que puede contestar: con clave, sin
+    pausa por un fallo, y cuya ultima respuesta o prueba no fallo (sin saberlo aun, cuenta). Ollama no es una API."""
+    return any(m.activo() and _resultado.get(m.NOMBRE, True) for m in PROVEEDORES)
+
 SYSTEM_PROMPT = (
     "Te llamas Píxel y eres un asistente de voz con inteligencia artificial; hablas en español. "
     "Responde en 2 a 4 frases. "
@@ -146,7 +161,9 @@ class Llm:
                 for trozo in m.generar_stream(self.system, self._conversacion(texto_usuario)):
                     dicho.append(trozo)
                     yield trozo
+                anotar(m.NOMBRE, True)
             except m.Error as e:
+                anotar(m.NOMBRE, False)
                 if dicho:
                     m.LOG("%s: se corto a media respuesta (%s)" % (m.NOMBRE, e))
                 else:

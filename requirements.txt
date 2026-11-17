@@ -4,3 +4,4 @@ piper-tts==1.8.0
 numpy==2.2.6
 yt-dlp==2026.8.19
 androidtvremote2==0.3.3
+bleak==3.1.0            # 2.6.0: el Bluetooth del PC para vincular el robot (robot_wifi.py)

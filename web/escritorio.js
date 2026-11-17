@@ -25,6 +25,8 @@
   const TIPOS = {luz: "Luz", enchufe: "Enchufe", tv: "Televisor", altavoz: "Altavoz", camara: "Cámara", impresora: "Impresora",
     movil: "Celular", ordenador: "Computador", router: "Router", pixel: "Píxel", otro: "Otro"};
   const ICONOS = {
+    bt: '<svg viewBox="0 0 24 24"><path d="M7 7l10 10-5 4V3l5 4L7 17"/></svg>',
+    wifi: '<svg viewBox="0 0 24 24"><path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/></svg>',
     movil: '<svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>',
     robot: '<svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4"/></svg>',
     luz: '<svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg>',
@@ -61,8 +63,25 @@
   <rect class="boca" x="84" y="172" width="32" height="6" rx="3" fill="#3b82f6" opacity=".8"/>
 </svg>`;
   }
-  $("#intro-pixel").innerHTML = pixelSVG("pi");
-  $("#avatar").innerHTML = pixelSVG("pa");
+  // 17 nov (pedido del usuario, con una captura de la bienvenida: "el modelo en 3D ponlo aqui"): en la bienvenida va la
+  // cara 3D de la app de internet (cara3d.js, WebGL sin librerias). Sin WebGL, el dibujo de antes.
+  // Tambien el logo de arriba ("también cambia este logo"). Sin WebGL, el dibujo de antes.
+  function montar3d(caja, clase, opciones) {
+    if (!window.CaraPixel) return null;
+    const lienzo = document.createElement("canvas");
+    lienzo.className = clase;
+    lienzo.setAttribute("aria-hidden", "true");
+    caja.appendChild(lienzo);
+    const api = window.CaraPixel.montar(lienzo, opciones);
+    if (!api) { lienzo.remove(); return null; }
+    caja.classList.add("en-3d");
+    api.estado("normal");
+    return api;
+  }
+  const cara3d = montar3d($("#intro-pixel"), "intro-cara", {soloSombra: true});
+  if (!cara3d) $("#intro-pixel").innerHTML = pixelSVG("pi");
+  const logo3d = montar3d($("#avatar"), "logo-cara", {sinSuelo: true});
+  if (!logo3d) $("#avatar").innerHTML = pixelSVG("pa");
   $("#pixel-dormido").innerHTML = pixelSVG("pd");
 
   // ------------------------------------------------------------------ bienvenida
@@ -145,6 +164,12 @@
     const cursor = document.createElement("span");
     cursor.className = "cursor";
     figura.classList.add("hablando");
+    // la cara 3D no tiene boca: al hablar le laten los ojos con la voz (como en la app); aqui, un vaiven mientras suena
+    let latido = null;
+    if (cara3d) {
+      cara3d.estado("hablando");
+      latido = setInterval(() => cara3d.boca(sonando() ? 0.35 + 0.3 * Math.abs(Math.sin(performance.now() / 95)) + Math.random() * 0.2 : null), 60);
+    }
     const dura = await hablarSaludo();
     const letras = FRASES.reduce((n, l) => n + l.reduce((m, p) => m + p.t.length, 0), 0);
     const comas = FRASES.reduce((n, l) => n + l.reduce((m, p) => m + (p.t.match(/,/g) || []).length, 0), 0);
@@ -170,6 +195,7 @@
     cursor.remove();
     while (sonando() && !introAcabada) await esperar(100);    // la boca se mueve hasta que acaba de hablar
     figura.classList.remove("hablando");
+    if (cara3d) { clearInterval(latido); cara3d.boca(null); cara3d.estado("normal"); cara3d.emocion("feliz", 1800); }
   }
 
   async function intro() {
@@ -217,7 +243,9 @@
     if (!reducir && de.width > 0 && a.width > 0 && getComputedStyle(figura).opacity > 0.5) {
       const vuela = document.createElement("div");
       vuela.className = "pixel-figura volando";
-      vuela.innerHTML = pixelSVG("pv");
+      const lienzo = figura.querySelector("canvas.intro-cara");
+      if (lienzo) vuela.appendChild(lienzo);              // la misma cara 3D vuela a su sitio (sin reiniciar nada)
+      else vuela.innerHTML = pixelSVG("pv");
       Object.assign(vuela.style, {left: de.left + "px", top: de.top + "px", width: de.width + "px", height: de.height + "px"});
       document.body.appendChild(vuela);
       figura.style.visibility = "hidden";
@@ -503,13 +531,89 @@
     }).join("");
   }
 
-  function pintarRobots() {
-    const lista = E.dispositivos || [];
-    $("#lista-robots").innerHTML = lista.length ? `<div class="lista">${lista.map((d) => `<div class="fila"><span class="ico">${ICONOS.robot}</span>
-      <div class="txt"><b>Robot en ${esc(d.ip)}</b><small>Conectado desde las ${esc(d.desde)} · ${esc(d.estado)}${d.frases ? " · " + d.frases + " frases" : ""}</small></div>
-      <span class="estado-dot ${d.estado === "sin datos" ? "mal" : "bien"}"></span></div>`).join("")}</div>`
-      : `<div class="vacio">Ningún robot conectado. Enciéndelo cerca de este computador, en la misma red WiFi: se conecta solo.</div>`;
+  // -- Robot Píxel (17 nov, Fase 16): el bombillo con el color del LED del robot y los dos pasos para vincularlo
+  // (robot_wifi.py). Pedido: "detectar por Bluetooth Pixel ... la lista de dispositivos ... después otro botón de
+  // vincular con WiFi ... ¿desea vincular a Pixel Assistance con el WiFi de este servidor? sí o no".
+  let redesFirma = "", preguntaAbierta = false, redesAbiertas = false, redElegida = "", claveEscrita = "";
+  let estadoRobotAntes = "";                   // para avisar una sola vez como acabo lo que se pidio
+  function robotConectado() {                  // la conexion del robot con este PC (la mas reciente que manda audio)
+    return (E.dispositivos || []).filter((d) => d.estado !== "sin datos").slice(-1)[0] || null;
   }
+  // La lista de redes WiFi que ve este PC (pedido: "también debe verse el listado de las redes"). Cada una con su
+  // botón «Elegir»; la elegida pide ahí mismo la contraseña (o usa la que este PC tiene guardada).
+  function pintarRedes(r, v, ocupado) {
+    const caja = $("#lista-redes");
+    caja.hidden = !redesAbiertas || !v;
+    if (caja.hidden) return;
+    const redes = r.redes || [];
+    const firma = JSON.stringify([redes, redElegida, ocupado, r.estado === "buscando_redes"]);
+    if (firma === redesFirma) return;          // no pisar la contraseña que se está escribiendo
+    redesFirma = firma;
+    if (r.estado === "buscando_redes" && !redes.length) { caja.innerHTML = '<div class="vacio">Buscando redes WiFi…</div>'; return; }
+    if (!redes.length) { caja.innerHTML = '<div class="vacio">Este computador no ve redes WiFi.</div>'; return; }
+    caja.innerHTML = `<h3 class="sub-titulo">Redes WiFi</h3><div class="lista">${redes.map((n) => {
+      const datos = [n.del_pc && "la de este computador", "señal " + n.senal + "%", n.abierta ? "abierta" : n.guardada ? "contraseña guardada en este computador" : "con contraseña", n.solo_5ghz && "5 GHz: el robot no la ve"].filter(Boolean).join(" · ");
+      const fila = `<div class="fila${n.ssid === redElegida ? " elegida" : ""}"><span class="ico">${ICONOS.wifi}</span><div class="txt"><b>${esc(n.ssid)}</b><small>${esc(datos)}</small></div>
+        <button class="btn suave" type="button" data-elegir-red="${esc(n.ssid)}"${n.solo_5ghz || ocupado ? " disabled" : ""}>Elegir</button></div>`;
+      if (n.ssid !== redElegida) return fila;
+      const pedir = !n.abierta && !n.guardada;
+      return fila + `<form class="fila-form" data-red="${esc(n.ssid)}">${pedir ? '<label class="campo">Contraseña de «' + esc(n.ssid) + '»<input name="clave" type="password" autocomplete="off" maxlength="64"></label>'
+        : '<p class="sub">' + (n.abierta ? "Es una red abierta: no lleva contraseña." : "Usa la contraseña que este computador ya tiene guardada.") + "</p>"}
+        <div class="acciones" style="margin:0;align-self:end"><button class="btn primario" type="submit"${ocupado ? " disabled" : ""}>Vincular</button><button class="btn fantasma" type="button" data-cancelar-red>Cancelar</button></div></form>`;
+    }).join("")}</div>`;
+    const clave = $("input[name=clave]", caja);
+    if (clave) { clave.value = claveEscrita; clave.addEventListener("input", () => { claveEscrita = clave.value; }); }
+  }
+
+  function pintarRobot() {
+    const r = E.robot_wifi || {}, v = r.vinculado, c = robotConectado();
+    const ocupado = ["detectando", "vinculando", "buscando_redes", "dando", "enlazando"].includes(r.estado);
+    // bombillo: el color que dice el robot (por su conexión con este PC, o el que leyó el Bluetooth)
+    const luz = (c && c.robot && c.robot.luz) || (v && v.luz) || "";
+    $("#robot-bombillo").dataset.luz = luz;
+    const wifi = !!c || !!(v && v.wifi), app = c && c.robot ? c.robot.app : !!(v && v.app);
+    // el bombillo y las condiciones, con lo que dice el robot y la misma forma que la app (luz_robot.js)
+    const api = c && c.robot && typeof c.robot.api === "boolean" ? c.robot.api : !!E.hay_api;
+    const d = window.LuzRobot.describir({luz, red: wifi, panel: !!c, api, app});
+    const [titulo, detalle] = d.luz ? [d.titulo, d.detalle] : v ? ["Vinculado por Bluetooth", "Falta el WiFi."] : ["Sin vincular", "Vincúlalo en dos pasos: Bluetooth y luego WiFi."];
+    $("#robot-titulo").textContent = titulo;
+    $("#robot-detalle").textContent = detalle + (c ? (detalle ? " " : "") + `Conectado a este panel desde las ${c.desde} (${c.ip}).` : "");
+    $("#robot-condiciones").innerHTML = window.LuzRobot.htmlCondiciones(d, (nombre, ok) =>
+      nombre === "Enlace con la app" && !ok && (v || c) ? `<button class="btn suave" type="button" id="robot-enlazar-app"${ocupado ? " disabled" : ""}>Enlazar</button>` : "");
+    // 17 nov (el usuario: "está en verde y dice que no encuentra el Bluetooth? los colores son los testigos de la
+    // conectividad"): el estado lo dicen el color y las cuatro condiciones. Lo que se pidió con un botón se ve aquí
+    // solo mientras se hace; cómo acabó sale una vez en un aviso y no se queda pegado.
+    const fase = $("#robot-fase");
+    fase.hidden = !(ocupado && r.fase);
+    fase.className = "nota";
+    fase.textContent = ocupado ? r.fase || "" : "";
+    if (estadoRobotAntes && ["detectando", "vinculando", "buscando_redes", "dando", "enlazando"].includes(estadoRobotAntes) && !ocupado && r.fase) {
+      toast(r.fase, r.estado === "error");
+    }
+    estadoRobotAntes = r.estado || "";
+    // paso 1: Bluetooth
+    $("#robot-detectar").disabled = ocupado;
+    $("#robot-detectar").textContent = r.estado === "detectando" ? "Detectando…" : "Detectar por Bluetooth";
+    // los pasos siguen la conectividad: conectado por WiFi a este panel, el Bluetooth y el WiFi ya están hechos
+    $("#bt-hecho").hidden = !(v || c);
+    $("#bt-hecho").textContent = v ? "Vinculado" : "Hecho";
+    const aparatos = r.aparatos || [];
+    $("#lista-bt").innerHTML = v
+      ? `<div class="lista"><div class="fila"><span class="ico">${ICONOS.robot}</span><div class="txt"><b>${esc(v.nombre)}</b><small>Vinculado por Bluetooth</small></div><span class="estado-dot bien"></span></div></div>`
+      : c && !aparatos.length ? `<div class="vacio">El robot ya está conectado a este panel por WiFi. El Bluetooth solo hace falta para darle otra red.</div>`
+      : aparatos.length ? `<div class="lista">${aparatos.map((a) => `<div class="fila"><span class="ico">${a.pixel ? ICONOS.robot : ICONOS.bt}</span>
+          <div class="txt"><b>${esc(a.nombre)}</b><small>${a.pixel ? "Robot Píxel · " : ""}señal ${a.rssi ?? "?"} dBm</small></div>
+          <button class="btn ${a.pixel ? "primario" : "suave"}" type="button" data-vincular-bt="${esc(a.direccion)}"${ocupado ? " disabled" : ""}>Vincular</button></div>`).join("")}</div>`
+      : `<div class="vacio">Toca «Detectar por Bluetooth» con el robot encendido cerca.</div>`;
+    // paso 2: WiFi
+    $("#robot-vincular-wifi").disabled = !v || ocupado;
+    $("#wifi-hecho").hidden = !((v && v.wifi) || c);
+    $("#wifi-hecho").textContent = v && v.wifi ? "Conectado a «" + v.red + "»" : "Conectado";
+    $("#pregunta-wifi").hidden = !preguntaAbierta || !v;
+    $("#pregunta-wifi-texto").innerHTML = `¿Desea vincular a <b>${esc(v ? v.nombre : "Pixel Assistance")}</b> con el WiFi de este servidor (<b>${esc(r.red_pc || "sin WiFi")}</b>)?`;
+    $("#wifi-si").disabled = ocupado || !r.red_pc;
+    $("#wifi-no").disabled = ocupado;
+    pintarRedes(r, v, ocupado);  }
 
   let formRed = "";
   function pintarRed() {
@@ -618,7 +722,7 @@
     pintarVincular();
     pintarApps();
     pintarApis();
-    pintarRobots();
+    pintarRobot();
     pintarRed();
     pintarVoz();
   }
@@ -692,6 +796,58 @@
   }
 
   $("#buscar-red").addEventListener("click", () => { formRed = ""; enviar("/api/wifi/buscar", {}); });
+  // Robot Píxel: paso 1 (Bluetooth) y paso 2 (WiFi)
+  $("#robot-detectar").addEventListener("click", () => { preguntaAbierta = redesAbiertas = false; enviar("/api/robot/detectar", {}); });
+  $("#robot-condiciones").addEventListener("click", (e) => {
+    if (e.target.closest("#robot-enlazar-app")) enviar("/api/robot/app", {});
+  });
+  $("#lista-bt").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-vincular-bt]");
+    if (b) enviar("/api/robot/vincular", {direccion: b.dataset.vincularBt});
+  });
+  $("#robot-vincular-wifi").addEventListener("click", () => {
+    const r = (E && E.robot_wifi) || {};
+    preguntaAbierta = !!r.red_pc;               // sin WiFi en este PC no hay nada que preguntar: solo la lista
+    redesAbiertas = true;
+    redElegida = "";
+    redesFirma = "";
+    enviar("/api/robot/redes", {}, {silencio: true});
+    if (E) pintarRobot();
+  });
+  $("#wifi-si").addEventListener("click", async () => {
+    const r = (E && E.robot_wifi) || {};
+    if (!r.red_pc_guardada) {                // el PC no tiene su contraseña: se escribe en la lista, ya elegida
+      preguntaAbierta = false;
+      redElegida = r.red_pc;
+      redesFirma = "";
+      pintarRobot();
+      const c = $("#lista-redes input[name=clave]");
+      if (c) c.focus();
+      return;
+    }
+    if (await enviar("/api/robot/wifi", {usar_pc: true})) { preguntaAbierta = false; redesAbiertas = false; }
+  });
+  $("#wifi-no").addEventListener("click", () => {
+    preguntaAbierta = false;
+    toast("Elige la red en la lista.");
+    if (E) pintarRobot();
+  });
+  $("#lista-redes").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-elegir-red]");
+    if (b) { redElegida = b.dataset.elegirRed; claveEscrita = ""; redesFirma = ""; if (E) pintarRobot(); const c = $("#lista-redes input[name=clave]"); if (c) c.focus(); return; }
+    if (e.target.closest("[data-cancelar-red]")) { redElegida = ""; claveEscrita = ""; redesFirma = ""; if (E) pintarRobot(); }
+  });
+  $("#lista-redes").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const r = (E && E.robot_wifi) || {};
+    const n = (r.redes || []).find((x) => x.ssid === e.target.dataset.red);
+    if (!n) { toast("Elige una red WiFi.", true); return; }
+    const pedir = !n.abierta && !n.guardada;
+    if (pedir && claveEscrita.length < 8) { toast("La contraseña de un WiFi tiene al menos 8 caracteres.", true); return; }
+    if (await enviar("/api/robot/wifi", {usar_pc: false, ssid: n.ssid, clave: pedir ? claveEscrita : "", guardada: n.guardada && !n.abierta})) {
+      claveEscrita = ""; redElegida = ""; redesAbiertas = false; preguntaAbierta = false;
+    }
+  });
   $("#google-conectar").addEventListener("click", () => enviar("/api/google/vincular", {}));
   $("#google-cargar").addEventListener("click", () => $("#google-archivo").click());
   $("#google-archivo").addEventListener("change", async (e) => {

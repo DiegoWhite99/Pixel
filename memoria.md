@@ -1137,6 +1137,13 @@ El usuario: «va muy rápido con lo del código, le doy repetir el código y se 
 - **Voz:** una sola, la de mujer (`st-F4`), en el PC y en la app. La ventana del programa dice el saludo con la voz del PC (`/api/voz/saludo`, 9,1 s con la voz real).
 - **Claves de IA:** en el PC no se perdió ninguna (el registro no tiene ningún «quitada»; el instalador de Windows no borra `datos`). En la app vivían solo en el navegador: ahora también en `usuarios/<uid>/ia` (regla nueva).
 
+### 17 nov: hub nuevo, la luz del robot y la corriente
+
+- **Hub nuevo** `1a86:809d` con un lector de micro SD pegado (`1908:0226`) y además un `1a86:5394` (3 configuraciones; no se sabe qué es). En cada arranque, al reconocer el `1a86:5394`, el reconocimiento USB de ESP-IDF 5.5.5 (`enum.c`, igual que en `release/v5.5`) llamaba `abort()` y el robot se reiniciaba sin parar (`rst:0xc`). `musbAlReconocer` lo rechaza: así se reconoce el micrófono `1b3f:0004` y manda 10 000 paquetes bien cada 10 s.
+- **Corriente** (solo el cable del PC al puerto COM; hub con su power bank, con micrófono, la placa amarilla por su USB y el lector): apagones (`Brownout detector was triggered`) al prender el WiFi, al conectarse el PC por Bluetooth, y luego al prender el puerto USB del hub: 255 reinicios en 150 s; 41 en 25 s. Con un power bank en el robot: un reinicio cada 25 a 30 s. Con la protección «2 apagones al prender el USB → sin USB», algunos arranques llegan a verde, pero a los segundos el programa se cae dentro del WiFi y de lwIP (`LoadStoreAlignment` en `ppTask`, `LoadProhibited` en `tcp_output` desde `client.write`): memoria corrompida con la corriente al límite. Falta darle al robot una fuente propia suficiente y que el hub no le tome corriente.
+- **La luz y el enlace**: verificado con el robot real que robot, registro del PC y panel dicen el mismo color (11:05: azul, sin enlace con la app). El robot no podía anotarse en la cuenta (Firebase 401: su entrada se había borrado). Con la regla nueva, el panel puso la marca y a los 3 s el robot dijo «verde, enlazado con la app» (11:26).
+- **WiFi del robot desde el PC por Bluetooth** (`robot_wifi.py`): funcionó con el robot real (de la red de la casa a la del laboratorio, con la contraseña guardada en el PC). El PC ve al robot a -25 a -35 dBm a su lado.
+
 ## (antes CLAUDE.md)
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.

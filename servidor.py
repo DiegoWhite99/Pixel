@@ -464,6 +464,7 @@ class Sesion:
         self.sock = sock
         self.addr = addr
         self.peer = "%s:%d" % addr
+        self.robot = {}                 # 17 nov: lo que el robot dice de si mismo (debug "robot:{luz, app}")
 
         self.pcm_buf = bytearray()      # audio crudo aun sin trocear en tramas
         self.preroll = deque(maxlen=PREROLL_FRAMES)
@@ -519,6 +520,16 @@ class Sesion:
             self._enviar(MSG_DEBUG, texto.encode("utf-8"))
         except OSError:
             pass
+
+    api_enviada = None                  # 17 nov: el ultimo estado de la API que se le mando a este robot
+
+    def avisar_estado_api(self, hay_api):
+        """17 nov (pedido: "amarillo si no hay API"): le dice al robot si hay una IA de internet que le conteste.
+        Va como debug (0x04) "estado:con_api" o "estado:sin_api": un firmware de antes solo lo escribe en su puerto
+        serie. Se manda al conectar (hay_api: alguna con clave y sin pausa) y al terminar cada respuesta de la IA
+        (si contesto Gemini o Groq; Ollama no es una API)."""
+        self.api_enviada = bool(hay_api)
+        self.debug("estado:con_api" if hay_api else "estado:sin_api")
 
     def enviar_audio(self, pcm):
         """Manda PCM al ESP32 en mensajes 0x02 de ~20 ms, o a la salida del PC si SALIDA_VOZ = "pc".
@@ -743,6 +754,22 @@ class Sesion:
             log("%s  Bluetooth: soy %s, veo %d dispositivo(s)" % (self.peer, d.get("yo"), len(vistos)))
         self.ble_yo, self.ble, self.ble_t = str(d.get("yo") or ""), vistos, time.monotonic()
 
+    def recibir_estado_robot(self, texto):
+        """17 nov: el robot dice el color de su luz y si esta enlazado con la app: debug "robot:{"luz", "app"}".
+        La ventana del programa muestra ese mismo color (pedido: "igual que un indicativo en el panel de control")."""
+        try:
+            d = json.loads(texto)
+            nuevo = {"luz": str(d["luz"]), "app": bool(d.get("app")), "id": str(d.get("id") or "")[:64]}
+            if "api" in d:
+                nuevo["api"] = bool(d["api"])                 # lo que el robot entendio del PC (estado:con_api)
+        except (ValueError, TypeError, KeyError):
+            log("%s  estado del robot ilegible: %r" % (self.peer, texto[:120]))
+            return
+        if (nuevo["luz"], nuevo["app"]) != (self.robot.get("luz"), self.robot.get("app")):
+            log("%s  robot: luz %s, %s" % (self.peer, nuevo["luz"], "enlazado con la app" if nuevo["app"]
+                                             else "sin enlace con la app"))
+        self.robot = nuevo
+
     def fin_de_turno(self):
         log("%s  0x03 fin de turno" % self.peer)
         if self.respondiendo.is_set():
@@ -954,6 +981,7 @@ class Sesion:
 
         t_llm_total = time.monotonic() - t0
         self.fin_respuesta()
+        avisar_api_a_robots()
 
         respuesta = " ".join(dichas)
         dur_audio = bytes_audio / float(SAMPLE_RATE * SAMPLE_WIDTH)
@@ -1190,6 +1218,31 @@ def sesion_que_habla():
     return max(oyen, key=lambda m: m.escucha_desde) if oyen else None
 
 
+def avisar_api_a_robots():
+    """17 nov: le dice a cada robot si hay API, solo si cambio desde lo ultimo que se le dijo. La llaman el fin de cada
+    respuesta, el panel al guardar o probar una clave, y vigilar_api() cada API_CADA_S (una pausa que se acaba)."""
+    import llm
+    hay = llm.hay_api()
+    with _sesiones_lock:
+        sesiones = list(SESIONES)
+    for s in sesiones:
+        if s.api_enviada is not hay:
+            log("%s  API para la luz del robot: %s" % (s.peer, "sí hay" if hay else "no hay"))
+            s.avisar_estado_api(hay)
+
+
+API_CADA_S = 3.0
+
+
+def vigilar_api():
+    while True:
+        time.sleep(API_CADA_S)
+        try:
+            avisar_api_a_robots()
+        except Exception as e:
+            log("api: no pude avisar a los robots: %s" % e)
+
+
 def vigilar_recordatorios():
     """Hilo: cada recordatorio que vence va a la cola de sesion_que_habla().
 
@@ -1265,6 +1318,8 @@ def atender(sock, addr):
     log("%s  conectado" % sesion.peer)
     sesion.debug("servidor listo | activacion: %s | acciones: %s"
                  % (ACTIVACION, ", ".join(n for n, _, _ in acciones.ACCIONES)))
+    import llm
+    sesion.avisar_estado_api(llm.hay_api())
     try:
         sock.settimeout(120.0)
         while True:
@@ -1292,11 +1347,17 @@ def atender(sock, addr):
                 texto = payload.decode("utf-8", "replace")
                 if texto.startswith("ble:"):
                     sesion.recibir_ble(texto[4:])
+                elif texto.startswith("robot:"):
+                    sesion.recibir_estado_robot(texto[6:])
                 elif texto.startswith("codigo:"):
                     # 12 nov: la app quiere enlazar al robot por Bluetooth y el robot pide decir su codigo (el
                     # autenticador): el PC lo dice por el altavoz del robot. El codigo no va al registro.
                     cifras = "".join(c for c in texto[7:] if c.isdigit())[:6]
-                    if len(cifras) == 6:
+                    import robot_wifi
+                    if len(cifras) == 6 and robot_wifi.recibir_codigo(cifras):
+                        # 17 nov: lo pidio el panel para enlazar el robot con la app: no se dice en voz alta
+                        log("%s  el robot dio su código al panel para enlazarlo con la app" % sesion.peer)
+                    elif len(cifras) == 6:
                         log("%s  el robot pide decir su código para enlazar la app" % sesion.peer)
                         sesion.cola.put(("codigo_esp32", FRASE_CODIGO_ROBOT, cifras))
                 else:
@@ -1387,6 +1448,7 @@ def main():
     CLASIFICADOR.extraer_recordatorio("recuérdame probar en 1 minuto")    # en frio tardaba 7.5 s
     log("  extractor de recordatorios listo en %.1f s" % (time.monotonic() - t0))
     threading.Thread(target=vigilar_recordatorios, daemon=True).start()
+    threading.Thread(target=vigilar_api, daemon=True).start()
     if DESCUBRIR_PORT:
         threading.Thread(target=responder_descubrimiento, daemon=True).start()
     log("recordatorios: %s | %d pendiente(s)" % (AGENDA.ruta, len(AGENDA.pendientes())))
