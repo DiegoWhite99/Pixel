@@ -3,7 +3,7 @@
 Píxel es un agente de inteligencia artificial creado por Divergencia IA, con cara de robot, hecho para una feria de tecnología. Vive en una aplicación web que se instala en el celular: oye la palabra **«Píxel»**, piensa con la inteligencia artificial que elijas (cada persona pone su clave), contesta con una voz natural de alta calidad y mueve su cara en 3D. Se entra con la cuenta de Google y cada persona tiene su perfil. Un computador y un ESP32 son opcionales: le dan micrófono y altavoz propios y le dejan manejar los aparatos de la casa.
 
 - **Aplicación:** https://pixelassitance.web.app (en el celular, con Chrome).
-- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.5.0/pixel_2.5.0_amd64.deb) y [Windows (.exe)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.5.0/Pixel-2.5.0-Setup.exe), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
+- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.5.0/pixel_2.5.0_amd64.deb) **estable** y [Windows (.exe)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.5.0/Pixel-2.5.0-Setup.exe) **beta** (pasa la prueba automática en un Windows limpio, pero todavía no se ha usado en un Windows de verdad), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
 - **Versión actual:** 2.5.0, del 15 de noviembre de 2026.
 - **Cómo está hecho por dentro:** `CLAUDE.md`. **Mediciones y decisiones:** `memoria.md`.
 
