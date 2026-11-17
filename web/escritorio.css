@@ -53,6 +53,34 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .sub { color: var(--suave); margin: 4px 0 0; font-size: 14px; }
 .nota { color: var(--cian); font-size: 14px; margin: 8px 0; }
 .error { color: var(--mal); font-weight: 600; }
+.nota.hecho { color: var(--bien); font-weight: 600; }
+/* 17 nov: Robot Píxel: el bombillo tiene el color del LED del robot; los pasos Bluetooth y WiFi */
+.robot-estado { display: flex; align-items: center; gap: 14px; margin-top: 12px; }
+.robot-estado .txt { display: grid; gap: 2px; }
+.robot-estado small { color: var(--suave); font-size: 13.5px; }
+.bombillo { flex: none; width: 34px; height: 34px; border-radius: 50%; background: #334155; border: 2px solid rgba(255, 255, 255, 0.15); }
+.bombillo[data-luz="azul"] { background: #3b82f6; box-shadow: 0 0 18px #3b82f6; }
+.bombillo[data-luz="verde"] { background: #22c55e; box-shadow: 0 0 18px #22c55e; }
+.bombillo[data-luz="amarilla"] { background: #facc15; box-shadow: 0 0 18px #facc15; }
+.bombillo[data-luz="roja"] { background: #ef4444; box-shadow: 0 0 18px #ef4444; }
+.condiciones { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; }
+.condiciones li { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.condiciones li > span { width: 20px; text-align: center; font-weight: 700; }
+.condiciones li.bien > span { color: #22c55e; } .condiciones li.mal > span { color: var(--mal); }
+.condiciones li small { color: var(--suave); }
+.condiciones li .btn { margin-left: auto; padding: 4px 12px; }
+.paso { margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.paso-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.paso-cab .btn { margin-left: auto; }
+.paso-num { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: rgba(56, 189, 248, 0.15); color: var(--cian); font-weight: 700; font-size: 13px; }
+.paso .lista, .paso .vacio, .pregunta, #f-wifi-otra { margin-top: 10px; }
+.pregunta p { margin: 0; }
+.fila.elegida { border-color: var(--cian); background: rgba(56, 189, 248, 0.08); }
+#lista-redes .sub-titulo { margin-top: 14px; }
+#lista-redes .lista { max-height: 430px; overflow-y: auto; padding-right: 4px; }
+.casilla { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 14px; color: var(--suave); cursor: pointer; }
+.casilla input { width: 18px; height: 18px; accent-color: var(--cian); }
+.casilla[hidden], .campo[hidden] { display: none; }
 svg { stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
 /* ------------------------------------------------------------------ botones y campos */
@@ -348,6 +376,13 @@ body.con-intro .app { opacity: 0; }
   100% { opacity: 1; transform: none; filter: blur(0) drop-shadow(0 0 34px rgba(56, 189, 248, 0.55)); }
 }
 .intro-pixel.listo svg { animation: flota 4s ease-in-out infinite; }
+/* 17 nov: la cara 3D de la app (cara3d.js) en la bienvenida */
+.intro-pixel.en-3d { position: relative; }
+.intro-cara { position: absolute; inset: -20px; width: calc(100% + 40px); height: calc(100% + 40px); display: block; touch-action: none; }
+.intro-pixel .fondo-musica, .avatar .fondo-musica { display: none; }
+.avatar.en-3d { position: relative; filter: drop-shadow(0 4px 12px rgba(56, 189, 248, 0.35)); }
+.logo-cara { position: absolute; inset: -4px; width: calc(100% + 8px); height: calc(100% + 8px); display: block; }
+.volando .intro-cara { inset: 0; width: 100%; height: 100%; }
 .onda {
   position: absolute; left: 50%; top: 55%; width: 220px; height: 220px; margin: -110px 0 0 -110px; border-radius: 50%;
   border: 2px solid rgba(94, 231, 255, 0.6); opacity: 0; pointer-events: none;

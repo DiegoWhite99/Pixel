@@ -150,7 +150,8 @@
               Object.assign(ap.puentes[pid], {capacidades: p.capacidades || [], tvs: p.tvs || [], mac: p.mac || "", ip: p.ip || (e.servidor && e.servidor.ip) || "",
                 panel: (e.servidor && e.servidor.panel) || 0, version: p.version || "", rssi: p.rssi || 0,
                 ir_rx: !!p.ir_rx, wifi: (e.wifi && e.wifi.dispositivos) || [],
-                pc: p.pc || "", pc_conectado: p.pc_conectado});     // 2.4.3: el robot, con que PC piensa
+                pc: p.pc || "", pc_conectado: p.pc_conectado,      // 2.4.3: el robot, con que PC piensa
+                luz: p.luz || "", api: p.api, app: p.app});        // 17 nov: su luz y lo que necesita el verde
             } catch (er) { /* estado roto: se ignora */ }
             pintar();
           }, () => {}),
@@ -339,43 +340,25 @@
     };
   }
 
-  // 15 nov (captura del usuario): en Chrome del PC con Ubuntu salia "Este navegador no tiene Bluetooth web. Usa
-  // Chrome en Android (o en el PC)", y ya estaba en Chrome en el PC. Cada causa con su aviso. En Linux, Chrome trae
-  // el Bluetooth web apagado: comprobado en Chrome 156, navigator.bluetooth no existe sin la opcion experimental.
-  // Funcion pura (se prueba en tools/prueba_modulos.js): {texto, copiar?}.
-  function porQueSinBluetooth(ua, seguro, host, brave) {
-    ua = ua || "";
-    if (!seguro) {
-      return {texto: "El Bluetooth del navegador solo funciona en una dirección segura. Abre la app en https://pixelassitance.web.app, " +
-        `o en http://localhost:8080 en el mismo PC donde está Píxel (ahora estás en ${host}).`};
-    }
-    if (/iPhone|iPad|iPod/.test(ua)) return {texto: "En el iPhone y el iPad ningún navegador tiene Bluetooth web. Usa Chrome en un celular Android o en un PC."};
-    if (brave) {
-      return {texto: "Brave trae el Bluetooth web apagado. Para prenderlo, copia esta dirección, pégala en la barra de Brave, ponla en «Enabled» y reinicia Brave. O usa Chrome.",
-        copiar: "brave://flags/#brave-web-bluetooth-api"};
-    }
-    if (/SamsungBrowser\//.test(ua)) return {texto: "El navegador de Samsung no tiene Bluetooth web. Abre la app en Chrome."};
-    const chrome = /Chrome\/|Chromium\/|Edg\//.test(ua) && !/Firefox\/|FxiOS\//.test(ua);
-    if (!chrome) return {texto: "Este navegador no tiene Bluetooth web. Abre la app en Chrome o en Edge (en el PC o en un celular Android)."};
-    if (/Linux/.test(ua) && !/Android/.test(ua)) {
-      const nav = /Edg\//.test(ua) ? "Edge" : "Chrome";
-      return {texto: `En Linux, ${nav} trae el Bluetooth web apagado. Para prenderlo, copia esta dirección, pégala en la barra de ${nav}, ` +
-        `pon «Experimental Web Platform features» en «Enabled» y reinicia ${nav}. O usa Chrome en tu celular Android.`,
-        copiar: (/Edg\//.test(ua) ? "edge" : "chrome") + "://flags/#enable-experimental-web-platform-features"};
-    }
-    return {texto: "Este navegador no deja usar el Bluetooth en esta página. Actualiza Chrome, o usa Chrome en tu celular Android."};
+  // 17 nov (el usuario, con captura: "te he dicho mil veces que no muestres estos errores, porque estamos en Chrome y se
+  // contradice"): el 15 nov, sin Bluetooth web, salia un recuadro fijo con como prender la opcion experimental de Chrome
+  // (porQueSinBluetooth), aun con el robot en linea. Ahora, sin Bluetooth en el navegador, el boton lleva al Panel de
+  // control del PC, que vincula el robot por su propio Bluetooth (robot_wifi.py, desde el 17 nov), y no queda nada fijo.
+  const SIN_BLE = "Agrega el robot desde el Panel de control del PC: Dispositivos → Robot Píxel → Detectar por Bluetooth.";
+
+  // 17 nov (el usuario: "si está el panel debe estar igual que en la web"): el bombillo y las condiciones del robot,
+  // con lo que el robot publica en la nube y la misma forma que el panel del PC (luz_robot.js)
+  function luzRobot(pid, p) {
+    if (!window.LuzRobot) return "";
+    const d = window.LuzRobot.describir(enLinea(pid) && p.luz ? {luz: p.luz, red: true, panel: !!p.pc_conectado, api: !!p.api, app: !!p.app} : {});
+    return `<div class="robot-estado"><span class="bombillo" data-luz="${esc(d.luz)}" aria-hidden="true"></span><div><b>${esc(d.titulo)}</b>${d.detalle ? "<small>" + esc(d.detalle) + "</small>" : ""}</div></div>` +
+      (d.condiciones.length ? `<ul class="condiciones">${window.LuzRobot.htmlCondiciones(d)}</ul>` : "");
   }
 
   async function agregarEsp32() {
     const caja = $("#ap-ble");
     const paso = (h) => { caja.innerHTML = h; caja.hidden = false; };
-    if (!navigator.bluetooth) {
-      const p = porQueSinBluetooth(navigator.userAgent, window.isSecureContext, location.host, !!navigator.brave);
-      paso(`<p class="aviso">${esc(p.texto)}</p>` + (p.copiar ? `<p class="aviso"><code>${esc(p.copiar)}</code> <button type="button" class="btn suave" id="ap-copiar-bt">Copiar</button></p>` : ""));
-      const b = $("#ap-copiar-bt");
-      if (b) b.addEventListener("click", () => navigator.clipboard.writeText(p.copiar).then(() => { b.textContent = "Copiada"; }, () => { b.textContent = "Cópiala a mano"; }));
-      return;
-    }
+    if (!navigator.bluetooth) { caja.hidden = true; toast(SIN_BLE); return; }
     // el Bluetooth del aparato apagado (o sin Bluetooth): antes no salia nada al tocar el boton
     const apagado = '<p class="aviso">El Bluetooth de este aparato está apagado, o no tiene. Préndelo y vuelve a tocar el botón.</p>';
     try { if (navigator.bluetooth.getAvailability && !(await navigator.bluetooth.getAvailability())) { paso(apagado); return; } } catch (e) { /* se intenta igual */ }
@@ -533,7 +516,7 @@
     if (!u) return;
     const ps = Object.entries(ap.puentes), pcs = ps.filter(([, x]) => x.tipo !== "puente");
     const hp = ps.length ? ps.map(([pid, p]) => `<div class="fila"><span class="ico ${enLinea(pid) ? "verde" : ""}">${svg(p.tipo === "puente" ? "otro" : "pc")}</span>
-        <div class="txt"><b>${esc(p.nombre)}</b><small>${p.tipo === "puente" ? "Robot Píxel" : "PC con el servidor" + (p.ip ? " · " + esc(p.ip) : "")} · ${enLinea(pid) ? "conectado" : "desconectado"}${p.capacidades.length ? " · " + esc(p.capacidades.join(", ")) : ""}${p.tipo === "puente" ? robotPc(pid, p, pcs) : ""}</small></div>
+        <div class="txt"><b>${esc(p.nombre)}</b><small>${p.tipo === "puente" ? "Robot Píxel" : "PC con el servidor" + (p.ip ? " · " + esc(p.ip) : "")} · ${enLinea(pid) ? "conectado" : "desconectado"}${p.capacidades.length ? " · " + esc(p.capacidades.join(", ")) : ""}${p.tipo === "puente" ? robotPc(pid, p, pcs) : ""}</small>${p.tipo === "puente" ? luzRobot(pid, p) : ""}</div>
         <span class="chip ${enLinea(pid) ? "ok" : "warn"}">${enLinea(pid) ? "En línea" : "Sin conexión"}</span>
         <button class="btn suave" type="button" data-probar-puente="${esc(pid)}">Probar</button>
         <button class="btn" type="button" data-quitar-puente="${esc(pid)}">Quitar</button></div>`).join("")
@@ -630,6 +613,7 @@
     $("#ap-metodo").addEventListener("change", camposMetodo);
     $("#f-aparato").addEventListener("submit", guardarAparato);
     $("#ap-ble-btn").addEventListener("click", () => agregarEsp32());
+    if (!navigator.bluetooth) $("#ap-ble-btn").textContent = "Agregar el robot desde el Panel de control";   // 17 nov
     $("#ap-puentes").addEventListener("click", async (e) => {
       const q = e.target.closest("[data-quitar-puente]");
       if (q) { quitarPuente(q.dataset.quitarPuente, q); return; }
@@ -704,7 +688,7 @@
     contexto: () => (lista().length ? "## Aparatos\n" + lista().map((a) => `- ${a.nombre} (${TIPOS[a.tipo] || a.tipo}): ${accionesDe(a).join(", ").replace(/_/g, " ") || "sin botones aprendidos"}${enLinea(a.puente) ? "" : "; su puente está desconectado"}.`).join("\n") : ""),
   });
 
-  window.PixelAparatos = {texto: {buscarAparato, plan, accionesDe, conArticulo, porQueSinBluetooth}, TIPOS, METODOS, mandar, probar: probarPuente,
+  window.PixelAparatos = {texto: {buscarAparato, plan, accionesDe, conArticulo}, TIPOS, METODOS, mandar, probar: probarPuente,
     // el primer puente en linea que sabe hacer algo ("youtube": el PC busca videos con yt-dlp)
     puenteCon: (cap) => Object.keys(ap.puentes).find((pid) => capacidades(pid).includes(cap) && enLinea(pid)) || ""};
 })();

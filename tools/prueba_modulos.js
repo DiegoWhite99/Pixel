@@ -13,7 +13,7 @@ ctx.self = ctx;
 vm.createContext(ctx);
 // lo que pone app.js: aqui solo lo justo para que los modulos carguen sin pagina
 vm.runInContext("var nube = {uid: '', usuario: null, d: null}; var $ = () => null; var esc = (t) => String(t); var toast = () => {};", ctx);
-for (const f of ["proveedores.js", "proveedor_claude.js", "voz.js", "agente.js", "cerebro.js", "google.js", "tiempo.js", "aparatos.js", "musica.js", "humor.js", "apuntes.js", "contactos.js", "whatsapp.js", "ajustes.js", "perfil.js", "registro.js"]) {
+for (const f of ["luz_robot.js", "proveedores.js", "proveedor_claude.js", "voz.js", "agente.js", "cerebro.js", "google.js", "tiempo.js", "aparatos.js", "musica.js", "humor.js", "apuntes.js", "contactos.js", "whatsapp.js", "ajustes.js", "perfil.js", "registro.js"]) {
   const ruta = path.join(WEB, f);
   if (fs.existsSync(ruta)) vm.runInContext(fs.readFileSync(ruta, "utf8"), ctx, {filename: f});
 }
@@ -232,21 +232,6 @@ if (ctx.PixelAparatos) {
     assert.strictEqual(D.buscarAparato(aparatos, "el computador").id, "p");
     assert.strictEqual(D.buscarAparato(aparatos, "la luz").id, "l");
     assert.strictEqual(D.buscarAparato(aparatos, "la nevera"), null);
-  });
-  prueba("porQueSinBluetooth: cada causa con su aviso (15 nov: en Chrome del PC decia 'usa Chrome')", () => {
-    const B = D.porQueSinBluetooth;
-    const chromeLinux = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36";
-    const linux = B(chromeLinux, true, "localhost:8080", false);
-    assert.ok(/Linux, Chrome trae el Bluetooth web apagado/.test(linux.texto), linux.texto);
-    assert.strictEqual(linux.copiar, "chrome://flags/#enable-experimental-web-platform-features");
-    assert.ok(!/no tiene Bluetooth web/.test(linux.texto), "en Chrome no se dice que el navegador no lo tiene");
-    assert.ok(/dirección segura/.test(B(chromeLinux, false, "192.168.1.50:8080", false).texto), "por IP: falta la direccion segura");
-    assert.strictEqual(B("Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0", true, "x", false).texto.indexOf("Este navegador no tiene"), 0);
-    assert.ok(/iPhone/.test(B("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 CriOS/140.0 Mobile/15E148 Safari/604.1", true, "x", false).texto));
-    assert.ok(/Brave/.test(B(chromeLinux, true, "x", true).texto));
-    assert.ok(/Linux, Edge/.test(B(chromeLinux + " Edg/156.0.0.0", true, "x", false).texto));
-    const android = B("Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Mobile Safari/537.36", true, "x", false);
-    assert.ok(!android.copiar && !/Linux/.test(android.texto), "Android no es el caso de Linux");
   });
   prueba("conArticulo: genero y siglas", () => {
     assert.strictEqual(D.conArticulo("Tele de la sala"), "la tele de la sala");
@@ -1020,6 +1005,31 @@ if (ctx.PixelContactos) {
   prueba("espejo: index.html carga espejo.js antes de app.js", () => {
     const html = fs.readFileSync(path.join(WEB, "index.html"), "utf8");
     assert.ok(html.indexOf('src="espejo.js"') > 0 && html.indexOf('src="espejo.js"') < html.indexOf('src="app.js"'));
+  });
+}
+
+// ------------------------------------------------------------------ 17 nov: la luz del robot, igual en el panel y en la app
+{
+  const L = vm.runInContext("LuzRobot", ctx);
+  prueba("luz del robot: cada color con su titulo, y las cuatro condiciones del verde", () => {
+    const todo = {red: true, panel: true, api: true, app: true};
+    assert.strictEqual(L.describir(Object.assign({luz: "verde"}, todo)).titulo, "Todo bien conectado");
+    const azul = L.describir({luz: "azul", red: true, panel: true, api: true, app: false});
+    assert.strictEqual(JSON.stringify(azul.condiciones.map((c) => [c.nombre, c.ok])), JSON.stringify([["Red", true], ["Panel de control", true], ["API", true], ["Enlace con la app", false]]));
+    assert.ok(/API/.test(L.describir({luz: "amarilla"}).titulo) && /error/.test(L.describir({luz: "roja"}).titulo));
+    const sin = L.describir({});
+    assert.ok(sin.titulo === "Sin conexión" && !sin.condiciones.length, "sin luz no se inventan condiciones");
+    assert.ok(/✗/.test(L.htmlCondiciones(azul)) && !/<script/.test(L.htmlCondiciones(L.describir({luz: "azul", red: "<script>"}))));
+  });
+  prueba("luz del robot: el panel del PC y la app usan la misma (luz_robot.js), sin avisos de opciones de Chrome", () => {
+    // la app carga aparatos.js despues, como modulo (agente.js): basta con que luz_robot.js vaya antes de app.js
+    for (const [html, js, antes] of [["index.html", "aparatos.js", "app.js"], ["escritorio.html", "escritorio.js", "escritorio.js"]]) {
+      const h = fs.readFileSync(path.join(WEB, html), "utf8"), j = fs.readFileSync(path.join(WEB, js), "utf8");
+      assert.ok(h.indexOf('src="luz_robot.js"') > 0 && h.indexOf('src="luz_robot.js"') < h.indexOf(`src="${antes}"`), `${html} no carga luz_robot.js antes de ${antes}`);
+      assert.ok(/LuzRobot\.describir\(/.test(j) && /LuzRobot\.htmlCondiciones\(/.test(j), `${js} no dibuja la luz con luz_robot.js`);
+    }
+    const ap = fs.readFileSync(path.join(WEB, "aparatos.js"), "utf8");
+    assert.ok(!/chrome:\/\/flags|enable-experimental-web-platform/.test(ap), "17 nov: «no muestres estos errores»");
   });
 }
 

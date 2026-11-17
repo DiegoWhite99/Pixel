@@ -40,6 +40,7 @@ import hmac
 import json
 import os
 import queue
+import re
 import secrets
 import threading
 import time
@@ -503,6 +504,24 @@ def nombre_a_duenos():
             S.log("nube: no pude poner el nombre en la cuenta de %s: %s" % ((d or {}).get("nombre") or uid, e))
     if puestos:
         S.log("nube: nombre '%s' puesto en %d cuenta(s) enlazada(s)" % (nombre(), puestos))
+
+
+def marcar_enlace_robot(robot_pid):
+    """17 nov (Fase 16): el panel enlaza el robot con la app. Deja usuarios/<uid>/enlazando/<robot> en cada cuenta
+    enlazada con este PC, como hace la app al agregar un aparato (web/aparatos.js): con esa marca (15 min) las reglas
+    dejan al robot anotarse en la cuenta. Desde el 17 nov las reglas dejan escribirla tambien a un PC enlazado a la
+    cuenta (no a un robot). Devuelve [(uid, nombre de la app)]."""
+    if not _estado["activa"] or not _auth.get("id"):
+        raise RuntimeError("Este panel no está conectado a la nube.")
+    duenos = list(_estado["duenos"].items())
+    if not duenos:
+        raise RuntimeError("Este panel no está vinculado con ninguna cuenta de la app.")
+    if not re.match(r"^[A-Za-z0-9_-]{6,64}$", robot_pid or ""):
+        raise RuntimeError("El robot no dijo su identidad.")
+    for uid, _ in duenos:
+        _db("PUT", "usuarios/%s/enlazando/%s" % (uid, robot_pid), SV)
+    S.log("nube: marca de enlace del robot %s en %d cuenta(s)" % (robot_pid[:6], len(duenos)))
+    return [(uid, str((d or {}).get("nombre") or "app")) for uid, d in duenos]
 
 
 def publicar_ia():

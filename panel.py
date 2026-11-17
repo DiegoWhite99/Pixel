@@ -33,6 +33,7 @@ import nube
 import puente_pc
 import recordatorios
 import red_wifi
+import robot_wifi
 
 S = None           # el modulo del servidor en marcha; lo pone iniciar()
 
@@ -224,6 +225,7 @@ def estado():
             "frases": s.n_frases, "pico": s.pico_sesion,
             "piso": round(s.piso) if s.piso is not None else None,
             "ultimo": s.ultimo_texto,
+            "robot": {k: v for k, v in getattr(s, "robot", {}).items() if k != "id"},   # 17 nov: {luz, app}
             "ble": {"yo": s.ble_yo,
                     "vistos": [dict(v, aceptado=v["mac"] in ACEPTADOS) for v in s.ble],
                     "hace": int(ahora - s.ble_t) if s.ble_t is not None else None},
@@ -259,6 +261,8 @@ def estado():
         "mis_dispositivos": mios,
         "bt_pc": bluetooth_pc.estado(),
         "wifi": wifi,
+        "robot_wifi": robot_wifi.estado(),      # 17 nov (Fase 16): darle el WiFi al robot por Bluetooth
+        "hay_api": llm.hay_api(),               # 17 nov: lo mismo que se le dice al robot (luz amarilla)
         "nube": nube.estado_local(),
         "puente": puente_pc.estado(),       # Fase 13: lo que este PC sabe hacer como puente de aparatos
         "obsidian": _obsidian(),
@@ -535,10 +539,13 @@ def guardar_gemini(d):
         S.log("panel: clave de Gemini quitada; responde Ollama")
         _marcar_ia("gemini", d)
         nube.publicar_ia()
+        S.avisar_api_a_robots()
         return {"mensaje": "Clave quitada. Píxel vuelve a usar la IA local."}
     S.log("panel: clave de Gemini guardada")
     ok, texto = gemini.probar()
     S.log("panel: prueba de Gemini: %s" % texto)
+    llm.anotar(gemini.NOMBRE, ok)
+    S.avisar_api_a_robots()                     # 17 nov: la luz del robot, enseguida
     if not ok and gemini.clave_rechazada():       # 12 nov: una clave que Google no acepta no se queda
         gemini.guardar("")
         nube.publicar_ia()
@@ -553,6 +560,8 @@ def guardar_gemini(d):
 def probar_gemini(d):
     ok, texto = gemini.probar()
     S.log("panel: prueba de Gemini: %s" % texto)
+    llm.anotar(gemini.NOMBRE, ok)
+    S.avisar_api_a_robots()
     if not ok:
         raise ErrorPanel(texto)
     return {"mensaje": texto}
@@ -568,10 +577,13 @@ def guardar_groq(d):
         S.log("panel: clave de Groq quitada")
         _marcar_ia("groq", d)
         nube.publicar_ia()
+        S.avisar_api_a_robots()
         return {"mensaje": "Clave de Groq quitada."}
     S.log("panel: clave de Groq guardada")
     ok, texto = groq_ia.probar()
     S.log("panel: prueba de Groq: %s" % texto)
+    llm.anotar(groq_ia.NOMBRE, ok)
+    S.avisar_api_a_robots()                     # 17 nov: la luz del robot, enseguida
     if not ok and groq_ia.clave_rechazada():      # una clave que Groq no acepta no se queda
         groq_ia.guardar("")
         nube.publicar_ia()
@@ -586,6 +598,8 @@ def guardar_groq(d):
 def probar_groq(d):
     ok, texto = groq_ia.probar()
     S.log("panel: prueba de Groq: %s" % texto)
+    llm.anotar(groq_ia.NOMBRE, ok)
+    S.avisar_api_a_robots()
     if not ok:
         raise ErrorPanel(texto)
     return {"mensaje": texto}
@@ -602,6 +616,7 @@ def elegir_ia(d):
         aplicar_ajustes()
     _marcar_ia("preferida", d)
     nube.publicar_ia()
+    S.avisar_api_a_robots()
     return {"mensaje": "Primero contesta %s." % ("Gemini" if ia == "gemini" else "Groq")}
 
 
@@ -642,9 +657,67 @@ RUTAS_POST.update({
     "/api/groq/probar": probar_groq,
     "/api/ia": elegir_ia,
 })
+def _robot_paso(funcion, *args, **kw):
+    try:
+        funcion(*args, **kw)
+    except robot_wifi.Error as e:
+        raise ErrorPanel(str(e))
+    return {}
+
+
+# 17 nov (Fase 16): vincular el robot desde la ventana, por pasos (de fondo; el avance va en /api/estado)
+def robot_detectar(d):
+    """Paso 1: los aparatos Bluetooth cercanos."""
+    return _robot_paso(robot_wifi.iniciar_deteccion)
+
+
+def robot_vincular(d):
+    """Paso 2: vincular por Bluetooth el aparato elegido (comprueba que es el robot)."""
+    return _robot_paso(robot_wifi.iniciar_vincular, (d.get("direccion") or "").strip())
+
+
+def robot_redes(d):
+    """Con «No» a usar el WiFi de este PC: las redes que ve el PC."""
+    return _robot_paso(robot_wifi.iniciar_buscar_redes)
+
+
+def _robot_dice_app():
+    """17 nov: algun robot conectado a este PC dice que ya esta enlazado con la app (debug "robot:{"app": true}")."""
+    with S._sesiones_lock:
+        return any(getattr(s, "robot", {}).get("app") for s in S.SESIONES)
+
+
+def _robot_id_por_red():
+    """17 nov: la identidad del robot conectado a este PC (la dice en su debug "robot:{...}"), o ""."""
+    with S._sesiones_lock:
+        ids = [getattr(s, "robot", {}).get("id") for s in S.SESIONES]
+    return next((i for i in reversed(ids) if i), "")
+
+
+def robot_wifi_dar(d):
+    """Paso 3: el WiFi del robot. usar_pc: el de este PC con la contrasena que tiene guardada (no viaja a la ventana)."""
+    return _robot_paso(robot_wifi.iniciar_wifi, bool(d.get("usar_pc")), d.get("ssid") or "", d.get("clave") or "",
+                       registrar=S.registrar, usar_guardada=bool(d.get("guardada")), marcar=nube.marcar_enlace_robot,
+                       app_por_red=_robot_dice_app)
+
+
+def robot_enlazar_app(d):
+    """Paso 4 a mano: enlazar el robot con la app de las cuentas de este PC (se hace solo tras el WiFi)."""
+    return _robot_paso(robot_wifi.iniciar_enlace_app, nube.marcar_enlace_robot, registrar=S.registrar,
+                       app_por_red=_robot_dice_app, id_por_red=_robot_id_por_red)
+
+
 RUTAS_SOLO_LOCAL = {
     "/api/google/credencial": guardar_credencial_google,     # un archivo de este PC: no llega por la nube
+    "/api/robot/detectar": robot_detectar,                   # el Bluetooth de este PC
+    "/api/robot/vincular": robot_vincular,
+    "/api/robot/redes": robot_redes,
+    "/api/robot/wifi": robot_wifi_dar,                       # usa las contrasenas WiFi guardadas en este PC
+    "/api/robot/app": robot_enlazar_app,
 }
+# 17 nov: ademas, solo desde este mismo PC (el panel de desarrollo escucha en 0.0.0.0 y no pide contrasena): asi nadie
+# en la red puede hacer que el PC le pase una clave WiFi guardada a otro aparato Bluetooth que se haga pasar por el robot
+RUTAS_SOLO_ESTE_PC = {"/api/robot/detectar", "/api/robot/vincular", "/api/robot/redes", "/api/robot/wifi", "/api/robot/app"}
 
 
 _saludo = {"clave": None, "wav": b""}
@@ -728,6 +801,9 @@ class Manejador(BaseHTTPRequestHandler):
         if funcion is None or largo > 20000:
             self._responder(404, {"error": "No existe."})
             return
+        if self.path in RUTAS_SOLO_ESTE_PC and self.client_address[0] not in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+            self._responder(403, {"error": "Esto solo se puede hacer desde el computador donde está Píxel."})
+            return
         try:
             datos = json.loads(self.rfile.read(largo) or b"{}")
             self._responder(200, funcion(datos if isinstance(datos, dict) else {}))
@@ -743,6 +819,7 @@ def iniciar(modulo_servidor):
     global S
     S = modulo_servidor
     puente_pc.S = modulo_servidor
+    robot_wifi.LOG = S.log
     cargar_ajustes()
     ruta = _ruta(S.DISPOSITIVOS_ARCHIVO)
     if os.path.exists(ruta):

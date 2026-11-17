@@ -112,9 +112,28 @@
           <p class="sub">Las cuentas que manejan a este Píxel desde la app.</p>
           <div data-lista-apps data-con-quitar></div>
         </article>
-        <article class="tarjeta">
+        <article class="tarjeta ancha" id="tarjeta-robot">
           <div class="t-cab"><h2>Robot Píxel</h2></div>
-          <div id="lista-robots"></div>
+          <div class="robot-estado">
+            <span class="bombillo" id="robot-bombillo" aria-hidden="true"></span>
+            <div class="txt"><b id="robot-titulo">Sin vincular</b><small id="robot-detalle">Vincúlalo en dos pasos: Bluetooth y luego WiFi.</small></div>
+          </div>
+          <ul class="condiciones" id="robot-condiciones" aria-label="Lo que necesita el verde"></ul>
+          <p id="robot-fase" class="nota" hidden aria-live="polite"></p>
+          <div class="paso">
+            <div class="paso-cab"><span class="paso-num">1</span><b>Bluetooth</b><span class="chip bien" id="bt-hecho" hidden>Vinculado</span>
+              <button class="btn suave" type="button" id="robot-detectar">Detectar por Bluetooth</button></div>
+            <div id="lista-bt"></div>
+          </div>
+          <div class="paso">
+            <div class="paso-cab"><span class="paso-num">2</span><b>WiFi</b><span class="chip bien" id="wifi-hecho" hidden>Conectado</span>
+              <button class="btn suave" type="button" id="robot-vincular-wifi" disabled>Vincular con WiFi</button></div>
+            <div id="pregunta-wifi" class="pregunta" hidden>
+              <p id="pregunta-wifi-texto"></p>
+              <div class="acciones"><button class="btn primario" type="button" id="wifi-si">Sí</button><button class="btn fantasma" type="button" id="wifi-no">No</button></div>
+            </div>
+            <div id="lista-redes" hidden></div>
+          </div>
         </article>
         <article class="tarjeta ancha">
           <div class="t-cab"><h2>Aparatos de tu red</h2><button class="btn suave" type="button" id="buscar-red">Buscar en la red</button></div>
@@ -268,6 +287,8 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
+<script src="cara3d.js"></script>   <!-- 17 nov: la cara 3D de la app, en la bienvenida -->
+<script src="luz_robot.js"></script>   <!-- 17 nov: la luz del robot, igual que en la app -->
 <script src="escritorio.js"></script>
 </body>
 </html>
