@@ -820,6 +820,10 @@ class Sesion:
                 self.respondiendo.set()
                 self._con_micro_sordo(self._decir, item[1])
                 continue
+            if item[0] == "presentar":              # 18 nov: la presentacion de la app (panel.presentarse)
+                self.respondiendo.set()
+                self._con_micro_sordo(self._decir_frases, item[1])
+                continue
             if item[0] == "decir_esp32":            # "Probar" del altavoz de Pixel en el panel
                 self.respondiendo.set()
                 self.forzar_esp32 = True
@@ -1055,6 +1059,17 @@ class Sesion:
         if audio:
             self.enviar_audio(audio)
         self.fin_respuesta(cierre)
+        self.debug("ia: " + texto)
+
+    def _decir_frases(self, texto):
+        """18 nov: un texto largo (la presentacion de la app) frase por frase, por donde habla Pixel: la voz empieza
+        antes y Supertonic suena mejor con frases cortas que con todo de una vez. Un solo cierre al final."""
+        frases, resto = extraer_frases(texto)
+        for f in frases + ([resto.strip()] if resto.strip() else []):
+            audio = TTS.sintetizar(f)
+            if audio:
+                self.enviar_audio(audio)
+        self.fin_respuesta()
         self.debug("ia: " + texto)
 
     def _accion(self, hallada):

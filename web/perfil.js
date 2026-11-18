@@ -214,6 +214,17 @@ ${s(p.reglas)}
     pf.tarjeta = frase;
     pintarTarjeta();
     if (location.hash && location.hash !== "#inicio" && !otraVez) location.hash = "#inicio";
+    // 18 nov (pedido: "si ya había seleccionado que la salida de audio salga por el robot, debe ser por ahí, no por el
+    // PC"): si en el Panel de control contesta el robot (o el PC) y hay un robot conectado (contestaElRobot, app.js),
+    // la presentación suena por donde habla Píxel. Un Panel sin esta orden (antes de la 2.6.3) o un fallo: suena aquí.
+    if (typeof contestaElRobot === "function" && contestaElRobot() && typeof ordenNube === "function") {
+      try {
+        const r = await ordenNube("/api/presentarse", {texto: frase});
+        if (typeof cara !== "undefined" && cara) cara.emocion("feliz", 2500);
+        toast(r.mensaje || "Píxel se presenta por el robot.");
+        return;
+      } catch (e) { console.warn("perfil: la presentación por el robot no se pudo:", e.message || e); }
+    }
     // con la voz de Mexico si llega pronto (se empezo a bajar al tocar "Entrar con Google")
     const v = N.voz.actual();
     if (VP && VP.de(v) && !VP.info(v).lista) {

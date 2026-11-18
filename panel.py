@@ -369,6 +369,28 @@ def probar_voz(d):
     return {"mensaje": "Escucha: suena por el altavoz del PC." if AJUSTES["salida_voz"] == "pc" else "Escucha el ESP32."}
 
 
+PRESENTACION_MAX = 1200
+
+
+def presentarse(d):
+    """18 nov (pedido: "si ya habia seleccionado que la salida de audio salga por el robot, debe ser por ahi, no por el
+    PC"): "Que Pixel se presente otra vez" de la app, cuando en la ventana contesta el robot o este PC (Voz -> Por donde
+    habla): la presentacion suena por donde habla Pixel, no en el navegador. El texto lo arma la app (perfil.js,
+    presentacion(), con el nombre y el trato del perfil); aqui solo se acepta esa presentacion."""
+    texto = d.get("texto")
+    if not isinstance(texto, str) or not texto.strip() or len(texto) > PRESENTACION_MAX \
+            or "creado por Divergencia IA" not in texto:
+        raise ErrorPanel("Esa no es la presentación de Píxel.")
+    with S._sesiones_lock:
+        robot = S.SESIONES[-1] if S.SESIONES else None
+    if robot is None:
+        raise ErrorPanel("No hay ningún robot conectado a este Panel de control.")
+    robot.cola.put(("presentar", texto.strip()))
+    S.log("panel: la app pide la presentacion de Pixel por %s" % ("el PC" if AJUSTES["salida_voz"] == "pc" else "el robot"))
+    return {"mensaje": "Píxel se presenta por los altavoces del PC." if AJUSTES["salida_voz"] == "pc"
+            else "Píxel se presenta por el robot."}
+
+
 def guardar_contacto(d):
     nombre = (d.get("nombre") or "").strip()
     correo = (d.get("correo") or "").strip()
@@ -630,6 +652,7 @@ def elegir_ia(d):
 RUTAS_POST = {
     "/api/agente": guardar_agente,
     "/api/agente/probar": probar_voz,
+    "/api/presentarse": presentarse,       # 18 nov: la presentacion de la app, por donde habla Pixel (solo los duenos)
     "/api/contactos": guardar_contacto,
     "/api/contactos/borrar": borrar_contacto,
     "/api/agenda/borrar": borrar_agenda,

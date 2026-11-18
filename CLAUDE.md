@@ -168,6 +168,8 @@ Los datos de las pruebas (nombres de ejemplo como «Ana Prueba») van solo en cu
 - **Cara 3D** (`cara3d.js`) en la bienvenida (`montar(canvas, {soloSombra: true})`) y en el logo (`{sinSuelo: true}`) de la ventana.
 - **Firmware (fuera del repo):** se anuncia como «Pixel Assistance»; rechaza el aparato USB `1a86:5394` del hub nuevo (hacía abortar el reconocimiento USB de ESP-IDF 5.5.5); tras 3 caídas seguidas, o 2 apagones seguidos justo al prender el puerto USB, arranca sin USB. Con solo el cable del PC (y el hub con micrófono, placa amarilla y lector) se reinicia por falta de corriente: ver `memoria.md`.
 
+**Después de la 2.6.2 (va en la 2.6.3):** la presentación de la app suena por donde habla Píxel cuando contesta el robot o el PC (`/api/presentarse` en `RUTAS_POST`, solo el texto con «creado por Divergencia IA»; `Sesion._decir_frases`; `perfil.js presentarse` con `contestaElRobot` y `ordenNube`; `tests/test_presentarse.py`).
+
 **2.6.2 (18 nov):** la 2.6.1 sin el cuelgue del instalador de Windows en la prueba de GitHub (la 2.6.1 quedó solo como versión de prueba): `.onInstSuccess` vuelve a abrir Píxel solo con `/ABRIR` (lo pasa `actualizar.py`), no con cualquier `/S`, porque `probar_instaladores.yml` instala con `Start-Process -Wait`, que espera también a lo que abrió el instalador.
 
 **2.6.1 (18 nov): actualizaciones desde el panel, calibración cognitiva, contesta uno solo, dos códigos y sin órdenes fantasmas.**

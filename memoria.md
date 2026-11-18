@@ -1144,6 +1144,10 @@ El usuario: «va muy rápido con lo del código, le doy repetir el código y se 
 - **La luz y el enlace**: verificado con el robot real que robot, registro del PC y panel dicen el mismo color (11:05: azul, sin enlace con la app). El robot no podía anotarse en la cuenta (Firebase 401: su entrada se había borrado). Con la regla nueva, el panel puso la marca y a los 3 s el robot dijo «verde, enlazado con la app» (11:26).
 - **WiFi del robot desde el PC por Bluetooth** (`robot_wifi.py`): funcionó con el robot real (de la red de la casa a la del laboratorio, con la contraseña guardada en el PC). El PC ve al robot a -25 a -35 dBm a su lado.
 
+### 18 nov: la presentación de la app por el robot
+
+- El usuario: «cuando le doy presentarse de nuevo no se presenta en el robot; si ya había seleccionado que la salida de audio salga por el robot, debe ser por ahí, no por el PC». «Que Píxel se presente otra vez» (y la primera presentación) usan `contestaElRobot()`: con el robot o el PC elegidos y un robot conectado, la app manda la orden `/api/presentarse` (solo acepta la presentación de Píxel) y el robot la dice frase por frase (`Sesion._decir_frases`, un solo cierre) por donde habla Píxel. Un Panel anterior (sin la orden) o un fallo: suena en la app como antes. Va en la 2.6.3 (se instala con el botón «Actualizar»).
+
 ### 18 nov: la 2.6.1 se colgó en la prueba de Windows → 2.6.2
 
 - `probar_instaladores.yml` instala el .exe con `Start-Process -Wait … /S`, que espera al instalador **y a todo lo que abrió**. La 2.6.1 abría Píxel al terminar cualquier instalación en silencio (`.onInstSuccess` con `IfSilent`), así que el paso «Instalar como una persona» se quedó 25 min esperando (antes tardaba 34 s); se canceló. Ubuntu 24.04 y 22.04 sí pasaron. Arreglo: solo con `/ABRIR`, que pasa `actualizar.py`. La etiqueta v2.6.1 ya estaba subida: salió la 2.6.2.
