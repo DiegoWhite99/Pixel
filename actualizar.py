@@ -13,7 +13,7 @@ servidor.py a mano o con su servicio) no se activa: ahi se actualiza con git.
     Linux: pkexec dpkg -i (Ubuntu pide la contrasena en su ventanita) y Pixel se reinicia solo: si corre como
       servicio (pixel-asistente.service, Restart=on-failure) sale con 75 y systemd lo vuelve a arrancar; si no, deja
       un "sleep 3; pixel --sin-ventana" y sale (la ventana que estaba abierta se reconecta sola);
-    Windows: el instalador en silencio (/S) en la misma carpeta; cierra Pixel y lo vuelve a abrir (.onInstSuccess).
+    Windows: el instalador en silencio (/S /ABRIR) en la misma carpeta; cierra Pixel y lo vuelve a abrir (.onInstSuccess).
 Las funciones puras (version_tupla, mas_nueva, leer_publicacion, huella_en, nombre_paquete) y el flujo con la red
 simulada se prueban en tests/test_actualizar.py.
 """
@@ -308,7 +308,8 @@ def _reiniciar():
 
 
 def _instalar_windows(ruta):
-    args = [ruta, "/S"] + (["/D=" + _conf["carpeta"]] if _conf["carpeta"] else [])   # /D= va al final y sin comillas
+    # /ABRIR: que el instalador vuelva a abrir Pixel al terminar (.onInstSuccess). /D= va al final y sin comillas.
+    args = [ruta, "/S", "/ABRIR"] + (["/D=" + _conf["carpeta"]] if _conf["carpeta"] else [])
     flags = 0x00000008 | 0x00000200          # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP: que no muera con Pixel
     try:
         subprocess.Popen(args, creationflags=flags | 0x01000000, close_fds=True)     # + CREATE_BREAKAWAY_FROM_JOB

@@ -1144,6 +1144,10 @@ El usuario: «va muy rápido con lo del código, le doy repetir el código y se 
 - **La luz y el enlace**: verificado con el robot real que robot, registro del PC y panel dicen el mismo color (11:05: azul, sin enlace con la app). El robot no podía anotarse en la cuenta (Firebase 401: su entrada se había borrado). Con la regla nueva, el panel puso la marca y a los 3 s el robot dijo «verde, enlazado con la app» (11:26).
 - **WiFi del robot desde el PC por Bluetooth** (`robot_wifi.py`): funcionó con el robot real (de la red de la casa a la del laboratorio, con la contraseña guardada en el PC). El PC ve al robot a -25 a -35 dBm a su lado.
 
+### 18 nov: la 2.6.1 se colgó en la prueba de Windows → 2.6.2
+
+- `probar_instaladores.yml` instala el .exe con `Start-Process -Wait … /S`, que espera al instalador **y a todo lo que abrió**. La 2.6.1 abría Píxel al terminar cualquier instalación en silencio (`.onInstSuccess` con `IfSilent`), así que el paso «Instalar como una persona» se quedó 25 min esperando (antes tardaba 34 s); se canceló. Ubuntu 24.04 y 22.04 sí pasaron. Arreglo: solo con `/ABRIR`, que pasa `actualizar.py`. La etiqueta v2.6.1 ya estaba subida: salió la 2.6.2.
+
 ### 18 nov: actualizaciones desde el Panel de control (Fase 17)
 
 - El usuario: «me toca descargar todo el tiempo». `actualizar.py` en el programa instalado. Probado contra GitHub de verdad con la versión simulada en 2.5.0: encontró la 2.6.0, bajó el .deb (164 MB) en 49 s y la huella coincidió con su SHA256SUMS; la instalación (`pkexec dpkg -i`) y el reinicio quedaron simulados para no tocar este PC. Sin probar todavía: la ventanita de pkexec y el reinicio de verdad (se podrá con la primera versión después de la 2.6.1), y todo el camino de Windows. Ojo: un proceso del servicio de usuario de systemd no está en la sesión gráfica, y pkexec puede no tener con qué pedir la contraseña (sale 127): entonces el error dice el `sudo apt install` a mano.

@@ -174,5 +174,5 @@ def test_actualizar_en_windows(pc, monkeypatch):
     monkeypatch.setattr(A.subprocess, "Popen", lambda args, **k: lanzados.append(args))
     instalar_ya()
     ruta = str(pc["datos"] / "actualizacion" / "Pixel-2.7.0-Setup.exe")
-    assert lanzados == [[ruta, "/S", "/D=C:\\Pixel"]]
+    assert lanzados == [[ruta, "/S", "/ABRIR", "/D=C:\\Pixel"]]      # /ABRIR: que lo vuelva a abrir (solo el boton)
     assert pc["corridas"] == [] and "vuelve a abrir solo" in A.estado()["fase"]

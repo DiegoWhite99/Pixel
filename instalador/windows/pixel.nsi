@@ -14,6 +14,7 @@ RequestExecutionLevel user
 ManifestDPIAware true
 
 !include "MUI2.nsh"
+!include "FileFunc.nsh"          ; 18 nov: GetParameters y GetOptions (el /ABRIR del boton Actualizar)
 
 !define NOMBRE "Píxel"
 !define EDITOR "Divergency IA"
@@ -95,10 +96,15 @@ Function AbrirPixel
   Exec '${PYW} ${ARGS}'
 FunctionEnd
 
-; 18 nov (Fase 17, actualizar.py): el boton "Actualizar" de la ventana corre este instalador en silencio (/S), que
-; cierra Pixel (CERRAR_PIXEL); al terminar lo vuelve a abrir. Instalado a mano (con sus paginas), lo abre la ultima.
+; 18 nov (Fase 17, actualizar.py): el boton "Actualizar" de la ventana corre este instalador en silencio con /ABRIR,
+; que cierra Pixel (CERRAR_PIXEL); al terminar lo vuelve a abrir. Solo con /ABRIR: la prueba de GitHub instala con /S y
+; espera a que el instalador y todo lo que abrio terminen (Start-Process -Wait); con un Pixel abierto se quedaba
+; esperando para siempre (la 2.6.1). Instalado a mano, con sus paginas, lo abre la ultima pagina.
 Function .onInstSuccess
-  IfSilent 0 +2
+  ${GetParameters} $R0
+  ClearErrors
+  ${GetOptions} $R0 "/ABRIR" $R1
+  IfErrors +2
     Call AbrirPixel
 FunctionEnd
 

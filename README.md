@@ -3,8 +3,8 @@
 Píxel es un agente de inteligencia artificial creado por Divergencia IA, con cara de robot, hecho para una feria de tecnología. Vive en una aplicación web que se instala en el celular: oye la palabra **«Píxel»**, piensa con la inteligencia artificial que elijas (cada persona pone su clave), contesta con una voz natural de alta calidad y mueve su cara en 3D. Se entra con la cuenta de Google y cada persona tiene su perfil. Un computador y un ESP32 son opcionales: le dan micrófono y altavoz propios y le dejan manejar los aparatos de la casa.
 
 - **Aplicación:** https://pixelassitance.web.app (en el celular, con Chrome).
-- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.6.1/pixel_2.6.1_amd64.deb) **estable** y [Windows (.exe)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.6.1/Pixel-2.6.1-Setup.exe) **beta** (pasa la prueba automática en un Windows limpio, pero todavía no se ha usado en un Windows de verdad), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
-- **Versión actual:** 2.6.1, del 18 de noviembre de 2026.
+- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.6.2/pixel_2.6.2_amd64.deb) **estable** y [Windows (.exe)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.6.2/Pixel-2.6.2-Setup.exe) **beta** (pasa la prueba automática en un Windows limpio, pero todavía no se ha usado en un Windows de verdad), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
+- **Versión actual:** 2.6.2, del 18 de noviembre de 2026.
 - **Cómo está hecho por dentro:** `CLAUDE.md`. **Mediciones y decisiones:** `memoria.md`.
 
 ## Qué puede hacer
@@ -38,6 +38,7 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 
 | Versión | Fecha | Qué trae |
 |---|---|---|
+| **2.6.2** | 18 nov 2026 | Todo lo de la 2.6.1 (que quedó solo como versión de prueba) y un arreglo del instalador de Windows: instalado en silencio ya no abre Píxel solo; solo lo vuelve a abrir el botón «Actualizar» del Panel de control. |
 | **2.6.1** | 18 nov 2026 | Píxel se actualiza solo desde su Panel de control: busca versiones nuevas, te avisa y las instala con un botón (la última descarga a mano). En Mi perfil, el cuestionario de identidad y calibración cognitiva (14 preguntas, arquetipo y temperatura) que Píxel usa para entenderte. Contesta uno solo: en el Panel de control, «Por dónde habla» elige el robot, el computador o la app de internet, y el otro se queda callado. Dos códigos separados: el del Panel de control sale solo en su ventana y el robot dice el suyo («mi código de robot»). «Vincular con mi cuenta» desde la ventana del PC, y en la app «Vincular Panel de control» en Puentes, con la descripción de cada puente. El robot ya no pone música solo cuando su micrófono mete ruido, y al agregarlo desde la app ya no pide el botón BOOT estando con el PC. |
 | **2.6.0** | 17 nov 2026 | El robot se vincula desde el Panel de control: Bluetooth, luego «¿el WiFi de este servidor? sí o no» con la lista de redes, y el enlace con la app. Su luz RGB dice cómo está (azul WiFi, verde todo bien, amarillo sin API, rojo un error) y el panel y la app la muestran igual. La bienvenida y el logo del panel usan la cara 3D de la app. Linux estable, Windows beta. |
 | **2.5.0** | 15 nov 2026 | Un solo Píxel, más firme: las claves de IA de la app quedan guardadas en tu cuenta y vuelven solas en otro navegador o aparato. Una sola voz, la de mujer. La ventana del programa saluda con voz. El PC sale en la app como «Panel de control» y el robot se llama «Pixel». El aviso del Bluetooth dice la causa real. |
@@ -58,6 +59,10 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 | **1.0.0** | 10 nov 2026 | Píxel entero en el celular: Gemini, Calendar, Gmail, Pomodoro, Eisenhower, cerebro, aparatos, música, notas y voz infantil. |
 
 No hay 1.1.0: la segunda fase salió directamente como 1.2.1.
+
+### 2.6.2 · 18 de noviembre de 2026
+
+La 2.6.1 no pasó la prueba automática en Windows: para que el botón «Actualizar» vuelva a abrir Píxel, su instalador lo abría al terminar cualquier instalación en silencio, y la prueba (que instala en silencio y espera a que el instalador y todo lo que abrió terminen) se quedaba esperando para siempre. Ahora el instalador solo vuelve a abrir Píxel cuando se lo pide el botón (`/ABRIR`). En Linux la 2.6.1 sí pasó. La 2.6.2 trae todo lo de la 2.6.1, que sigue abajo.
 
 ### 2.6.1 · 18 de noviembre de 2026
 
