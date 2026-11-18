@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Asistente de voz. Desde el 12 nov **ya no es una demo de feria**: es un producto de verdad, y el robot, el programa del PC y la app de internet tienen que ser **un mismo Píxel** (ajustes, claves de IA, voz, personalidad y lo que sabe del usuario, copiados en los dos sentidos; ver `web/espejo.js`). Un ESP32-S3 (el robot nuevo trae un micrófono USB tras un hub, ver `memoria.md`; su firmware **no** está en este repo) manda audio por TCP. El servidor en Python lo transcribe (faster-whisper), decide la acción (regex, clasificador LLM o respuesta libre del LLM) y devuelve voz (Piper o Supertonic). Palabra de activación: "Píxel". Gemini o Groq responden si hay clave (`llm.motores()`, la preferida primero); si no, Ollama (`qwen2.5:3b` en `127.0.0.1:11434`).
 
-Repo público: https://github.com/DiegoWhite99/Pixel. No entran claves, grabaciones ni datos personales (ver `.gitignore`). Ramas: `main` (v2.6.0) y `vinculacion_movil` (trabajo nuevo). Versiones `vX.Y.Z` con su historia en `README.md`.
+Repo público: https://github.com/DiegoWhite99/Pixel. No entran claves, grabaciones ni datos personales (ver `.gitignore`). Ramas: `main` (v2.6.1) y `vinculacion_movil` (trabajo nuevo). Versiones `vX.Y.Z` con su historia en `README.md`.
 
 **Detalle y mediciones:** `memoria.md`, con el registro de decisiones y, al final, el apéndice "Referencia detallada" (el detalle por fase que antes estaba aquí). **Funciones, código y rutas:** `docs/FUNCIONES.md`. **Auditoría de esta limpieza:** `docs/AUDITORIA.md`.
 
@@ -167,6 +167,12 @@ Los datos de las pruebas (nombres de ejemplo como «Ana Prueba») van solo en cu
 - **App:** sin Bluetooth web ya no sale el aviso de `chrome://flags` (pedido: "no muestres estos errores, estamos en Chrome y se contradice"); el botón lleva al Panel de control.
 - **Cara 3D** (`cara3d.js`) en la bienvenida (`montar(canvas, {soloSombra: true})`) y en el logo (`{sinSuelo: true}`) de la ventana.
 - **Firmware (fuera del repo):** se anuncia como «Pixel Assistance»; rechaza el aparato USB `1a86:5394` del hub nuevo (hacía abortar el reconocimiento USB de ESP-IDF 5.5.5); tras 3 caídas seguidas, o 2 apagones seguidos justo al prender el puerto USB, arranca sin USB. Con solo el cable del PC (y el hub con micrófono, placa amarilla y lector) se reinicia por falta de corriente: ver `memoria.md`.
+
+**2.6.1 (18 nov): dos códigos y sin órdenes fantasmas.**
+- **Dos códigos** (pedido: "son dos códigos, uno para el robot y otro para el panel de control"): el del PC ya no se dice en voz alta (`nube.SIN_VOZ`); solo sale en su ventana, con «Vincular con mi cuenta» (abre la app con `?enlazar=&codigo=&nombre=`, `enlazarDesdePanel` en `app.js`) y la marca `#xxxx` del pid. El robot dice el suyo con `FRASE_CODIGO_ROBOT`.
+- **Puentes en la app:** dos opciones con su descripción; «Vincular Panel de control» lleva `data-buscar-pixel` (el diálogo `#enlazar` de Cuentas).
+- **Eco del prompt:** con ruido, Whisper escribe su `initial_prompt` («Píxel, YouTube, pon música… Queen»), que trae la activación: `stt.eco_del_prompt` lo descarta («TEXTO FANTASMA»). No cambiar `STT_PROMPT` sin revisar `tests/test_eco_prompt.py`.
+- **Firmware (fuera del repo):** el anillo del micrófono USB solo guarda muestras enteras (le cabe un byte menos que su tamaño y el audio quedaba corrido un byte); `onWrite` del Bluetooth repone el estado en el acto (la app leía su propio mensaje y pedía el botón BOOT); `conectar()` pone `luzPorAvisar`. Detalle en `memoria.md` (18 nov).
 
 **Gemini:** REST `v1beta` desde `gemini.py` (clave en la cabecera `x-goog-api-key`, nunca en la URL ni en logs). Si falla, responde Ollama y pausa Gemini unos segundos (`PAUSA_S`), o 10 min tras un 429 (`PAUSA_CUPO_S`). El plan gratis tiene cupo diario por modelo: las pruebas de punta a punta lo gastan.
 
