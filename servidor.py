@@ -875,6 +875,11 @@ class Sesion:
 
         # --- STT ---
         texto, t_stt = TRANSCRIPTOR.transcribir(pcm)
+        from stt import eco_del_prompt      # aqui y no arriba: importar servidor no carga faster-whisper
+        if texto and eco_del_prompt(texto, TRANSCRIPTOR.initial_prompt):     # 18 nov: el Queen fantasma
+            log("%s  TEXTO FANTASMA (Whisper repitio su lista de palabras, no es una orden): \"%s\""
+                % (self.peer, texto))
+            texto = ""
         if not texto:
             log("%s  TEXTO: (vacio, Whisper no saco nada)" % self.peer)
             log("%s  STT: %.2f s para %.2f s de audio" % (self.peer, t_stt, dur_s))

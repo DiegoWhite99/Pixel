@@ -5,8 +5,10 @@ El modelo se carga UNA sola vez al arrancar el servidor y se reutiliza
 en cada frase.
 """
 
+import re
 import threading
 import time
+import unicodedata
 
 import numpy as np
 from faster_whisper import WhisperModel
@@ -15,6 +17,31 @@ from faster_whisper.vad import VadOptions, get_speech_timestamps
 
 def _a_float(pcm_bytes):
     return np.frombuffer(pcm_bytes, dtype="<i2").astype(np.float32) / 32768.0
+
+
+def _trozos(texto):
+    """'Píxel, YouTube, pon música.' -> ['pixel', 'youtube', 'pon musica'] (sin tildes, mayusculas ni signos)"""
+    plano = "".join(c for c in unicodedata.normalize("NFD", texto.lower()) if unicodedata.category(c) != "Mn")
+    return [" ".join(p) for p in (re.findall(r"\w+", t) for t in re.split(r"[,;:.!?¡¿]", plano)) if p]
+
+
+MIN_TROZOS_ECO = 4
+
+
+def eco_del_prompt(texto, prompt):
+    """True si Whisper solo repitio su initial_prompt, cosa que hace con ruido.
+
+    18 nov: con el audio del robot corrido un byte (ruido a todo volumen) Whisper escribia "Píxel, YouTube, pon
+    música, reproduce, Soda Stereo, Queen, Bohemian Rhapsody", que trae la palabra de activacion, y el robot ponia
+    Queen solo. Es eco una lista de 4 o mas trozos distintos, separados por comas, que son todos trozos del prompt.
+    Una orden de verdad ("Píxel, pon Queen", "Píxel, busca en YouTube Soda Stereo") tiene trozos que no estan en
+    el prompt, o menos de 4.
+    """
+    if not prompt:
+        return False
+    del_prompt = set(_trozos(prompt))
+    trozos = _trozos(texto)
+    return len(set(trozos)) >= MIN_TROZOS_ECO and all(t in del_prompt for t in trozos)
 
 
 class Transcriptor:

@@ -124,6 +124,11 @@ p { margin: 0; }
 .fila .txt small { color: var(--muted); display: block; overflow-wrap: anywhere; }
 .fila .ico { width: 40px; height: 40px; background: #fff; }
 .vacio { color: var(--muted); font-size: 14px; padding: 18px; border: 1.5px dashed var(--line); border-radius: 12px; text-align: center; }
+/* 18 nov: Puentes, las dos formas de agregar uno (robot Píxel y Panel de control), cada una con su descripción */
+.puente-opciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.puente-opcion { display: grid; gap: 6px; align-content: start; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); min-width: 0; }
+.puente-opcion .sub { margin: 0; }
+.puente-opcion .btn { justify-self: start; margin-top: 4px; white-space: normal; text-align: center; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 14px; margin: 0; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }

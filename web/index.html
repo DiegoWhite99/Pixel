@@ -201,9 +201,22 @@
       </details>
     </div>
     <div class="card" id="card-puentes" hidden>
-      <div class="head"><div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 18c0-6 4-10 8-10s8 4 8 10M2 18h20M8 18v-4M16 18v-4M12 18v-6"/></svg></div><h2>Puentes</h2></div>
-        <button class="btn primario" type="button" id="ap-ble-btn">Agregar el robot Píxel por Bluetooth</button></div>
-      <p class="sub">El puente está en tu casa y recibe las órdenes de Píxel por internet: el robot Píxel (infrarrojo, relé, encender el PC por red) o el PC con el servidor (el propio PC y un TV Android).</p>
+      <div class="head"><div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 18c0-6 4-10 8-10s8 4 8 10M2 18h20M8 18v-4M16 18v-4M12 18v-6"/></svg></div><h2>Puentes</h2></div></div>
+      <p class="sub">El puente está en tu casa y recibe las órdenes de Píxel por internet. Hay dos:</p>
+      <!-- 18 nov (pedido: "agrega una nueva funcion o boton donde mencione vincular panel de control y tenga la
+           descripcion y todo"): las dos formas de agregar un puente, cada una con lo que hace y su boton -->
+      <div class="puente-opciones">
+        <div class="puente-opcion">
+          <b>Robot Píxel</b>
+          <p class="sub">El robot de tu casa: maneja aparatos por infrarrojo y relé, y enciende el PC por red. Se agrega por Bluetooth y dice en voz alta <b>su código de robot</b>.</p>
+          <button class="btn primario" type="button" id="ap-ble-btn">Agregar el robot Píxel por Bluetooth</button>
+        </div>
+        <div class="puente-opcion">
+          <b>Panel de control</b>
+          <p class="sub">El programa de Píxel en tu computador: maneja el propio PC (volumen, música, YouTube, WhatsApp) y un TV Android. Abre su ventana en el PC y escribe aquí el <b>código de 6 cifras</b> que sale ahí.</p>
+          <button class="btn primario" type="button" data-buscar-pixel>Vincular Panel de control</button>
+        </div>
+      </div>
       <div class="lista" id="ap-puentes"></div>
       <div class="prueba-puente" id="ap-prueba" hidden aria-live="polite"></div>
       <div id="ap-ble" hidden></div>
