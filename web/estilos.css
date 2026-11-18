@@ -124,6 +124,35 @@ p { margin: 0; }
 .fila .txt small { color: var(--muted); display: block; overflow-wrap: anywhere; }
 .fila .ico { width: 40px; height: 40px; background: #fff; }
 .vacio { color: var(--muted); font-size: 14px; padding: 18px; border: 1.5px dashed var(--line); border-radius: 12px; text-align: center; }
+/* 18 nov: el cuestionario de calibración cognitiva dentro de Mi perfil (calibracion.js) */
+.calibracion { border: 1px solid var(--line); border-radius: 12px; padding: 0 14px; background: var(--surface-2); }
+.calibracion > summary { cursor: pointer; padding: 12px 0; list-style-position: outside; }
+.calibracion > summary > span { display: inline-grid; gap: 2px; vertical-align: top; }
+.calibracion > summary small { color: var(--muted); font-size: 13px; }
+.calibracion[open] { padding-bottom: 14px; }
+.calibracion > .sub { margin: 0 0 6px; }
+.cal-bloque { margin: 16px 0 8px; text-transform: none; letter-spacing: 0; font-size: 13.5px; color: var(--blue); }
+.cal-pregunta { border: 0; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; min-width: 0; }
+.cal-pregunta legend { font-weight: 600; font-size: 14px; padding: 0; margin-bottom: 6px; }
+.cal-pregunta legend em { font-style: normal; color: var(--muted); font-weight: 600; }
+.cal-n { color: var(--blue); }
+.cal-op { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); cursor: pointer; font-size: 14px; }
+.cal-op input { margin: 3px 0 0; flex: none; accent-color: var(--blue); }
+.cal-op:has(input:checked) { border-color: var(--blue-2); background: var(--blue-soft); }
+.cal-letra { font-weight: 700; color: var(--blue); flex: none; }
+.cal-pregunta.vf { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cal-pregunta.vf legend { grid-column: 1 / -1; }
+.cal-sintesis { border-top: 1px solid var(--line); margin-top: 6px; display: grid; gap: 10px; }
+.cal-fila { display: grid; gap: 2px; padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
+.cal-fila small { color: var(--muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+.cal-fila span { color: var(--muted); font-size: 13.5px; }
+.cal-temp input[type=range] { width: 100%; accent-color: var(--blue); }
+.cal-temp small { color: var(--muted); font-size: 13px; font-weight: 400; }
+/* 18 nov: Puentes, las dos formas de agregar uno (robot Píxel y Panel de control), cada una con su descripción */
+.puente-opciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.puente-opcion { display: grid; gap: 6px; align-content: start; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); min-width: 0; }
+.puente-opcion .sub { margin: 0; }
+.puente-opcion .btn { justify-self: start; margin-top: 4px; white-space: normal; text-align: center; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 14px; margin: 0; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
@@ -741,3 +770,4 @@ input[type=tel], input[type=search] { width: 100%; border: 1px solid var(--line)
 .condiciones li > span { width: 14px; text-align: center; font-weight: 700; }
 .condiciones li.bien > span { color: #16a34a; } .condiciones li.mal > span { color: #dc2626; }
 .condiciones li small { opacity: 0.75; }
+.marca-pc { font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600; padding: 1px 6px; border-radius: 6px; background: #e0f2fe; color: #0369a1; }

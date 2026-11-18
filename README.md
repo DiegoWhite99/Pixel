@@ -3,8 +3,8 @@
 Píxel es un agente de inteligencia artificial creado por Divergencia IA, con cara de robot, hecho para una feria de tecnología. Vive en una aplicación web que se instala en el celular: oye la palabra **«Píxel»**, piensa con la inteligencia artificial que elijas (cada persona pone su clave), contesta con una voz natural de alta calidad y mueve su cara en 3D. Se entra con la cuenta de Google y cada persona tiene su perfil. Un computador y un ESP32 son opcionales: le dan micrófono y altavoz propios y le dejan manejar los aparatos de la casa.
 
 - **Aplicación:** https://pixelassitance.web.app (en el celular, con Chrome).
-- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.6.0/pixel_2.6.0_amd64.deb) **estable** y [Windows (.exe)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.6.0/Pixel-2.6.0-Setup.exe) **beta** (pasa la prueba automática en un Windows limpio, pero todavía no se ha usado en un Windows de verdad), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
-- **Versión actual:** 2.6.0, del 17 de noviembre de 2026.
+- **Programa para el computador:** [Linux (.deb)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.6.1/pixel_2.6.1_amd64.deb) **estable** y [Windows (.exe)](https://github.com/DiegoWhite99/Pixel/releases/download/v2.6.1/Pixel-2.6.1-Setup.exe) **beta** (pasa la prueba automática en un Windows limpio, pero todavía no se ha usado en un Windows de verdad), en [Versiones de GitHub](https://github.com/DiegoWhite99/Pixel/releases).
+- **Versión actual:** 2.6.1, del 18 de noviembre de 2026.
 - **Cómo está hecho por dentro:** `CLAUDE.md`. **Mediciones y decisiones:** `memoria.md`.
 
 ## Qué puede hacer
@@ -38,6 +38,7 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 
 | Versión | Fecha | Qué trae |
 |---|---|---|
+| **2.6.1** | 18 nov 2026 | Píxel se actualiza solo desde su Panel de control: busca versiones nuevas, te avisa y las instala con un botón (la última descarga a mano). En Mi perfil, el cuestionario de identidad y calibración cognitiva (14 preguntas, arquetipo y temperatura) que Píxel usa para entenderte. Contesta uno solo: en el Panel de control, «Por dónde habla» elige el robot, el computador o la app de internet, y el otro se queda callado. Dos códigos separados: el del Panel de control sale solo en su ventana y el robot dice el suyo («mi código de robot»). «Vincular con mi cuenta» desde la ventana del PC, y en la app «Vincular Panel de control» en Puentes, con la descripción de cada puente. El robot ya no pone música solo cuando su micrófono mete ruido, y al agregarlo desde la app ya no pide el botón BOOT estando con el PC. |
 | **2.6.0** | 17 nov 2026 | El robot se vincula desde el Panel de control: Bluetooth, luego «¿el WiFi de este servidor? sí o no» con la lista de redes, y el enlace con la app. Su luz RGB dice cómo está (azul WiFi, verde todo bien, amarillo sin API, rojo un error) y el panel y la app la muestran igual. La bienvenida y el logo del panel usan la cara 3D de la app. Linux estable, Windows beta. |
 | **2.5.0** | 15 nov 2026 | Un solo Píxel, más firme: las claves de IA de la app quedan guardadas en tu cuenta y vuelven solas en otro navegador o aparato. Una sola voz, la de mujer. La ventana del programa saluda con voz. El PC sale en la app como «Panel de control» y el robot se llama «Pixel». El aviso del Bluetooth dice la causa real. |
 | **2.4.3** | 13 nov 2026 | El robot se queda con su PC (aunque haya otro Píxel en la red) y se cambia desde la app. Los recordatorios son una sola lista: los de la app los dice el robot y los que le pides al robot salen en la app. |
@@ -57,6 +58,23 @@ Cada versión tiene un número **X.Y.Z** y una etiqueta en git (`vX.Y.Z`):
 | **1.0.0** | 10 nov 2026 | Píxel entero en el celular: Gemini, Calendar, Gmail, Pomodoro, Eisenhower, cerebro, aparatos, música, notas y voz infantil. |
 
 No hay 1.1.0: la segunda fase salió directamente como 1.2.1.
+
+### 2.6.1 · 18 de noviembre de 2026
+
+Pedidos del usuario: «son dos códigos, uno para el robot ESP32-S3 y otro para el panel de control», «cada Píxel con su servidor y con su cuenta», «¿por qué siempre reproduce Queen? Mira eso de los estados fantasmas», «volvemos con el error de la vinculación», «agrega un botón que diga vincular panel de control y tenga la descripción» «me están hablando los dos al tiempo: si le doy al robot, el de la web no tiene por qué hablar, y viceversa» «hay un formulario que uno llena y el agente lo toma de referencia para entenderte: agrega este y realiza el empalme» y «en el panel de control, un botón que llame las versiones más recientes y se actualicen y reciba notificaciones: me toca descargar todo el tiempo».
+
+- **Actualizaciones desde el Panel de control.** Esta es la última versión que hay que bajar a mano. Desde la 2.6.1, Píxel busca solo la última versión publicada (al arrancar y cada 6 horas); si hay una nueva, sale un aviso arriba en la ventana y una notificación del escritorio (en Linux). En Inicio, la tarjeta **Actualizaciones** tiene **Buscar actualizaciones** y **Actualizar a X**: baja el paquete, comprueba su huella y lo instala. En Linux Ubuntu pide la contraseña y Píxel se reinicia solo; en Windows (beta) corre el instalador sin preguntas y Píxel vuelve a abrir. Solo se puede pedir desde la ventana de ese PC, no desde la app ni desde la red.
+
+- **Perfil de identidad y calibración cognitiva**, dentro de Mi perfil: el trato ahora puede ser de tú, de usted o neutro, y hay 14 preguntas en tres bloques (estructura del yo, deseo y sombra; procesamiento, atención y dopamina; comunicación, fricción y vínculo). Con 7 o más respuestas sale la síntesis: arquetipo dominante y secundario (Arquitecto, Mago, Estratega o Explorador), los modificadores (Modo Directo / Sin Filtros, Monitor de Economía Libidinal, Freno al Perfeccionismo) y una temperatura de comunicación de 1 a 10, sugerida por las respuestas y ajustable. Todo eso entra en las instrucciones de Píxel en la app y, por el espejo, en el robot y el PC.
+
+- **Contesta uno solo.** En la ventana del Panel de control, Voz → **Por dónde habla** tiene tres opciones: **El robot**, **Este computador** o **La app de internet**. Con el robot o el computador, la app de internet oye «Píxel» pero se queda callada (y dice por qué) mientras haya un robot conectado al Panel; con la app, el robot se queda callado. Lo que escribes en la app siempre se contesta.
+
+- **Dos códigos, cada uno en su sitio.** El código del Panel de control ya no se dice por el parlante del robot (se confundía con el del robot): sale solo en la ventana del PC. El robot dice el suyo con otra frase: «Soy el robot Píxel. Mi código de robot es…».
+- **Vincular el Panel de control con la cuenta correcta.** En la ventana del PC, «Vincular con mi cuenta» abre la app con la identidad de ese PC y su código. Cada PC lleva su marca (#xxxx) en la ventana y en la lista de la app, para no confundirlo con otro «Panel de control».
+- **En la app, Puentes con sus dos opciones**, cada una con lo que hace y su botón: **Robot Píxel** (por Bluetooth) y **Panel de control** (**Vincular Panel de control**, que lista los Paneles esperando y pide el código de su ventana).
+- **Sin órdenes fantasmas.** Cuando el micrófono del robot metía ruido a todo volumen, el reconocimiento de voz escribía su lista de palabras de ejemplo («Píxel, YouTube, pon música… Queen») y el robot ponía Queen solo. Ahora eso no cuenta como orden. La causa del ruido estaba en el firmware del robot (fuera de este repositorio) y también se arregló.
+- **Agregar el robot desde la app** ya no dice «no está conectado a tu PC» ni pide el botón BOOT mientras el PC está diciendo el código (arreglo del firmware). Tampoco habla de una luz celeste: el robot solo tiene sus cuatro colores.
+- **El panel no pierde la luz del robot** cuando el robot se reconecta sin reiniciarse (firmware).
 
 ### 2.6.0 · 17 de noviembre de 2026
 

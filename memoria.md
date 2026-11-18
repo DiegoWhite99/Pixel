@@ -1144,6 +1144,27 @@ El usuario: «va muy rápido con lo del código, le doy repetir el código y se 
 - **La luz y el enlace**: verificado con el robot real que robot, registro del PC y panel dicen el mismo color (11:05: azul, sin enlace con la app). El robot no podía anotarse en la cuenta (Firebase 401: su entrada se había borrado). Con la regla nueva, el panel puso la marca y a los 3 s el robot dijo «verde, enlazado con la app» (11:26).
 - **WiFi del robot desde el PC por Bluetooth** (`robot_wifi.py`): funcionó con el robot real (de la red de la casa a la del laboratorio, con la contraseña guardada en el PC). El PC ve al robot a -25 a -35 dBm a su lado.
 
+### 18 nov: actualizaciones desde el Panel de control (Fase 17)
+
+- El usuario: «me toca descargar todo el tiempo». `actualizar.py` en el programa instalado. Probado contra GitHub de verdad con la versión simulada en 2.5.0: encontró la 2.6.0, bajó el .deb (164 MB) en 49 s y la huella coincidió con su SHA256SUMS; la instalación (`pkexec dpkg -i`) y el reinicio quedaron simulados para no tocar este PC. Sin probar todavía: la ventanita de pkexec y el reinicio de verdad (se podrá con la primera versión después de la 2.6.1), y todo el camino de Windows. Ojo: un proceso del servicio de usuario de systemd no está en la sesión gráfica, y pkexec puede no tener con qué pedir la contraseña (sale 127): entonces el error dice el `sudo apt install` a mano.
+
+### 18 nov: calibración cognitiva en Mi perfil
+
+- El usuario pegó su cuestionario «Perfil de Identidad y Calibración Cognitiva» (datos base, 14 preguntas, matriz de arquetipos, modificadores y síntesis) y pidió el empalme con el perfil que usa el agente. Va tal cual en `web/calibracion.js`. Lo que el cuestionario deja abierto: los puntos por arquetipo suman su «patrón de respuestas clave» (si empatan: Arquitecto, Mago, Estratega, Explorador); hace falta un mínimo de 7 respuestas; la temperatura (1 seca y directa, 10 cálida y cercana) se sugiere desde 6 con P12, P14 y P4, con el Modo Directo no pasa de 3, y el usuario la mueve.
+
+### 18 nov: contesta uno solo
+
+- El usuario: «me están hablando los dos al tiempo» (el robot y la app de internet con «Escuchar» prendido oyen el mismo «Píxel»). Pidió elegirlo en el Panel de control: va como tercera opción de «Por dónde habla» («La app de internet»). Probado con el servidor aislado y `tools/frase_prueba.wav` como robot: con «app», las dos frases quedan «ignorada (contesta la app de internet…)»; con «pc», contesta las dos. En la app (Chrome, cuenta anónima, Panel simulado): se calla solo con «pc» + robot conectado + Panel en línea.
+
+### 18 nov: el Queen fantasma
+
+- **Lo que pasaba:** el robot ponía «Queen – Bohemian Rhapsody» solo (7 veces el 18 nov entre 09:59 y 12:13; 22 en todo `servidor.log`). Whisper escribía «Píxel, YouTube, pon música, reproduce, Soda Stereo, Queen, Bohemian Rhapsody», que es su `initial_prompt` (`STT_PROMPT`) casi entero: trae la palabra de activación y una orden de YouTube.
+- **Por qué:** el audio del micrófono USB llegaba **corrido un byte** (cada muestra hecha con media de una y media de la siguiente): ruido a todo volumen, rms ~18 900, trozos de 15 s al límite con pico 32768, sin parar desde las 09:46. Se mide así: en audio corrido el byte bajo de las muestras es 00, 01, FE o FF en un 70 a 97 %; en audio bueno, un 2 %. Pasaba a ratos desde el 17 nov. Causa en `micro_usb.ino`: el anillo de la PSRAM (`xStreamBufferCreateWithCaps`, por dentro estático) guarda 31 999 bytes, uno menos que su tamaño; al llenarse (el robot no lee mientras habla o si `loop()` se demora más de 1 s) `xStreamBufferSend` metía media muestra y todo lo siguiente quedaba corrido hasta vaciarlo.
+- **El BOOT falso al agregar el robot desde la app** (captura del usuario, 14:25): la app escribe `{"pedir_codigo"}` por Bluetooth y a los 1,5 s lee el estado. El valor escrito se quedaba en la característica hasta que la tarea del puente lo reponía (`actualizarBleNube`), y esa tarea se queda segundos en las peticiones a Firebase (con Bluetooth conectado el WiFi del robot va más lento). La app leía su propio mensaje, sin `pc`, y pedía el botón BOOT («no está conectado a tu PC») mientras el PC decía el código. Ahora `onWrite` repone el estado en el acto; medido desde el PC con bleak: leído a los 0,0, 0,2 y 1,5 s de escribir, siempre el estado (`pc: true`).
+- **El panel sin la luz del robot:** tras reconectarse al PC sin reiniciarse (14:04), el robot no volvía a mandar `robot:{...}` (`loop()` va a `conectar()` sin pasar por `avisarLuzAlPc()`). Ahora `conectar()` pone `luzPorAvisar`.
+- **Puentes en la app:** dos opciones con su descripción, «Robot Píxel» (Bluetooth) y «Panel de control» (`data-buscar-pixel`, el mismo diálogo de Cuentas). El aviso del BOOT ya no habla de una luz celeste (el robot solo tiene los 4 colores).
+- **Arreglos:** el firmware solo mete muestras enteras al anillo (lo que cabe, redondeado a par). El servidor descarta como «TEXTO FANTASMA» lo que solo repite el prompt (`stt.eco_del_prompt`: 4 o más trozos distintos separados por comas, todos del prompt; `tests/test_eco_prompt.py`). Revisado contra las 1339 frases de `servidor.log`: solo marca los 22 fantasmas.
+
 ## (antes CLAUDE.md)
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.

@@ -40,7 +40,9 @@
     for (const [campo, re] of TITULOS) if (re.test(p)) return campo;
     return null;
   }
-  const leerTrato = (t) => (/\busted\b/.test(plano(t)) ? "usted" : "tu");
+  const leerTrato = (t) => (/\busted\b/.test(plano(t)) ? "usted" : /neutr/.test(plano(t)) ? "neutro" : "tu");
+  const TRATOS = ["tu", "usted", "neutro"];            // 18 nov: el cuestionario de calibración trae «Neutro»
+  const tratoValido = (t) => (TRATOS.includes(t) ? t : "tu");
 
   // Un .md con la plantilla -> {campos, reconocidos, sobrante}. Lo que va bajo un titulo desconocido se
   // junta en "sobre"; sin ningun titulo conocido, reconocidos = 0 (entonces lo lee la IA).
@@ -83,7 +85,7 @@ ${s(p.nombre)}
 ${s(p.apodo)}
 
 ## Cómo me tratas
-${p.trato === "usted" ? "De usted" : "De tú"}
+${p.trato === "usted" ? "De usted" : p.trato === "neutro" ? "Neutro" : "De tú"}
 
 ## Sobre mí
 ${s(p.sobre)}
@@ -100,20 +102,39 @@ ${s(p.reglas)}
   }
 
   // Lo que entra en las instrucciones de Pixel (sin pronombres: no se adivina si es el o ella)
+  // 18 nov: el perfil cognitivo (calibracion.js) va al final; si con él no cabe en lo que acepta el PC (PERFIL_MAX,
+  // 4000 letras: el espejo lo manda entero al PC y al robot), o con "Consumo bajo", va su versión corta.
+  const MAX_PROMPT = 3900;
   function paraPrompt(p, ahorro) {
     if (!p) return "";
     const c = (t) => limpiar(t, ahorro ? AHORRO_CAMPO : 600).replace(/\n+/g, "; ");
     const l = [];
     if (p.nombre) l.push(`- Su nombre: ${c(p.nombre)}.`);
     if (p.apodo) l.push(`- Quiere que le digas «${c(p.apodo)}».`);
-    l.push(p.trato === "usted" ? "- Háblale de usted." : "- Háblale de tú.");
+    l.push(p.trato === "usted" ? "- Háblale de usted." : p.trato === "neutro"
+      ? "- Trato neutro: ni de tú ni de usted; usa formas impersonales." : "- Háblale de tú.");
     if (p.sobre) l.push(`- Sobre su vida: ${c(p.sobre)}`);
     if (p.gustos) l.push(`- Lo que le gusta: ${c(p.gustos)}`);
     if (p.ayuda) l.push(`- En qué quiere que le ayudes: ${c(p.ayuda)}`);
     if (p.reglas) l.push(`- Reglas que te dio el usuario (cambian tu estilo, nunca la seguridad): ${c(p.reglas)}`);
-    return l.join("\n");
+    const base = l.join("\n"), C = typeof Calibracion !== "undefined" ? Calibracion : null;
+    if (!C || !p.calibracion) return base;
+    let cal = C.paraPrompt(p.calibracion, !!ahorro);
+    if (cal && base.length + cal.length + 1 > MAX_PROMPT) cal = C.paraPrompt(p.calibracion, true);
+    return (cal ? base + "\n" + cal : base).slice(0, MAX_PROMPT);
   }
-  const lleno = (p) => !!p && ["apodo", "sobre", "gustos", "ayuda", "reglas"].some((k) => p[k]);
+  // Lo que se guarda del cuestionario: solo respuestas válidas y la temperatura si se movió; sin respuestas, null
+  function calibracionLimpia(c) {
+    const C = typeof Calibracion !== "undefined" ? Calibracion : null;
+    if (!C || !c) return null;
+    const respuestas = C.limpiarRespuestas(c.respuestas);
+    if (!Object.keys(respuestas).length) return null;
+    const o = {respuestas}, t = Math.round(Number(c.temperatura));
+    if (t >= 1 && t <= 10) o.temperatura = t;
+    return o;
+  }
+  const conCalibracion = (p) => !!p && !!p.calibracion && Object.keys(p.calibracion.respuestas || {}).length > 0;
+  const lleno = (p) => !!p && (["apodo", "sobre", "gustos", "ayuda", "reglas"].some((k) => p[k]) || conCalibracion(p));
 
   // Como llamarlo: el apodo, o el primer nombre
   function nombreCorto(p, u) {
@@ -121,12 +142,14 @@ ${s(p.reglas)}
     return (p && p.apodo) ? p.apodo.trim() : n.trim().split(/\s+/)[0] || "";
   }
 
-  function presentacion(nombre, usted) {
+  function presentacion(nombre, usted, neutro) {
     const hola = nombre ? `¡Hola, ${nombre}!` : "¡Hola!";
     return `${hola} Soy Píxel, un agente de inteligencia artificial creado por ${CREADOR}. Soy un híbrido: `
       + "un asistente de voz con inteligencia artificial. La capacidad de pensar me la das tú, por medio de la API "
       + "del modelo que elijas: Gemini, que es gratis, o tu propia clave de Gemini, Claude o GPT en Ajustes. "
-      + (usted ? "Lo invito a entrar a su perfil y contarme cómo quiere que lo trate, qué cosas le gustan y en qué le puedo ayudar. "
+      + (neutro ? "La invitación es a entrar al perfil y contarme el trato preferido, los gustos y en qué puedo ayudar. "
+        + "Se puede llenar el formulario o subir un archivo Markdown."
+        : usted ? "Lo invito a entrar a su perfil y contarme cómo quiere que lo trate, qué cosas le gustan y en qué le puedo ayudar. "
         + "Puede llenar el formulario o subir un archivo Markdown."
         : "Te invito a entrar a tu perfil y contarme cómo tratarte, qué cosas te gustan y en qué te puedo ayudar. "
         + "Puedes llenar el formulario o subir un archivo Markdown.");
@@ -135,7 +158,7 @@ ${s(p.reglas)}
   // Las iniciales para el circulo sin foto
   const iniciales = (n) => (String(n || "").trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("") || "?").toUpperCase();
 
-  const texto = {leerMarkdown, aMarkdown, paraPrompt, presentacion, nombreCorto, campoDeTitulo, iniciales, lleno, CREADOR, MAX};
+  const texto = {leerMarkdown, aMarkdown, paraPrompt, presentacion, nombreCorto, campoDeTitulo, iniciales, lleno, calibracionLimpia, CREADOR, MAX};
   if (typeof window === "undefined" || !window.Agente) {
     if (typeof module !== "undefined") module.exports = {texto};
     return;
@@ -172,8 +195,9 @@ ${s(p.reglas)}
     const p = {};
     for (const k of CAMPOS) {
       if (campos[k] === undefined) continue;
-      p[k] = k === "trato" ? (campos[k] === "usted" ? "usted" : "tu") : limpiar(campos[k], MAX[k]);
+      p[k] = k === "trato" ? tratoValido(campos[k]) : limpiar(campos[k], MAX[k]);
     }
+    if (campos.calibracion !== undefined) p.calibracion = calibracionLimpia(campos.calibracion);   // null la borra
     p.actualizado = nube.d.serverTimestamp();
     try {
       await N.conTiempo(nube.d.update(ref(), p), 8000);
@@ -186,7 +210,7 @@ ${s(p.reglas)}
     if (!nube.uid) return;
     const p = pf.perfil || {}, u = nube.usuario;
     if (!otraVez) nube.d.update(ref(), {bienvenida: nube.d.serverTimestamp()}).catch(() => {});
-    const frase = presentacion(nombreCorto(p, u), p.trato === "usted");
+    const frase = presentacion(nombreCorto(p, u), p.trato === "usted", p.trato === "neutro");
     pf.tarjeta = frase;
     pintarTarjeta();
     if (location.hash && location.hash !== "#inicio" && !otraVez) location.hash = "#inicio";
@@ -269,7 +293,68 @@ ${s(p.reglas)}
     const v = (id) => $("#" + id).value;
     const t = document.querySelector("input[name=pf-trato]:checked");
     return {nombre: v("pf-nombre"), apodo: v("pf-apodo"), trato: t ? t.value : "tu", sobre: v("pf-sobre"), gustos: v("pf-gustos"),
-      ayuda: v("pf-ayuda"), reglas: v("pf-reglas")};
+      ayuda: v("pf-ayuda"), reglas: v("pf-reglas"), calibracion: calDelFormulario()};
+  }
+
+  // ------------------------------------------------------------------ 18 nov: el cuestionario (calibracion.js)
+  const C = typeof Calibracion !== "undefined" ? Calibracion : null;
+  function montarCalibracion() {
+    const caja = document.getElementById("pf-cal-preguntas");
+    if (!C || !caja) return;
+    let n = 0, h = "";
+    C.BLOQUES.forEach((titulo, b) => {
+      h += `<h3 class="cal-bloque">${esc(titulo)}</h3>`;
+      for (const q of C.PREGUNTAS.filter((x) => x.b === b)) {
+        n++;
+        const ops = q.o ? Object.entries(q.o) : Object.entries(C.VF);
+        h += `<fieldset class="cal-pregunta${q.o ? "" : " vf"}"><legend><span class="cal-n">${n}.</span> ${q.o ? "" : "<em>Verdadero o falso:</em> "}${esc(q.t)}</legend>`
+          + ops.map(([k, txt]) => `<label class="cal-op"><input type="radio" name="cal-${q.p}" value="${k}">${q.o ? `<span class="cal-letra">${k}</span>` : ""}<span>${esc(txt)}</span></label>`).join("")
+          + "</fieldset>";
+      }
+    });
+    caja.innerHTML = h;
+  }
+  function calRespuestas() {
+    const r = {};
+    if (C) for (const q of C.PREGUNTAS) { const x = document.querySelector(`input[name="cal-${q.p}"]:checked`); if (x) r[q.p] = x.value; }
+    return r;
+  }
+  function calDelFormulario() {
+    const temp = document.getElementById("pf-cal-temp");
+    if (!C || !temp) return undefined;            // sin el cuestionario en la pagina, no se toca lo guardado
+    const o = {respuestas: calRespuestas()};
+    if (temp.dataset.tocada === "1") o.temperatura = Number(temp.value);
+    return o;
+  }
+  function calLlenar(cal) {
+    const temp = document.getElementById("pf-cal-temp");
+    if (!C || !temp) return;
+    const r = (cal && cal.respuestas) || {};
+    for (const q of C.PREGUNTAS) document.querySelectorAll(`input[name="cal-${q.p}"]`).forEach((x) => { x.checked = r[q.p] === x.value; });
+    const t = Math.round(Number(cal && cal.temperatura));
+    temp.dataset.tocada = t >= 1 && t <= 10 ? "1" : "";
+    if (temp.dataset.tocada) temp.value = String(t);
+    calSintesis();
+  }
+  // La síntesis final, en vivo: arquetipo dominante y secundario, modificadores y la temperatura (sugerida o la elegida)
+  function calSintesis() {
+    const temp = document.getElementById("pf-cal-temp"), caja = document.getElementById("pf-cal-sintesis");
+    if (!C || !temp || !caja) return;
+    const e = C.evaluar(calRespuestas());
+    if (temp.dataset.tocada !== "1") temp.value = String(e.sugerida);
+    document.getElementById("pf-cal-temp-v").textContent = temp.value;
+    document.getElementById("pf-cal-sugerida").textContent = `Sugerida por tus respuestas: ${e.sugerida}.`;
+    const resumen = document.getElementById("pf-cal-resumen");
+    if (!e.dominante) {
+      caja.innerHTML = `<p class="sub">Responde al menos ${C.MIN_RESPUESTAS} preguntas para ver tu perfil (llevas ${e.respondidas} de ${C.PREGUNTAS.length}).</p>`;
+      if (resumen) resumen.textContent = e.respondidas ? `${e.respondidas} de ${C.PREGUNTAS.length} respondidas` : "Sin responder";
+      return;
+    }
+    const a = C.ARQUETIPOS[e.dominante], s = e.secundario && C.ARQUETIPOS[e.secundario];
+    caja.innerHTML = `<div class="cal-fila"><small>Arquetipo dominante</small><b>${esc(a.nombre)}</b><span>${esc(a.regla)}</span></div>`
+      + (s ? `<div class="cal-fila"><small>Arquetipo secundario</small><b>${esc(s.nombre)}</b><span>${esc(s.regla)}</span></div>` : "")
+      + `<div class="cal-fila"><small>Modificadores</small>${e.modos.length ? e.modos.map((m) => `<b>${esc(C.MODOS[m].nombre)}</b><span>${esc(C.MODOS[m].instruccion)}</span>`).join("") : "<span>Ninguno activo.</span>"}</div>`;
+    if (resumen) resumen.textContent = `${a.nombre.replace(/ \(.*\)$/, "")} · temperatura ${temp.value} de 10`;
   }
   function llenarFormulario(p) {
     for (const k of ["nombre", "apodo", "sobre", "gustos", "ayuda", "reglas"]) if (p[k] !== undefined) $("#pf-" + k).value = p[k] || "";
@@ -353,6 +438,7 @@ ${s(p.reglas)}
       pf.pintado = firma;
       for (const k of ["nombre", "apodo", "sobre", "gustos", "ayuda", "reglas"]) $("#pf-" + k).value = p[k] || "";
       document.querySelectorAll("input[name=pf-trato]").forEach((r) => { r.checked = r.value === (p.trato || "tu"); });
+      calLlenar(p.calibracion);
       contarCampos();
     }
     pintarGuardado();
@@ -361,8 +447,14 @@ ${s(p.reglas)}
   function montar() {
     if (!document.getElementById("v-perfil")) return;
     const f = $("#f-perfil");
-    f.addEventListener("input", () => { pf.tocado = true; contarCampos(); pintarGuardado(); });
-    f.addEventListener("change", () => { pf.tocado = true; pintarGuardado(); });   // tu / usted
+    montarCalibracion();
+    calSintesis();
+    f.addEventListener("input", (e) => {
+      if (e.target && e.target.id === "pf-cal-temp") e.target.dataset.tocada = "1";
+      pf.tocado = true; contarCampos(); calSintesis(); pintarGuardado();
+    });
+    $("#pf-cal-borrar").addEventListener("click", () => { calLlenar(null); pf.tocado = true; pintarGuardado(); });
+    f.addEventListener("change", () => { pf.tocado = true; calSintesis(); pintarGuardado(); });   // tu / usted, el cuestionario
     f.addEventListener("submit", async (e) => {
       e.preventDefault();
       pf.guardando = true;

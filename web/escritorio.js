@@ -297,6 +297,7 @@
   }
 
   let E = null, modo = "conectando", fallos = 0, reloj = null, apagadoAqui = false;
+  let actualizando = false, versionVista = "";      // 18 nov (Fase 17): mientras se instala una version nueva
 
   async function mirar() {
     clearTimeout(reloj);
@@ -395,15 +396,23 @@
     pintarCabecera();
     const v = ventana();
     $("#apagado").hidden = false;
-    $("#apagado-titulo").textContent = apagadoAqui ? "Apagaste a Píxel" : "Píxel está apagado";
-    $("#apagado-texto").textContent = v ? "No escucha al robot ni a tus apps hasta que lo enciendas."
+    $("#apagado-titulo").textContent = actualizando ? "Píxel se está actualizando" : apagadoAqui ? "Apagaste a Píxel" : "Píxel está apagado";
+    $("#apagado-texto").textContent = actualizando ? "Se instala la versión nueva y Píxel vuelve solo. Esta ventana se reconecta sola en un momento."
+      : v ? "No escucha al robot ni a tus apps hasta que lo enciendas."
       : "Esta página no encuentra a Píxel. Ábrelo desde el menú de inicio o el escritorio.";
-    $("#encender").hidden = !v;
-    $("#cerrar-ventana").hidden = !v;
+    $("#encender").hidden = !v || actualizando;
+    $("#cerrar-ventana").hidden = !v || actualizando;
   }
 
   // -- vincular (Inicio y Dispositivos) --
   let firmaVincular = "", codigoHasta = 0;
+  // 17 nov (el usuario: "cada Píxel con su servidor y con su cuenta, por eso está logueado; ponle coherencia"): en la
+  // nube había dos «Panel de control» esperando y la app le mandaba el código al otro. «Vincular con mi cuenta» abre
+  // la app con la identidad de ESTE PC y su código: con la sesión abierta, se enlaza este y no otro (app.js,
+  // enlazarDesdePanel). La marca corta (las 4 primeras letras de su identidad) también sale en la lista de la app.
+  const marcaPc = (pid) => "#" + String(pid).slice(0, 4);
+  const enlaceApp = (n, codigo) => `${URL_APP}/?enlazar=${encodeURIComponent(n.pid)}&codigo=${encodeURIComponent(codigo)}&nombre=${encodeURIComponent(n.nombre || "Panel de control")}`;
+
   function pintarVincular() {
     const n = (E && modo === "listo" && E.nube) || null;
     const enlace = n && n.enlace;
@@ -413,12 +422,12 @@
     firmaVincular = firma;
     const duenos = (n && n.duenos) || [];
     const izquierda = `<div>
-      <h2>Vincula a Píxel con tu cuenta</h2>
+      <h2>Vincula el Panel de control con tu cuenta</h2>
       <p class="sub">${duenos.length ? `Ya está vinculado con ${duenos.length === 1 ? "una cuenta" : duenos.length + " cuentas"}. Puedes sumar otra.` : "Así lo manejas desde tu celular o cualquier computador."}</p>
       <ol class="pasos">
         <li><span>Abre <a href="${URL_APP}" target="_blank" rel="noopener"><b>pixelassitance.web.app</b></a> y entra con tu cuenta de Google.</span></li>
-        <li><span>Toca <b>Buscar a Píxel</b> y elige <b>${esc((n && n.nombre) || "este Píxel")}</b>.</span></li>
-        <li><span>Escribe el código de 6 cifras que ves aquí.</span></li>
+        <li><span>Toca <b>Buscar a Píxel</b> y elige <b>${esc((n && n.nombre) || "este Píxel")}</b>${n && n.pid ? ` <span class="marca-pc">${esc(marcaPc(n.pid))}</span>` : ""}.</span></li>
+        <li><span>Escribe el código de 6 cifras que ves aquí. Es el del Panel de control; el robot tiene el suyo.</span></li>
       </ol></div>`;
     let derecha;
     const enchufe = '<svg viewBox="0 0 24 24"><path d="M9 7 7 9a4.2 4.2 0 0 0 6 6l2-2M15 17l2-2a4.2 4.2 0 0 0-6-6L9 11M8 16l8-8"/></svg>';
@@ -433,7 +442,8 @@
       derecha = `<div class="codigo-zona">
         <div class="digitos" aria-label="Código ${esc(c.split("").join(" "))}">${c.split("").map((d) => `<span>${esc(d)}</span>`).join("")}</div>
         <div class="cuenta-atras"><svg viewBox="0 0 28 28" aria-hidden="true"><circle class="pista" cx="14" cy="14" r="11"/><circle class="resto" cx="14" cy="14" r="11" stroke-dasharray="69.1" stroke-dashoffset="0"/></svg><span data-quedan></span></div>
-        <div class="acciones centro"><button class="btn suave" type="button" data-decir>Decirlo en voz alta</button><button class="btn fantasma" type="button" data-nuevo>Código nuevo</button></div>
+        ${n.pid ? `<a class="btn primario" href="${esc(enlaceApp(n, c))}" target="_blank" rel="noopener">Vincular con mi cuenta</a>` : ""}
+        <div class="acciones centro"><button class="btn fantasma" type="button" data-nuevo>Código nuevo</button></div>
       </div>`;
     } else {
       derecha = `<div class="sin-codigo">${enchufe}<span>Pide un código y escríbelo en la app.</span><button class="btn primario" type="button" data-nuevo>Mostrar código para vincular</button></div>`;
@@ -682,9 +692,10 @@
     $("#perfil-de").textContent = (pf.de ? `De la cuenta de ${pf.de}. ` : "") + "Lo escribes en la app de Píxel, en tu Perfil, y se copia solo aquí y al robot.";
     if (vozTocada && vozPintada) return;
     const f = $("#f-voz");
-    for (const nombre of ["salida_voz", "respuesta"]) {
-      for (const r of $$(`input[name="${nombre}"]`, f)) r.checked = r.value === aj[nombre];
-    }
+    // 18 nov: «La app de internet» va en la misma tarjeta, pero se guarda aparte (contesta: "app"), sin tocar la salida
+    const salida = aj.contesta === "app" ? "app" : aj.salida_voz;
+    for (const r of $$('input[name="salida_voz"]', f)) r.checked = r.value === salida;
+    for (const r of $$('input[name="respuesta"]', f)) r.checked = r.value === aj.respuesta;
     sel.value = aj.voz || "";
     f.tono.value = aj.tono || "normal";
     f.personalidad.value = aj.personalidad || "";
@@ -699,7 +710,9 @@
   function datosVoz() {
     const f = $("#f-voz");
     const marcado = (n) => { const r = $(`input[name="${n}"]:checked`, f); return r ? r.value : undefined; };
-    return {voz: f.voz.value, respuesta: marcado("respuesta") || "normal", salida_voz: marcado("salida_voz") || "esp32",
+    const salida = marcado("salida_voz") || "esp32", antes = ((E && E.agente && E.agente.ajustes) || {}).salida_voz;
+    return {voz: f.voz.value, respuesta: marcado("respuesta") || "normal",
+      salida_voz: salida === "app" ? (antes === "pc" ? "pc" : "esp32") : salida, contesta: salida === "app" ? "app" : "pc",
       tono: f.tono.value, personalidad: f.personalidad.value};
   }
 
@@ -725,6 +738,60 @@
     pintarRobot();
     pintarRed();
     pintarVoz();
+    pintarVersion();
+  }
+
+  // ------------------------------------------------------------------ 18 nov (Fase 17): actualizaciones
+  // Pedido: "un boton que llame las versiones mas recientes y se actualicen y reciba notificaciones; me toca descargar
+  // todo el tiempo". Lo hace actualizar.py (solo el programa instalado); aqui se ve y se pide.
+  function cuandoFue(seg) {
+    const d = new Date(seg * 1000), min = Math.round((Date.now() - d) / 60000);
+    if (min < 2) return "hace un momento";
+    if (min < 60) return `hace ${min} minutos`;
+    const hora = d.toLocaleTimeString("es", {hour: "numeric", minute: "2-digit"});
+    return d.toDateString() === new Date().toDateString() ? `hoy a las ${hora}` : `el ${d.toLocaleDateString("es", {day: "numeric", month: "long"})} a las ${hora}`;
+  }
+  function pintarVersion() {
+    const a = E.actualizacion || {};
+    const actualizar = $$("[data-actualizar]"), buscar = $("#ver-buscar"), notas = $("#ver-notas"), chip = $("#ver-chip");
+    const err = $("#ver-error"), barra = $("#ver-barra"), aviso = $("#aviso-version");
+    if (versionVista && a.actual && a.actual !== versionVista) toast(`¡Listo! Píxel ya está en la versión ${a.actual}.`);
+    if (a.actual) versionVista = a.actual;
+    if (!a.activo) {
+      $("#ver-texto").textContent = "Este Píxel corre desde el código del proyecto: se actualiza con git, no con este botón. En el programa instalado aquí se buscan y se instalan las versiones nuevas.";
+      for (const b of actualizar) b.hidden = true;
+      buscar.hidden = true; notas.hidden = true; err.hidden = true; barra.hidden = true; aviso.hidden = true;
+      chip.textContent = "Desde el código"; chip.className = "chip";
+      return;
+    }
+    actualizando = !!a.instalando;
+    let texto;
+    if (a.instalando) texto = a.fase || "Actualizando Píxel…";
+    else if (a.buscando) texto = "Buscando versiones nuevas…";
+    else if (a.hay) texto = `Hay una versión nueva: ${a.ultima}. Tienes la ${a.actual}. Se baja, se instala y Píxel se reinicia solo.`;
+    else if (a.revisado) texto = `Tienes la última versión (${a.actual}). Revisado ${cuandoFue(a.revisado)}; vuelvo a mirar solo cada 6 horas.`;
+    else texto = `Tienes la versión ${a.actual}. Busco versiones nuevas solo, al arrancar y cada 6 horas, y te aviso.`;
+    $("#ver-texto").textContent = texto;
+    chip.textContent = a.instalando ? "Actualizando" : a.hay ? "Versión nueva" : a.revisado ? "Al día" : a.actual;
+    chip.className = "chip" + (a.instalando || a.hay ? " aviso" : a.revisado ? " bien" : "");
+    err.hidden = !a.error || a.instalando;
+    err.textContent = a.error || "";
+    const conCifra = a.instalando && a.total > 0;
+    barra.hidden = !a.instalando;
+    barra.classList.toggle("sin", !conCifra);
+    $("i", barra).style.width = conCifra ? Math.round((a.avance / a.total) * 100) + "%" : "";
+    for (const b of actualizar) {
+      b.hidden = !a.hay || a.instalando;
+      b.textContent = `Actualizar a ${a.ultima}`;
+      b.dataset.version = a.ultima || "";
+    }
+    buscar.hidden = false;
+    buscar.disabled = !!(a.buscando || a.instalando);
+    notas.hidden = !(a.hay && a.pagina);
+    if (a.pagina) notas.href = a.pagina;
+    aviso.hidden = !(a.hay || a.instalando);
+    $("#aviso-version-texto").textContent = a.instalando ? (a.fase || "Actualizando Píxel…")
+      : `Hay una versión nueva de Píxel: ${a.ultima} (tienes la ${a.actual}).`;
   }
 
   // ------------------------------------------------------------------ eventos
@@ -744,13 +811,27 @@
     const t = e.target.closest("button");
     if (!t) return;
     if (t.dataset.ir) { irA(t.dataset.ir); return; }
+    if (t.hasAttribute("data-actualizar")) {          // 18 nov (Fase 17)
+      const v = t.dataset.version || "la versión nueva";
+      if (!confirm(`¿Actualizar Píxel a ${v}? Se baja, se instala y Píxel se reinicia solo (un par de minutos).`
+        + ((E.actualizacion || {}).sistema === "linux" ? " Ubuntu te va a pedir tu contraseña." : ""))) return;
+      t.disabled = true;
+      await enviar("/api/actualizar/instalar", {});
+      t.disabled = false;
+      return;
+    }
+    if (t.id === "ver-buscar") {
+      t.disabled = true;
+      await enviar("/api/actualizar/buscar", {});
+      t.disabled = false;
+      return;
+    }
     if (t.hasAttribute("data-nuevo")) {
       t.disabled = true;
       await enviar("/api/nube/enlazar", {});
       t.disabled = false;
       return;
     }
-    if (t.hasAttribute("data-decir")) { enviar("/api/nube/decir", {}); return; }
     if (t.dataset.quitarApp) {
       if (confirm(`¿Desvincular «${t.dataset.nombre || "esa cuenta"}»? Ya no podrá manejar a Píxel desde su app.`)) enviar("/api/nube/quitar", {uid: t.dataset.quitarApp});
       return;
@@ -866,7 +947,10 @@
   });
   $("#probar-voz").addEventListener("click", async () => {
     const d = datosVoz();
-    if (await enviar("/api/agente", d, {silencio: true})) { vozTocada = false; enviar("/api/agente/probar", {donde: d.salida_voz}); }
+    if (!(await enviar("/api/agente", d, {silencio: true}))) return;
+    vozTocada = false;
+    if (d.contesta === "app") toast("Contesta la app de internet: pruébala diciéndole «Píxel» en el celular o el navegador.");
+    else enviar("/api/agente/probar", {donde: d.salida_voz});
   });
 
   $("#apagar").addEventListener("click", async () => {

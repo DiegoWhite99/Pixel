@@ -95,6 +95,13 @@ Function AbrirPixel
   Exec '${PYW} ${ARGS}'
 FunctionEnd
 
+; 18 nov (Fase 17, actualizar.py): el boton "Actualizar" de la ventana corre este instalador en silencio (/S), que
+; cierra Pixel (CERRAR_PIXEL); al terminar lo vuelve a abrir. Instalado a mano (con sus paginas), lo abre la ultima.
+Function .onInstSuccess
+  IfSilent 0 +2
+    Call AbrirPixel
+FunctionEnd
+
 Section "${NOMBRE} (necesario)" SecPixel
   SectionIn RO
   !insertmacro CERRAR_PIXEL

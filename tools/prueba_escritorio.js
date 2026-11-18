@@ -14,6 +14,9 @@ const SALUDO = "Hola, soy Píxel, un agente creado por Divergency IA. Bienvenido
 const ESTADO = {
   servidor: {ip: "192.168.1.50", puerto: 8765, panel: 8080, ollama: false, stt: "base", llm: "qwen2.5:3b"},
   programa: {version: "9.9.9", apagar: true},
+  // 18 nov (Fase 17): hay una version nueva publicada (actualizar.py)
+  actualizacion: {activo: true, actual: "9.9.9", ultima: "10.0.0", hay: true, sistema: "linux", revisado: Math.floor(Date.now() / 1000),
+    pagina: "https://github.com/DiegoWhite99/Pixel/releases/tag/v10.0.0", buscando: false, instalando: false, fase: "", avance: 0, total: 0, error: ""},
   dispositivos: [{ip: "192.168.1.60", puerto: 5000, desde: "08:10:00", minutos: 3, estado: "escuchando", frases: 2, pico: 0, piso: 0, ultimo: "", ble: {}}],
   celulares: [{uid: "u-prueba", nombre: "Celular de Ana Prueba", escuchando: true, estado: "escuchando", frases: 0, ultimo: ""}],
   mis_dispositivos: [{nombre: "Luz de prueba", mac: "aa:bb:cc:dd:ee:01", via: "wifi", ip: "192.168.1.70", tipo: "luz", encendido: true}],
@@ -95,6 +98,21 @@ const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
     ok((await p.$eval("#d-ia strong", (e) => e.textContent)) === "Gemini", "el dato de IA dice Gemini");
     ok((await p.$eval("#version", (e) => e.textContent)) === "9.9.9", "sale la versión del programa");
     ok(!(await p.$eval("#apagar", (e) => e.hidden)), "el botón «Apagar Píxel» sale en el programa");
+
+    console.log("Actualizaciones");
+    ok(!(await p.$eval("#aviso-version", (e) => e.hidden)) && (await p.$eval("#aviso-version", (e) => e.textContent)).includes("10.0.0"),
+      "el aviso de la versión nueva sale arriba");
+    ok((await p.$eval("#ver-texto", (e) => e.textContent)).includes("Hay una versión nueva: 10.0.0"), "la tarjeta dice cuál es la nueva");
+    const dialogos = [];
+    p.once("dialog", (d) => { dialogos.push(d.message()); d.accept(); });
+    await p.click("#tarjeta-version [data-actualizar]");
+    await new Promise((r) => setTimeout(r, 400));
+    ok(dialogos.length === 1 && dialogos[0].includes("10.0.0") && dialogos[0].includes("contraseña"), "pregunta antes de actualizar");
+    ok(enviados.some((e) => e.ruta === "/api/actualizar/instalar"), "«Actualizar» lo pide al programa");
+    await p.click("#ver-buscar");
+    await new Promise((r) => setTimeout(r, 400));
+    ok(enviados.some((e) => e.ruta === "/api/actualizar/buscar"), "«Buscar actualizaciones» lo pide al programa");
+    await foto("11_actualizar");
 
     console.log("Tus APIs");
     await p.click('[data-vista="apis"]');

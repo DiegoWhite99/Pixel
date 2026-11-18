@@ -423,10 +423,10 @@
     }
   }
 
-  // El código que dice Píxel (por el PC): "otra" = que lo diga otra vez, null = cancelar
+  // El código que dice el robot (lo dice el PC por el parlante del robot): "otra" = que lo diga otra vez, null = cancelar
   function pedirCodigo(paso, error) {
     return new Promise((ok) => {
-      paso(`<form class="grupo" id="ap-codigo"><p class="sub">${error ? "<b>Ese no era el código, o pediste otro.</b> " : ""}Escucha a Píxel: está diciendo un código de 6 cifras. Escríbelo aquí.</p>
+      paso(`<form class="grupo" id="ap-codigo"><p class="sub">${error ? "<b>Ese no era el código, o pediste otro.</b> " : ""}Escucha al robot: está diciendo <b>su código de robot</b>, de 6 cifras. Escríbelo aquí (no es el del Panel de control).</p>
         <div class="form-fila"><label class="campo">Código<input type="text" id="ap-cod" inputmode="numeric" maxlength="7" autocomplete="one-time-code" placeholder="000 000" required></label>
         <button class="btn primario" type="submit">Enlazar</button></div>
         <div class="acciones"><button class="btn" type="button" id="ap-cod-otra">Que lo diga otra vez</button><button class="btn" type="button" id="ap-cod-no">Cancelar</button></div></form>`);
@@ -444,7 +444,7 @@
   // Sin el PC, Píxel no puede decir el código: se enlaza con su botón BOOT (prueba de que lo tienes delante)
   function pedirBoot(paso, ble) {
     return new Promise((ok) => {
-      paso(`<div class="grupo"><p class="sub">Píxel no está conectado a tu PC, así que no puede decirte el código. Pulsa <b>una vez</b> su botón <b>BOOT</b> (la luz se pone celeste) y espera.</p>
+      paso(`<div class="grupo"><p class="sub">Píxel no está conectado a tu PC, así que no puede decirte el código. Pulsa <b>una vez</b> su botón <b>BOOT</b> y espera.</p>
         <div class="buscando"><span class="giro"></span>Esperando el botón…</div><button class="btn" type="button" id="ap-boot-no">Cancelar</button></div>`);
       let fin = false;
       $("#ap-boot-no").addEventListener("click", () => { fin = true; ok(false); });
@@ -520,7 +520,7 @@
         <span class="chip ${enLinea(pid) ? "ok" : "warn"}">${enLinea(pid) ? "En línea" : "Sin conexión"}</span>
         <button class="btn suave" type="button" data-probar-puente="${esc(pid)}">Probar</button>
         <button class="btn" type="button" data-quitar-puente="${esc(pid)}">Quitar</button></div>`).join("")
-      : '<div class="vacio">Aún no hay puentes. Agrega el robot Píxel por Bluetooth, o enlaza el PC en Cuentas.</div>';
+      : '<div class="vacio">Aún no hay puentes. Agrega el robot Píxel o vincula el Panel de control con los botones de arriba.</div>';
     if (hp !== ap.pintadoP) { $("#ap-puentes").innerHTML = hp; ap.pintadoP = hp; pintarFormulario(); }
     const xs = ap.aparatos;
     const h = xs === null ? '<div class="vacio">Cargando…</div>' : xs.length ? xs.map((a) => {

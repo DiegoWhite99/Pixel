@@ -35,7 +35,7 @@ import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "2.6.0"
+VERSION = "2.6.1"
 APP = os.path.dirname(os.path.abspath(__file__))
 WINDOWS = os.name == "nt"
 REGISTRO_MAX = 5 * 1024 * 1024        # pixel.log: al pasar de esto se guarda como pixel.log.1
@@ -332,6 +332,9 @@ def configurar(datos):
         threading.Timer(0.6, lambda: os._exit(0)).start()
         return {"mensaje": "Píxel se apaga."}
     panel.RUTAS_SOLO_LOCAL["/api/apagar"] = apagar
+    # 18 nov (Fase 17): buscar versiones nuevas, avisar e instalarlas desde la ventana ("me toca descargar todo el tiempo")
+    import actualizar
+    actualizar.configurar(VERSION, datos, carpeta=os.path.dirname(APP), programa="/usr/bin/pixel", log=servidor.log)
     return servidor, panel
 
 

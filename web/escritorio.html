@@ -70,6 +70,13 @@
       <div class="pildoras" id="pildoras" aria-live="polite"></div>
     </header>
 
+    <!-- 18 nov (Fase 17, actualizar.py): hay una version nueva de Pixel; se ve en todas las pestanas -->
+    <div id="aviso-version" class="aviso-version" hidden role="status">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg>
+      <span id="aviso-version-texto"></span>
+      <button class="btn primario" type="button" data-actualizar>Actualizar</button>
+    </div>
+
     <!-- Preparando: la primera vez baja la voz y el oido -->
     <section id="preparando" class="tarjeta preparando" hidden aria-live="polite">
       <div class="prep-cab">
@@ -99,6 +106,18 @@
         <article class="tarjeta">
           <div class="t-cab"><h2>Tus APIs</h2><button class="enlace-btn" type="button" data-ir="apis">Administrar</button></div>
           <div id="resumen-apis" class="resumen-apis"></div>
+        </article>
+        <!-- 18 nov (Fase 17): buscar versiones nuevas e instalarlas sin descargar a mano -->
+        <article class="tarjeta" id="tarjeta-version">
+          <div class="t-cab"><h2>Actualizaciones</h2><span class="chip" id="ver-chip"></span></div>
+          <p class="sub" id="ver-texto"></p>
+          <div class="barra" id="ver-barra" hidden><i></i></div>
+          <p class="error" id="ver-error" hidden></p>
+          <div class="acciones">
+            <button class="btn primario" type="button" data-actualizar hidden>Actualizar</button>
+            <button class="btn" type="button" id="ver-buscar">Buscar actualizaciones</button>
+            <a class="enlace-btn" id="ver-notas" target="_blank" rel="noopener" hidden>Qué trae</a>
+          </div>
         </article>
       </div>
     </section>
@@ -228,8 +247,10 @@
         <article class="tarjeta">
           <h2>Por dónde habla</h2>
           <div class="opciones" id="op-salida">
-            <label class="opcion"><input type="radio" name="salida_voz" value="esp32"><span><b>El robot</b><small>Por el altavoz de Píxel</small></span></label>
-            <label class="opcion"><input type="radio" name="salida_voz" value="pc"><span><b>Este computador</b><small>Por sus altavoces</small></span></label>
+            <label class="opcion"><input type="radio" name="salida_voz" value="esp32"><span><b>El robot</b><small>Por el altavoz de Píxel. La app de internet se queda callada.</small></span></label>
+            <label class="opcion"><input type="radio" name="salida_voz" value="pc"><span><b>Este computador</b><small>Por sus altavoces. La app de internet se queda callada.</small></span></label>
+            <!-- 18 nov (pedido: "si le doy al robot, el de la web no tiene por que hablar, y viceversa"): contesta uno solo -->
+            <label class="opcion"><input type="radio" name="salida_voz" value="app"><span><b>La app de internet</b><small>En el celular o el navegador. El robot se queda callado.</small></span></label>
           </div>
         </article>
         <article class="tarjeta">

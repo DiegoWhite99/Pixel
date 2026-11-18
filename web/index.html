@@ -201,9 +201,22 @@
       </details>
     </div>
     <div class="card" id="card-puentes" hidden>
-      <div class="head"><div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 18c0-6 4-10 8-10s8 4 8 10M2 18h20M8 18v-4M16 18v-4M12 18v-6"/></svg></div><h2>Puentes</h2></div>
-        <button class="btn primario" type="button" id="ap-ble-btn">Agregar el robot Píxel por Bluetooth</button></div>
-      <p class="sub">El puente está en tu casa y recibe las órdenes de Píxel por internet: el robot Píxel (infrarrojo, relé, encender el PC por red) o el PC con el servidor (el propio PC y un TV Android).</p>
+      <div class="head"><div class="titulo"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 18c0-6 4-10 8-10s8 4 8 10M2 18h20M8 18v-4M16 18v-4M12 18v-6"/></svg></div><h2>Puentes</h2></div></div>
+      <p class="sub">El puente está en tu casa y recibe las órdenes de Píxel por internet. Hay dos:</p>
+      <!-- 18 nov (pedido: "agrega una nueva funcion o boton donde mencione vincular panel de control y tenga la
+           descripcion y todo"): las dos formas de agregar un puente, cada una con lo que hace y su boton -->
+      <div class="puente-opciones">
+        <div class="puente-opcion">
+          <b>Robot Píxel</b>
+          <p class="sub">El robot de tu casa: maneja aparatos por infrarrojo y relé, y enciende el PC por red. Se agrega por Bluetooth y dice en voz alta <b>su código de robot</b>.</p>
+          <button class="btn primario" type="button" id="ap-ble-btn">Agregar el robot Píxel por Bluetooth</button>
+        </div>
+        <div class="puente-opcion">
+          <b>Panel de control</b>
+          <p class="sub">El programa de Píxel en tu computador: maneja el propio PC (volumen, música, YouTube, WhatsApp) y un TV Android. Abre su ventana en el PC y escribe aquí el <b>código de 6 cifras</b> que sale ahí.</p>
+          <button class="btn primario" type="button" data-buscar-pixel>Vincular Panel de control</button>
+        </div>
+      </div>
       <div class="lista" id="ap-puentes"></div>
       <div class="prueba-puente" id="ap-prueba" hidden aria-live="polite"></div>
       <div id="ap-ble" hidden></div>
@@ -493,13 +506,14 @@
           <input type="file" id="pf-foto" accept="image/*" hidden>
         </div>
         <div class="form-fila">
-          <label class="campo">Tu nombre<input type="text" id="pf-nombre" maxlength="60" autocomplete="name"></label>
+          <label class="campo">Tu nombre o alias<input type="text" id="pf-nombre" maxlength="60" autocomplete="name"></label>
           <label class="campo">Cómo quieres que te llame<input type="text" id="pf-apodo" maxlength="40" placeholder="Por ejemplo: Diego"></label>
         </div>
         <div class="campo"><span>Cómo te habla</span>
           <div class="segmento" role="radiogroup" aria-label="Cómo te habla Píxel">
             <label><input type="radio" name="pf-trato" value="tu" checked>De tú</label>
             <label><input type="radio" name="pf-trato" value="usted">De usted</label>
+            <label><input type="radio" name="pf-trato" value="neutro">Neutro</label>
           </div>
         </div>
         <label class="campo">Sobre ti<textarea id="pf-sobre" maxlength="600" placeholder="A qué te dedicas, qué estudias, de dónde eres…"></textarea></label>
@@ -510,6 +524,21 @@
         <div class="contador" data-max="pf-ayuda"></div>
         <label class="campo">Reglas para Píxel<textarea id="pf-reglas" maxlength="600" placeholder="Por ejemplo: explícame con ejemplos; dime los precios en pesos colombianos."></textarea></label>
         <div class="contador" data-max="pf-reglas"></div>
+        <!-- 18 nov (pedido del usuario): su cuestionario de identidad y calibracion cognitiva (calibracion.js); Pixel
+             lo usa en sus instrucciones, igual que lo de arriba -->
+        <details class="calibracion" id="pf-cal" open>
+          <summary><span><b>Perfil de identidad y calibración cognitiva</b><small id="pf-cal-resumen">Sin responder</small></span></summary>
+          <p class="sub">Psicoanálisis, sombra y neurociencia: 14 preguntas para que Píxel te entienda mejor. Marca la opción que mejor refleje tu reacción natural, no la que consideres «correcta».</p>
+          <div id="pf-cal-preguntas"></div>
+          <div class="cal-sintesis">
+            <h3 class="cal-bloque">Síntesis final del perfil</h3>
+            <div id="pf-cal-sintesis" aria-live="polite"></div>
+            <label class="campo cal-temp"><span>Temperatura de comunicación: <b id="pf-cal-temp-v">6</b> de 10</span>
+              <input type="range" id="pf-cal-temp" min="1" max="10" step="1" value="6">
+              <small>1 = seca y directa · 10 = cálida y cercana. <span id="pf-cal-sugerida"></span> Muévela si no te convence.</small></label>
+            <div class="acciones"><button class="btn suave" type="button" id="pf-cal-borrar">Borrar mis respuestas</button></div>
+          </div>
+        </details>
         <div class="acciones pf-guardar"><button class="btn primario" type="submit" id="pf-guardar">Guardar perfil</button><span class="pf-guardado" id="pf-guardado" aria-live="polite"></span></div>
       </form>
       <div class="pf-lado">
@@ -651,11 +680,10 @@
     <div id="lista-visibles"></div>
   </div>
   <form class="hoja-cuerpo" id="enlazar-codigo" hidden>
-    <div class="fila"><span class="ico" data-icono="pixel"></span><div class="txt"><b id="enlazar-nombre">Píxel</b><small>Escribe el código de 6 cifras que dice Píxel. También sale en el panel de Píxel del computador.</small></div></div>
-    <p class="nota" id="enlazar-nota">Pidiéndole a Píxel que diga el código…</p>
+    <div class="fila"><span class="ico" data-icono="pixel"></span><div class="txt"><b id="enlazar-nombre">Píxel</b><small>Escribe el código de 6 cifras que sale en la ventana del Panel de control, en el computador. El robot tiene su propio código.</small></div></div>
     <label class="campo">Código<input type="text" class="codigo-input" id="codigo" inputmode="numeric" maxlength="7" autocomplete="one-time-code" placeholder="000 000" required></label>
     <p class="aviso" id="enlazar-error" hidden></p>
-    <div class="acciones"><button class="btn primario grande" type="submit">Enlazar</button><button class="btn suave" type="button" id="b-decir">Que lo diga otra vez</button></div>
+    <div class="acciones"><button class="btn primario grande" type="submit">Enlazar</button></div>
   </form>
   <div class="hoja-cuerpo" id="enlazar-listo" hidden>
     <div class="vacio" style="border-style:solid;background:var(--green-soft);color:var(--green);font-weight:650">¡Listo! Esta app ya maneja a Píxel.</div>
@@ -671,6 +699,7 @@
 <script src="proveedor_claude.js"></script>
 <script src="cara3d.js"></script>
 <script src="luz_robot.js"></script>
+<script src="calibracion.js"></script>
 <script src="claves.js"></script>
 <script src="espejo.js"></script>
 <script src="app.js"></script>

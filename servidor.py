@@ -76,6 +76,20 @@ DISPOSITIVOS_ARCHIVO = "dispositivos.json"  # dispositivos Bluetooth aceptados e
 # Por donde habla Pixel: "esp32" (su altavoz) o "pc" (salida de audio del PC: el altavoz
 # Bluetooth si esta conectado). Lo cambia el panel (ajustes.json).
 SALIDA_VOZ = "esp32"
+# 18 nov (pedido: "si le doy al robot, el de la web no tiene por que hablar, y viceversa"): quien contesta cuando se
+# dice "Pixel". "pc": este programa (por el robot o por el PC) y la app de internet se calla mientras haya un robot
+# conectado. "app": la app de internet, y el robot se calla. Lo cambia la ventana (Voz -> Por donde habla).
+CONTESTA = "pc"
+
+
+def callado_por_ajuste(es_movil, hay_robot):
+    """Por que esta sesion no contesta a "Pixel" ("" si contesta). es_movil: el celular como microfono del PC
+    (SesionMovil, que habla por el celular: es la app). hay_robot: algun robot conectado a este PC."""
+    if CONTESTA == "app" and not es_movil:
+        return "contesta la app de internet"
+    if CONTESTA != "app" and es_movil and hay_robot:
+        return "contesta el robot"
+    return ""
 
 # Pixel en la nube (Fase 10, nube.py): la app de https://pixelassitance.web.app lo encuentra y lo
 # maneja desde cualquier sitio. Mismo proyecto de Firebase que web/app.js. NUBE_DB vacio = sin nube.
@@ -118,7 +132,7 @@ MSG_AUDIO_IN = 0x01
 MSG_AUDIO_OUT = 0x02
 MSG_END_TURN = 0x03
 MSG_DEBUG = 0x04
-FRASE_CODIGO_ROBOT = "Para enlazarme con la app, mi código es:"
+FRASE_CODIGO_ROBOT = "Soy el robot Píxel. Mi código de robot es:"   # 17 nov: el del PC ya no se dice
 # 13 nov (el usuario: "va muy rapido con lo del codigo"): los codigos se dicen cifra por cifra, cada una sola y con
 # un silencio despues, y dos veces (_decir_codigo). Antes iban en una frase con comas ("6, 3, 7...") y sonaban seguidas.
 CIFRAS_PALABRAS = ("Cero", "Uno", "Dos", "Tres", "Cuatro", "Cinco", "Seis", "Siete", "Ocho", "Nueve")
@@ -875,6 +889,11 @@ class Sesion:
 
         # --- STT ---
         texto, t_stt = TRANSCRIPTOR.transcribir(pcm)
+        from stt import eco_del_prompt      # aqui y no arriba: importar servidor no carga faster-whisper
+        if texto and eco_del_prompt(texto, TRANSCRIPTOR.initial_prompt):     # 18 nov: el Queen fantasma
+            log("%s  TEXTO FANTASMA (Whisper repitio su lista de palabras, no es una orden): \"%s\""
+                % (self.peer, texto))
+            texto = ""
         if not texto:
             log("%s  TEXTO: (vacio, Whisper no saco nada)" % self.peer)
             log("%s  STT: %.2f s para %.2f s de audio" % (self.peer, t_stt, dur_s))
@@ -899,6 +918,13 @@ class Sesion:
         en_ventana = t_inicio <= self.ventana_hasta
         if not activa and not en_ventana:
             log("%s  ignorada (sin %s): %s" % (self.peer, ACTIVACION, texto))
+            return
+        with _sesiones_lock:
+            hay_robot = bool(SESIONES)
+        callado = callado_por_ajuste(isinstance(self, SesionMovil), hay_robot)
+        if callado:                         # 18 nov: solo contesta uno, el que se eligio en la ventana (Voz)
+            self.ventana_hasta = 0.0
+            log("%s  ignorada (%s, Panel de control -> Voz): %s" % (self.peer, callado, texto))
             return
         self.ventana_hasta = 0.0            # la ventana vale para una sola frase
         self.turno_aceptado = True

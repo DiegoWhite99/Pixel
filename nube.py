@@ -56,8 +56,10 @@ LENTO_S = 30.0
 MIRANDO_S = 60          # la app esta abierta si su latido es de hace menos de esto
 VIVO_S = 10
 RESPUESTA_S = 60        # las respuestas se borran pasado este tiempo
-DECIR_CADA_S = 12       # como mucho, cada cuanto se dice el codigo en voz alta
-FRASE_CODIGO = "Para enlazar la app, mi código es:"     # luego las cifras, despacio (Sesion._decir_codigo)
+# 17 nov (el usuario: "son dos códigos, uno para el robot y otro para el panel de control"): el código del Panel de
+# control solo sale en su ventana. Antes se decía por el parlante del robot, casi con la misma frase que el código del
+# robot, y se confundían: con el del PC se intentaba enlazar el robot, y al revés.
+SIN_VOZ = "El código del Panel de control no se dice en voz alta: está en su ventana, en el computador."
 FRASE_ENLAZADO = "¡Listo! Ya estoy enlazado con tu app."
 SV = {".sv": "timestamp"}
 MOVIL_MAX_S = 12        # frase mas larga que se acepta del celular (el corta a los 10 s)
@@ -78,7 +80,6 @@ _hechas = set()         # ordenes ya encoladas: el streaming puede repetirlas al
 _respuestas = []        # (monotonic, id) para borrarlas pasado RESPUESTA_S
 _mirando = {"hasta": 0.0}
 _hay_voz = threading.Event()
-_dicho = {"t": 0.0}
 _frases = queue.Queue()
 _frases_vistas = set()  # como _hechas, para las frases del celular
 _habla = queue.Queue()  # (uid, tipo, pcm, dime, extra) que escribir, en orden
@@ -193,20 +194,6 @@ def cerrar_enlace():
     _db("DELETE", "visibles/" + _pid())
 
 
-def decir_codigo():
-    """Pixel dice el codigo por su altavoz (o por el celular que escucha). False si no hay por donde."""
-    enlace = _estado["enlace"]
-    if enlace is None:
-        return False
-    sesion = S.sesion_que_habla()
-    if sesion is None:
-        return False
-    if time.monotonic() - _dicho["t"] > DECIR_CADA_S:
-        _dicho["t"] = time.monotonic()
-        sesion.cola.put(("codigo", FRASE_CODIGO, enlace["codigo"]))
-    return True
-
-
 def _responder(clave, uid, ok, texto, **extra):
     datos = dict(extra, uid=uid, ok=ok, t=SV)
     datos["mensaje" if ok else "error"] = texto
@@ -225,9 +212,7 @@ def _solicitud(uid, s):
         return
     codigo = str(s.get("codigo") or "").strip()
     if not codigo:
-        dicho = decir_codigo()
-        _responder(clave, uid, True, "Escucha a Píxel." if dicho else "Píxel no tiene altavoz conectado: mira el código en el panel del PC.",
-                   n=n, dicho=dicho)
+        _responder(clave, uid, True, SIN_VOZ, n=n, dicho=False)
         return
     if hmac.compare_digest(codigo, enlace["codigo"]):
         app = (str(s.get("nombre") or "App").strip() or "App")[:40]
@@ -266,16 +251,12 @@ def _ruta_enlazar(d):
     if not _estado["conectada"]:
         raise P.ErrorPanel("Píxel no está conectado a la nube: %s" % (_estado["error"] or "sin internet"))
     codigo = abrir_enlace()
-    decir_codigo()
     return {"mensaje": "Código %s, válido %d minutos." % (codigo, ENLACE_S // 60)}
 
 
 def _ruta_decir(d):
-    if _estado["enlace"] is None:
-        raise P.ErrorPanel("No hay ningún código abierto: pulsa Enlazar otra app.")
-    if not decir_codigo():
-        raise P.ErrorPanel("No hay ningún ESP32 conectado para decirlo.")
-    return {"mensaje": "Escucha a Píxel."}
+    """Apps de antes del 17 nov piden decir el código del PC: ya no se dice (SIN_VOZ)."""
+    raise P.ErrorPanel(SIN_VOZ)
 
 
 # ------------------------------------------------------------------ estado para el panel
@@ -331,6 +312,8 @@ def _al_orden(id_, orden):
 
 
 def _al_solicitud(uid, s):
+    # 17 nov: la app dijo "Pixel no contesto" y aqui no habia nada: que quede en el registro que llego
+    S.log("nube: llego una solicitud de enlace de %s (%s)" % (str(uid)[:6], "con código" if isinstance(s, dict) and s.get("codigo") else "pide oír el código"))
     if isinstance(s, dict):
         try:
             _solicitud(uid, s)
