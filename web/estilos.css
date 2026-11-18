@@ -741,3 +741,4 @@ input[type=tel], input[type=search] { width: 100%; border: 1px solid var(--line)
 .condiciones li > span { width: 14px; text-align: center; font-weight: 700; }
 .condiciones li.bien > span { color: #16a34a; } .condiciones li.mal > span { color: #dc2626; }
 .condiciones li small { opacity: 0.75; }
+.marca-pc { font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600; padding: 1px 6px; border-radius: 6px; background: #e0f2fe; color: #0369a1; }

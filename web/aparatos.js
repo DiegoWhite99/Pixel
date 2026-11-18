@@ -423,10 +423,10 @@
     }
   }
 
-  // El código que dice Píxel (por el PC): "otra" = que lo diga otra vez, null = cancelar
+  // El código que dice el robot (lo dice el PC por el parlante del robot): "otra" = que lo diga otra vez, null = cancelar
   function pedirCodigo(paso, error) {
     return new Promise((ok) => {
-      paso(`<form class="grupo" id="ap-codigo"><p class="sub">${error ? "<b>Ese no era el código, o pediste otro.</b> " : ""}Escucha a Píxel: está diciendo un código de 6 cifras. Escríbelo aquí.</p>
+      paso(`<form class="grupo" id="ap-codigo"><p class="sub">${error ? "<b>Ese no era el código, o pediste otro.</b> " : ""}Escucha al robot: está diciendo <b>su código de robot</b>, de 6 cifras. Escríbelo aquí (no es el del Panel de control).</p>
         <div class="form-fila"><label class="campo">Código<input type="text" id="ap-cod" inputmode="numeric" maxlength="7" autocomplete="one-time-code" placeholder="000 000" required></label>
         <button class="btn primario" type="submit">Enlazar</button></div>
         <div class="acciones"><button class="btn" type="button" id="ap-cod-otra">Que lo diga otra vez</button><button class="btn" type="button" id="ap-cod-no">Cancelar</button></div></form>`);

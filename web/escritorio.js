@@ -404,6 +404,13 @@
 
   // -- vincular (Inicio y Dispositivos) --
   let firmaVincular = "", codigoHasta = 0;
+  // 17 nov (el usuario: "cada Píxel con su servidor y con su cuenta, por eso está logueado; ponle coherencia"): en la
+  // nube había dos «Panel de control» esperando y la app le mandaba el código al otro. «Vincular con mi cuenta» abre
+  // la app con la identidad de ESTE PC y su código: con la sesión abierta, se enlaza este y no otro (app.js,
+  // enlazarDesdePanel). La marca corta (las 4 primeras letras de su identidad) también sale en la lista de la app.
+  const marcaPc = (pid) => "#" + String(pid).slice(0, 4);
+  const enlaceApp = (n, codigo) => `${URL_APP}/?enlazar=${encodeURIComponent(n.pid)}&codigo=${encodeURIComponent(codigo)}&nombre=${encodeURIComponent(n.nombre || "Panel de control")}`;
+
   function pintarVincular() {
     const n = (E && modo === "listo" && E.nube) || null;
     const enlace = n && n.enlace;
@@ -413,12 +420,12 @@
     firmaVincular = firma;
     const duenos = (n && n.duenos) || [];
     const izquierda = `<div>
-      <h2>Vincula a Píxel con tu cuenta</h2>
+      <h2>Vincula el Panel de control con tu cuenta</h2>
       <p class="sub">${duenos.length ? `Ya está vinculado con ${duenos.length === 1 ? "una cuenta" : duenos.length + " cuentas"}. Puedes sumar otra.` : "Así lo manejas desde tu celular o cualquier computador."}</p>
       <ol class="pasos">
         <li><span>Abre <a href="${URL_APP}" target="_blank" rel="noopener"><b>pixelassitance.web.app</b></a> y entra con tu cuenta de Google.</span></li>
-        <li><span>Toca <b>Buscar a Píxel</b> y elige <b>${esc((n && n.nombre) || "este Píxel")}</b>.</span></li>
-        <li><span>Escribe el código de 6 cifras que ves aquí.</span></li>
+        <li><span>Toca <b>Buscar a Píxel</b> y elige <b>${esc((n && n.nombre) || "este Píxel")}</b>${n && n.pid ? ` <span class="marca-pc">${esc(marcaPc(n.pid))}</span>` : ""}.</span></li>
+        <li><span>Escribe el código de 6 cifras que ves aquí. Es el del Panel de control; el robot tiene el suyo.</span></li>
       </ol></div>`;
     let derecha;
     const enchufe = '<svg viewBox="0 0 24 24"><path d="M9 7 7 9a4.2 4.2 0 0 0 6 6l2-2M15 17l2-2a4.2 4.2 0 0 0-6-6L9 11M8 16l8-8"/></svg>';
@@ -433,7 +440,8 @@
       derecha = `<div class="codigo-zona">
         <div class="digitos" aria-label="Código ${esc(c.split("").join(" "))}">${c.split("").map((d) => `<span>${esc(d)}</span>`).join("")}</div>
         <div class="cuenta-atras"><svg viewBox="0 0 28 28" aria-hidden="true"><circle class="pista" cx="14" cy="14" r="11"/><circle class="resto" cx="14" cy="14" r="11" stroke-dasharray="69.1" stroke-dashoffset="0"/></svg><span data-quedan></span></div>
-        <div class="acciones centro"><button class="btn suave" type="button" data-decir>Decirlo en voz alta</button><button class="btn fantasma" type="button" data-nuevo>Código nuevo</button></div>
+        ${n.pid ? `<a class="btn primario" href="${esc(enlaceApp(n, c))}" target="_blank" rel="noopener">Vincular con mi cuenta</a>` : ""}
+        <div class="acciones centro"><button class="btn fantasma" type="button" data-nuevo>Código nuevo</button></div>
       </div>`;
     } else {
       derecha = `<div class="sin-codigo">${enchufe}<span>Pide un código y escríbelo en la app.</span><button class="btn primario" type="button" data-nuevo>Mostrar código para vincular</button></div>`;
@@ -750,7 +758,6 @@
       t.disabled = false;
       return;
     }
-    if (t.hasAttribute("data-decir")) { enviar("/api/nube/decir", {}); return; }
     if (t.dataset.quitarApp) {
       if (confirm(`¿Desvincular «${t.dataset.nombre || "esa cuenta"}»? Ya no podrá manejar a Píxel desde su app.`)) enviar("/api/nube/quitar", {uid: t.dataset.quitarApp});
       return;

@@ -118,7 +118,7 @@ MSG_AUDIO_IN = 0x01
 MSG_AUDIO_OUT = 0x02
 MSG_END_TURN = 0x03
 MSG_DEBUG = 0x04
-FRASE_CODIGO_ROBOT = "Para enlazarme con la app, mi código es:"
+FRASE_CODIGO_ROBOT = "Soy el robot Píxel. Mi código de robot es:"   # 17 nov: el del PC ya no se dice
 # 13 nov (el usuario: "va muy rapido con lo del codigo"): los codigos se dicen cifra por cifra, cada una sola y con
 # un silencio despues, y dos veces (_decir_codigo). Antes iban en una frase con comas ("6, 3, 7...") y sonaban seguidas.
 CIFRAS_PALABRAS = ("Cero", "Uno", "Dos", "Tres", "Cuatro", "Cinco", "Seis", "Siete", "Ocho", "Nueve")

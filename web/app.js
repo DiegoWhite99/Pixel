@@ -489,12 +489,11 @@ function pintarNube(d) {
   } else {
     chip.textContent = !n.activa ? "Desactivada" : n.conectada ? "Conectada" : "Sin conexión";
     chip.className = "chip" + (n.conectada ? " ok" : n.activa ? " warn" : "");
-    h += `<p class="sub">En el móvil abre <b>${URL_APP}</b>, entra con Google, toca <b>Buscar a Píxel</b> y escribe el código que diga Píxel.</p>`;
+    h += `<p class="sub">En el móvil abre <b>${URL_APP}</b>, entra con Google, toca <b>Buscar a Píxel</b> y escribe el código que sale en la ventana del Panel de control.</p>`;
     if (n.activa && !n.conectada) h += `<p class="aviso">Sin conexión con la nube: ${esc(n.error || "¿hay internet?")}</p>`;
     if (n.enlace) {
       h += `<div class="codigo-grande"><small>Código para enlazar</small><b>${esc(n.enlace.codigo.replace(/(\d{3})(\d{3})/, "$1 $2"))}</b>
-        <small>válido ${Math.max(1, Math.ceil(n.enlace.quedan_s / 60))} min</small></div>
-        <div class="acciones"><button class="btn suave" type="button" data-nube="decir">Que lo diga en voz alta</button></div>`;
+        <small>válido ${Math.max(1, Math.ceil(n.enlace.quedan_s / 60))} min</small></div>`;
     } else if (n.conectada) {
       h += '<div class="acciones"><button class="btn primario" type="button" data-nube="enlazar">Enlazar otra app</button></div>';
     }
@@ -601,6 +600,7 @@ function sesion(u) {
     }, (e) => console.warn("claves en la nube:", e.message || e));
   }
   nube.quitarMios = nube.d.onValue(nube.d.ref(nube.db, `usuarios/${nube.uid}/pixeles`), (s) => { nube.mios = s.val() || {}; elegirPixel(); }, errorNube);
+  enlazarDesdePanel();                                  // 17 nov: vino desde «Vincular con mi cuenta» del PC
 }
 
 // Siempre se elige la cuenta (Fase 14: para la feria se entra con una cuenta de demostracion, no la personal).
@@ -762,6 +762,31 @@ function esperarRespuesta(pid, clave, n, ms) {
 // ------------------------------------------------------------------ enlazar (como Alexa)
 let enlazando = null;          // {pid, nombre} del Pixel elegido en la lista
 
+// 17 nov (el usuario: "cada Píxel con su servidor y con su cuenta, por eso está logueado; ponle coherencia"): en la
+// lista había dos «Panel de control» y el código se le mandaba al otro PC ("Píxel no contestó"). El botón «Vincular
+// con mi cuenta» de la ventana del PC abre la app con ?enlazar=<su pid>&codigo=<su código>: con la sesión abierta se
+// enlaza ESE PC, sin lista y sin escribir el código. Es el mismo paso que escribirlo a mano (#enlazar-codigo).
+const ENLACE_PANEL = (() => {
+  const pid = PARAMS.get("enlazar") || "", codigo = (PARAMS.get("codigo") || "").replace(/\D/g, "");
+  return /^[A-Za-z0-9_-]{6,64}$/.test(pid) && codigo.length === 6
+    ? {pid, codigo, nombre: (PARAMS.get("nombre") || "Panel de control").slice(0, 60), hecho: false} : null;
+})();
+
+function enlazarDesdePanel() {
+  if (!ENLACE_PANEL || ENLACE_PANEL.hecho || !nube.usuario) return;
+  ENLACE_PANEL.hecho = true;
+  try { history.replaceState(null, "", location.pathname + location.hash); } catch (e) { /* nada */ }   // el código no se queda en la barra
+  enlazando = {pid: ENLACE_PANEL.pid, nombre: ENLACE_PANEL.nombre};
+  $("#enlazar-nombre").textContent = enlazando.nombre + " " + marcaPc(enlazando.pid);
+  $("#codigo").value = ENLACE_PANEL.codigo;
+  $("#enlazar-error").hidden = true;
+  pasoEnlace("codigo");
+  if (!$("#enlazar").open) $("#enlazar").showModal();
+  $("#enlazar-codigo").requestSubmit();
+}
+
+const marcaPc = (pid) => "#" + String(pid).slice(0, 4);      // la misma que muestra la ventana del PC
+
 function nombreApp() {
   const u = nube.usuario, ua = navigator.userAgent;
   return ((u && (u.displayName || u.email)) || (/iPhone|iPad/.test(ua) ? "iPhone" : /Android/.test(ua) ? "Móvil Android" : "Navegador")).slice(0, 40);
@@ -790,7 +815,7 @@ function pintarVisibles() {
   $("#lista-visibles").innerHTML = !nube.d
     ? `<div class="buscando"><span class="giro"></span>${nube.error ? "No pude conectar con la nube. ¿Tienes internet?" : "Conectando con la nube…"}</div>`
     : lista.length ? `<div class="lista">${lista.map(([pid, v]) => `<div class="fila"><span class="ico">${icono("pixel")}</span>
-        <div class="txt"><b>${esc(v.nombre)}</b><small>Esperando a enlazarse</small></div>
+        <div class="txt"><b>${esc(v.nombre)} <span class="marca-pc">${esc(marcaPc(pid))}</span></b><small>Esperando a enlazarse · la marca sale en la ventana de su PC</small></div>
         ${nube.mios && nube.mios[pid] ? '<span class="chip ok">Ya enlazado</span>'
           : `<button class="btn primario" type="button" data-enlazar="${esc(pid)}" data-nombre="${esc(v.nombre)}">Enlazar</button>`}</div>`).join("")}</div>`
     : `<div class="buscando"><span class="giro"></span>Buscando a Píxel…</div>
@@ -806,14 +831,6 @@ async function pedirAPixel(codigo) {
   return esperarRespuesta(enlazando.pid, "enlace-" + nube.uid, n, 15000);
 }
 
-async function decirCodigo() {
-  const aviso = $("#enlazar-nota");
-  aviso.textContent = "Pidiéndole a Píxel que diga el código…";
-  try {
-    const r = await pedirAPixel("");
-    aviso.textContent = r.dicho ? "🔊 Escucha a Píxel y escribe el código." : r.mensaje;
-  } catch (e) { aviso.textContent = e.message; }
-}
 // ------------------------------------------------------------------ eventos
 function contar() { $("#contador").textContent = $("#personalidad").value.length + " / 300"; }
 $("#personalidad").addEventListener("input", contar);
@@ -881,10 +898,8 @@ document.addEventListener("click", async (e) => {
     $("#codigo").value = ""; $("#enlazar-error").hidden = true;
     pasoEnlace("codigo");
     $("#codigo").focus();
-    decirCodigo();
     return;
   }
-  if (t.closest("#b-decir")) { decirCodigo(); return; }
   if (t.closest("#enlazar-atras")) { pasoEnlace("buscar"); return; }
   if (t.closest("[data-cerrar-enlazar]")) { $("#enlazar").close(); return; }
   const nb = t.closest("[data-nube]");

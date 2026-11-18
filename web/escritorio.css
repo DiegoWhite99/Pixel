@@ -69,6 +69,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .condiciones li.bien > span { color: #22c55e; } .condiciones li.mal > span { color: var(--mal); }
 .condiciones li small { color: var(--suave); }
 .condiciones li .btn { margin-left: auto; padding: 4px 12px; }
+.marca-pc { font-family: ui-monospace, monospace; font-size: 12px; padding: 1px 6px; border-radius: 6px; background: rgba(56, 189, 248, 0.15); color: var(--cian); }
+.codigo-zona > .btn.primario { margin-top: 10px; }
 .paso { margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
 .paso-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .paso-cab .btn { margin-left: auto; }

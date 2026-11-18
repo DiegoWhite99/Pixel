@@ -1033,6 +1033,27 @@ if (ctx.PixelContactos) {
   });
 }
 
+// 17 nov: «Vincular con mi cuenta» en la ventana del PC enlaza ESE PC con la cuenta de la sesión abierta
+prueba("enlace desde el panel: la ventana manda su identidad y su código, y la app enlaza ese PC sin lista", () => {
+  const esc = fs.readFileSync(path.join(WEB, "escritorio.js"), "utf8"), app = fs.readFileSync(path.join(WEB, "app.js"), "utf8");
+  assert.ok(/\?enlazar=\$\{encodeURIComponent\(n\.pid\)\}&codigo=/.test(esc), "la ventana no arma el enlace con su pid y su código");
+  assert.ok(/PARAMS\.get\("enlazar"\)/.test(app) && /PARAMS\.get\("codigo"\)/.test(app), "la app no lee el PC y el código");
+  assert.ok(/enlazarDesdePanel\(\);/.test(app) && /requestSubmit\(\)/.test(app), "la app no enlaza al abrir la sesión");
+  assert.ok(/history\.replaceState/.test(app), "el código se queda en la barra de direcciones");
+  const marca = /const marcaPc = \(pid\) => "#" \+ String\(pid\)\.slice\(0, 4\)/;
+  assert.ok(marca.test(esc) && marca.test(app), "la marca del PC no es la misma en la ventana y en la app");
+});
+
+// 17 nov: dos códigos distintos. El del Panel de control está en su ventana (no se dice); el del robot lo dice el robot
+prueba("dos códigos: el del Panel de control en su ventana, el del robot lo dice el robot", () => {
+  const html = fs.readFileSync(path.join(WEB, "index.html"), "utf8"), app = fs.readFileSync(path.join(WEB, "app.js"), "utf8");
+  const ap = fs.readFileSync(path.join(WEB, "aparatos.js"), "utf8"), ven = fs.readFileSync(path.join(WEB, "escritorio.js"), "utf8");
+  assert.ok(/ventana del Panel de control/.test(html) && !/id="b-decir"/.test(html), "enlazar el PC: el código está en su ventana");
+  assert.ok(!/decirCodigo|data-nube="decir"/.test(app), "la app ya no pide que se diga el código del PC");
+  assert.ok(!/data-decir/.test(ven), "la ventana del PC ya no lo dice en voz alta");
+  assert.ok(/su código de robot/.test(ap) && /no es el del Panel de control/.test(ap), "enlazar el robot: su propio código");
+});
+
 Promise.all(esperando).then(() => {
   console.log(fallos ? `${fallos} fallo(s), ${hechas} bien` : `todo bien (${hechas} pruebas)`);
   process.exit(fallos ? 1 : 0);
