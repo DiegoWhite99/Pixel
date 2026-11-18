@@ -132,7 +132,15 @@ function feliz(texto) {
 // El servidor apunta el volumen de cada trozo de voz y a que hora (de su reloj) empieza a sonar;
 // aqui se busca el trozo que suena ahora y la boca se abre segun su volumen. En la app de internet,
 // mientras Pixel habla en este celular (agente.js), la boca sigue esa voz.
-const voz = {segmentos: [], offset: 0, recibida: 0};      // offset: reloj del servidor - reloj de aqui (ms)
+const voz = {segmentos: [], offset: 0, recibida: 0, pensando: false, pensandoPuesto: false};      // offset: reloj del servidor - reloj de aqui (ms)
+
+// 18 nov (pedido: "el Pixel animado debe ir en reaccion simultanea al Pixel de la web"): mientras el robot piensa (su luz
+// en arcoiris), esta cara tambien; la ventana del Panel de control hace lo mismo con /api/voz (escritorio.js)
+function caraPensando() {
+  if (!cara || voz.pensando === voz.pensandoPuesto) return;
+  voz.pensandoPuesto = voz.pensando;
+  cara.emocion("pensando", voz.pensando ? 45000 : 0);
+}
 
 async function pedirVoz() {
   const t0 = Date.now();
@@ -141,6 +149,8 @@ async function pedirVoz() {
     voz.offset = j.ahora - (t0 + Date.now()) / 2;
     voz.segmentos = j.segmentos;
     voz.recibida = Date.now();
+    voz.pensando = !!j.pensando;
+    caraPensando();
   } catch (e) { /* sin servidor: la boca se queda quieta */ }
 }
 
@@ -665,6 +675,8 @@ function elegirPixel() {
     const v = s.val();
     if (!v || !v.json) return;
     try { voz.segmentos = JSON.parse(v.json); voz.recibida = Date.now(); } catch (e) { /* trozo roto: se ignora */ }
+    voz.pensando = !!v.pensando;
+    caraPensando();
   }, errorNube));
   latido();
 }

@@ -357,7 +357,8 @@ def _publicar_voz():
         if not _estado["duenos"] or time.monotonic() > _mirando["hasta"]:
             continue
         try:
-            _db("PUT", "pixeles/%s/voz" % _pid(), {"json": json.dumps(P.voz()["segmentos"])})
+            v = P.voz()                         # 18 nov: tambien si un robot esta pensando (la cara de la app)
+            _db("PUT", "pixeles/%s/voz" % _pid(), {"json": json.dumps(v["segmentos"]), "pensando": bool(v.get("pensando"))})
         except Exception as e:
             _estado["error"] = str(e)[:200]
 

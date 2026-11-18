@@ -1144,6 +1144,10 @@ El usuario: «va muy rápido con lo del código, le doy repetir el código y se 
 - **La luz y el enlace**: verificado con el robot real que robot, registro del PC y panel dicen el mismo color (11:05: azul, sin enlace con la app). El robot no podía anotarse en la cuenta (Firebase 401: su entrada se había borrado). Con la regla nueva, el panel puso la marca y a los 3 s el robot dijo «verde, enlazado con la app» (11:26).
 - **WiFi del robot desde el PC por Bluetooth** (`robot_wifi.py`): funcionó con el robot real (de la red de la casa a la del laboratorio, con la contraseña guardada en el PC). El PC ve al robot a -25 a -35 dBm a su lado.
 
+### 18 nov: Píxel pensando, en la luz y en las dos caras
+
+- Pedidos: «cuando esté pensando me gustaría que el led se ponga de muchos colores, identificando que está pensando» y «el Píxel animado debe ir en reacción simultánea al Píxel de la web» (eligió: las dos caras, la de la ventana y la de la app). El arcoíris no es un color nuevo de estado (la regla de los cuatro colores sigue): solo dura mientras piensa y luego vuelve a pintar su color. Firmware cargado al robot el 18 nov 16:44.
+
 ### 18 nov: la presentación de la app por el robot
 
 - El usuario: «cuando le doy presentarse de nuevo no se presenta en el robot; si ya había seleccionado que la salida de audio salga por el robot, debe ser por ahí, no por el PC». «Que Píxel se presente otra vez» (y la primera presentación) usan `contestaElRobot()`: con el robot o el PC elegidos y un robot conectado, la app manda la orden `/api/presentarse` (solo acepta la presentación de Píxel) y el robot la dice frase por frase (`Sesion._decir_frases`, un solo cierre) por donde habla Píxel. Un Panel anterior (sin la orden) o un fallo: suena en la app como antes. Va en la 2.6.3 (se instala con el botón «Actualizar»).

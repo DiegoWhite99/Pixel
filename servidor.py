@@ -573,7 +573,24 @@ class Sesion:
     # PENSAR_CADA_S hasta que suena la respuesta. El celular (SesionMovil) pone el suyo al recibir el "oido".
     PENSAR_SONIDO = True
 
+    # 18 nov (pedido: "cuando este pensando me gustaria que el led se ponga de muchos colores, identificando que esta
+    # pensando"): el robot pone su luz en arcoiris entre "estado:pensando" y "estado:listo" (debug 0x04, como
+    # "estado:con_api"; un firmware de antes solo lo escribe en su puerto serie). No al celular (SesionMovil).
+    LUZ_PENSANDO = True
+
+    def _avisar_pensando(self, si):
+        if not self.LUZ_PENSANDO or getattr(self, "_luz_pensando", False) == si:
+            return
+        self._luz_pensando = si
+        try:
+            self.debug("estado:pensando" if si else "estado:listo")
+        except OSError:
+            pass
+        if AL_HABLAR is not None:                # la nube lo publica: la cara de la app piensa a la vez
+            AL_HABLAR()
+
     def _empezar_pensando(self):
+        self._avisar_pensando(True)
         if not self.PENSAR_SONIDO:
             return
         self._parar_pensando()
@@ -605,6 +622,7 @@ class Sesion:
             p[0].set()
             with self._pensar_lock:
                 pass
+        self._avisar_pensando(False)
 
     def _apuntar_voz(self, pcm, inicio):
         """Volumen de la voz cada BOCA_PASO_MS, con la hora a la que empieza a sonar: la app mueve la boca con el."""
@@ -1152,6 +1170,7 @@ class SesionMovil(Sesion):
     """
 
     PENSAR_SONIDO = False               # el celular pone sus notas de "pensando" al recibir el "oido"
+    LUZ_PENSANDO = False                # 18 nov: la luz de arcoiris es del robot
 
     def __init__(self, uid, escribir):
         self.uid = uid

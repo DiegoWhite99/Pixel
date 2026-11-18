@@ -82,6 +82,34 @@
   if (!cara3d) $("#intro-pixel").innerHTML = pixelSVG("pi");
   const logo3d = montar3d($("#avatar"), "logo-cara", {sinSuelo: true});
   if (!logo3d) $("#avatar").innerHTML = pixelSVG("pa");
+
+  // 18 nov (pedido: "el Pixel animado debe ir en reaccion simultanea al Pixel de la web"): la cara del logo hace lo mismo
+  // que la de la app: piensa mientras el robot piensa (su luz en arcoiris) y mueve la boca con la voz que suena
+  // (/api/voz: el volumen de cada trozo y a que hora del reloj del servidor empieza, como moverBoca de app.js)
+  const vozCara = {segmentos: [], offset: 0, pensando: false, puesto: ""};
+  async function pedirVozCara() {
+    if (!logo3d || document.hidden || modo !== "listo") return;
+    const t0 = Date.now();
+    try {
+      const j = await (await pedir("/api/voz", {espera: 2000})).json();
+      vozCara.offset = j.ahora - (t0 + Date.now()) / 2;
+      vozCara.segmentos = j.segmentos || [];
+      vozCara.pensando = !!j.pensando;
+    } catch (e) { vozCara.segmentos = []; vozCara.pensando = false; }
+  }
+  function moverCara() {
+    if (!logo3d) return;
+    const t = Date.now() + vozCara.offset;
+    let nivel = null;
+    for (const s of vozCara.segmentos) {
+      const i = Math.floor((t - s.t) / s.paso);
+      if (i >= 0 && i < s.niveles.length) { nivel = s.niveles[i]; break; }
+    }
+    logo3d.boca(nivel);
+    const estado = vozCara.pensando ? "pensando" : nivel !== null ? "hablando" : "normal";
+    if (estado !== vozCara.puesto) { vozCara.puesto = estado; logo3d.estado(estado); }
+  }
+  if (logo3d) { setInterval(pedirVozCara, 250); setInterval(moverCara, 50); }
   $("#pixel-dormido").innerHTML = pixelSVG("pd");
 
   // ------------------------------------------------------------------ bienvenida

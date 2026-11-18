@@ -302,7 +302,10 @@ def voz():
         sesiones = list(S.SESIONES)
     ahora = int(time.time() * 1000)
     segmentos = [v for s in sesiones for v in list(s.voz) if v["t"] + len(v["niveles"]) * v["paso"] > ahora - 2000]
-    return {"ahora": ahora, "segmentos": segmentos}
+    # 18 nov (pedido: "el Pixel animado debe ir en reaccion simultanea al Pixel de la web"): si un robot esta pensando
+    # (lo mismo que su luz de arcoiris), las caras de la ventana y de la app ponen cara de pensar
+    pensando = any(getattr(s, "_luz_pensando", False) for s in sesiones)
+    return {"ahora": ahora, "segmentos": segmentos, "pensando": pensando}
 
 
 # ------------------------------------------------------------------ acciones del panel
