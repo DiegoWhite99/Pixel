@@ -565,13 +565,19 @@
     if (oye.quiere) setTimeout(arrancarRec, 150);
   }
 
+  let contestaOtro = null;      // 18 nov: app.js dice si contesta el robot (Panel de control -> Voz); "" si contesto yo
   function alOir(texto, inicio) {
     if (est.estado !== "escuchando") return;
     // dictado (apuntes.js con una nota abierta): todo lo que se oye va a la nota, sin "Píxel" ni Gemini
     for (const m of modulos) { try { if (m.dictar && usar(m) && m.dictar(texto)) return; } catch (e) { console.warn("agente:", m.nombre, e); } }
     const [ok, resto] = activacion(texto);
+    const enVentana = (inicio || Date.now()) < oye.ventanaHasta;
+    // 18 nov (pedido: "si le doy al robot, el de la web no tiene por que hablar, y viceversa"): si en el Panel de
+    // control contesta el robot, la app oye "Píxel" pero se queda callada y dice por qué (lo escrito si contesta)
+    const otro = (ok || enVentana) && contestaOtro ? contestaOtro() : "";
+    if (otro) { oye.ventanaHasta = 0; aviso(otro); return; }
     if (!ok) {                                  // vale si empezo a hablar dentro de la ventana
-      if ((inicio || Date.now()) < oye.ventanaHasta) { oye.ventanaHasta = 0; orden(texto); }
+      if (enVentana) { oye.ventanaHasta = 0; orden(texto); }
       return;                                   // sin "Píxel": no es para mi
     }
     if (!resto) { dime(); return; }
@@ -1333,6 +1339,7 @@
   };
 
   window.Agente = {iniciar, usuario, nivelBoca, guardarAjustes, probar, pintar, modulo, nucleo,
+    callarSi: (fn) => { contestaOtro = typeof fn === "function" ? fn : null; },
     activo: () => est.montado && !!nube.usuario,
     texto: {plano, activacion, extraerFrases, cuandoDicho, leerCuando, horaDicha, fechaAhora, respuestaPendiente, juntarParte, parecido}};
 })();

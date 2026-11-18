@@ -66,6 +66,7 @@ TONOS = {"normal": 1.0, "infantil": 1.32, "muy_infantil": 1.55}
 # 2.0.0: el tono propio de cada voz, como base en web/voz.js. La de hombre (~160 Hz) un 8 % mas grave.
 BASE_VOZ = {"ald": 0.92}
 AJUSTES = {"voz": "st-F4", "personalidad": "", "respuesta": "normal", "salida_voz": "esp32", "tono": "normal",
+           "contesta": "pc",     # 18 nov: quien contesta a "Pixel", "pc" (el robot o el PC) o "app" (servidor.CONTESTA)
            "ia": "gemini",        # Fase 15: la IA de internet que contesta primero si hay clave de las dos
            # 2.4.0, espejo con la app (web/espejo.js): la hora de Firebase (ms) del ultimo cambio de los ajustes del
            # agente (personalidad, respuesta, voz, tono) y de cada clave de IA y de la preferida. Gana el mas reciente.
@@ -90,6 +91,7 @@ IAS = ("gemini", "groq")
 DIRECCION = "0.0.0.0"
 PROGRAMA = {}        # el programa instalado: {"version", "apagar"} (lo pone el lanzador; sale en /api/estado)
 SALIDAS_VOZ = ("esp32", "pc")
+CONTESTAN = ("pc", "app")      # 18 nov: el robot o el PC, o la app de internet (el otro se calla)
 ACEPTADOS = {}      # mac -> {"nombre", "aceptado"} (Bluetooth del ESP32) o + {"via": "wifi", "ip", "tipo", "fabricante"}
 _RE_MAC = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
 _RE_IP = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
@@ -155,10 +157,11 @@ def aplicar_ajustes():
         for sesion in S.SESIONES + list(S.MOVILES.values()):
             sesion.llm.system = system
     S.SALIDA_VOZ = AJUSTES["salida_voz"]
+    S.CONTESTA = AJUSTES.get("contesta") if AJUSTES.get("contesta") in CONTESTAN else "pc"
     llm.PREFERIDA = AJUSTES.get("ia") if AJUSTES.get("ia") in IAS else "gemini"
     S.TTS.agudo = TONOS.get(AJUSTES.get("tono"), 1.0) * BASE_VOZ.get(voz[0], 1.0)
-    S.log("panel: voz %s (%s) por %s, respuestas %s, personalidad %r; instrucciones %s (%d caracteres)%s"
-          % (voz[0], AJUSTES.get("tono", "normal"), AJUSTES["salida_voz"], AJUSTES["respuesta"], AJUSTES["personalidad"],
+    S.log("panel: voz %s (%s) por %s, contesta %s, respuestas %s, personalidad %r; instrucciones %s (%d caracteres)%s"
+          % (voz[0], AJUSTES.get("tono", "normal"), AJUSTES["salida_voz"], S.CONTESTA, AJUSTES["respuesta"], AJUSTES["personalidad"],
              "de la app (web/agente.md)" if "Divergencia IA" in system else "de respaldo", len(system),
              ", con el perfil de " + (PERFIL["de"] or "la app") if PERFIL["texto"] else ", sin perfil"))
 
@@ -323,16 +326,18 @@ def guardar_agente(d):
     voz, respuesta = d.get("voz"), d.get("respuesta")
     salida = d.get("salida_voz") or AJUSTES["salida_voz"]
     tono = d.get("tono") or AJUSTES.get("tono", "normal")
+    contesta = d.get("contesta") or AJUSTES.get("contesta", "pc")      # sin el campo (la app, el espejo): no cambia
     personalidad = (d.get("personalidad") or "").strip()
-    if voz not in [v[0] for v in VOCES] or respuesta not in RESPUESTAS or salida not in SALIDAS_VOZ or tono not in TONOS:
-        raise ErrorPanel("Voz, tipo de voz, salida o largo de respuesta desconocidos.")
+    if voz not in [v[0] for v in VOCES] or respuesta not in RESPUESTAS or salida not in SALIDAS_VOZ or tono not in TONOS \
+            or contesta not in CONTESTAN:
+        raise ErrorPanel("Voz, tipo de voz, salida, quién contesta o largo de respuesta desconocidos.")
     if len(personalidad) > PERSONALIDAD_MAX:
         raise ErrorPanel("La personalidad admite hasta %d caracteres." % PERSONALIDAD_MAX)
     nuevos = dict(voz=voz, respuesta=respuesta, personalidad=personalidad, tono=tono)
     with _lock:
         if any(AJUSTES.get(k) != nuevos[k] for k in CAMPOS_ESPEJO) or "t" in d:
             AJUSTES["t"] = _hora(d)              # 2.4.0: el espejo con la app compara esta hora
-        AJUSTES.update(nuevos, salida_voz=salida)
+        AJUSTES.update(nuevos, salida_voz=salida, contesta=contesta)
         _guardar_json(_ruta(S.AJUSTES_ARCHIVO), AJUSTES)
         aplicar_ajustes()
     return {"mensaje": "Guardado. Las próximas respuestas ya lo usan."}

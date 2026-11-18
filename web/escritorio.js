@@ -690,9 +690,10 @@
     $("#perfil-de").textContent = (pf.de ? `De la cuenta de ${pf.de}. ` : "") + "Lo escribes en la app de Píxel, en tu Perfil, y se copia solo aquí y al robot.";
     if (vozTocada && vozPintada) return;
     const f = $("#f-voz");
-    for (const nombre of ["salida_voz", "respuesta"]) {
-      for (const r of $$(`input[name="${nombre}"]`, f)) r.checked = r.value === aj[nombre];
-    }
+    // 18 nov: «La app de internet» va en la misma tarjeta, pero se guarda aparte (contesta: "app"), sin tocar la salida
+    const salida = aj.contesta === "app" ? "app" : aj.salida_voz;
+    for (const r of $$('input[name="salida_voz"]', f)) r.checked = r.value === salida;
+    for (const r of $$('input[name="respuesta"]', f)) r.checked = r.value === aj.respuesta;
     sel.value = aj.voz || "";
     f.tono.value = aj.tono || "normal";
     f.personalidad.value = aj.personalidad || "";
@@ -707,7 +708,9 @@
   function datosVoz() {
     const f = $("#f-voz");
     const marcado = (n) => { const r = $(`input[name="${n}"]:checked`, f); return r ? r.value : undefined; };
-    return {voz: f.voz.value, respuesta: marcado("respuesta") || "normal", salida_voz: marcado("salida_voz") || "esp32",
+    const salida = marcado("salida_voz") || "esp32", antes = ((E && E.agente && E.agente.ajustes) || {}).salida_voz;
+    return {voz: f.voz.value, respuesta: marcado("respuesta") || "normal",
+      salida_voz: salida === "app" ? (antes === "pc" ? "pc" : "esp32") : salida, contesta: salida === "app" ? "app" : "pc",
       tono: f.tono.value, personalidad: f.personalidad.value};
   }
 
@@ -873,7 +876,10 @@
   });
   $("#probar-voz").addEventListener("click", async () => {
     const d = datosVoz();
-    if (await enviar("/api/agente", d, {silencio: true})) { vozTocada = false; enviar("/api/agente/probar", {donde: d.salida_voz}); }
+    if (!(await enviar("/api/agente", d, {silencio: true}))) return;
+    vozTocada = false;
+    if (d.contesta === "app") toast("Contesta la app de internet: pruébala diciéndole «Píxel» en el celular o el navegador.");
+    else enviar("/api/agente/probar", {donde: d.salida_voz});
   });
 
   $("#apagar").addEventListener("click", async () => {

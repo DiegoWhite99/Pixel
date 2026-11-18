@@ -573,12 +573,22 @@ async function iniciarNube() {
     // Fase 12: Pixel vive en este celular (agente.js); el Pixel del PC se enlaza aparte, si se quiere
     const s = document.createElement("script");
     s.src = "agente.js";
-    s.onload = () => window.Agente.iniciar(app);
+    s.onload = () => { window.Agente.iniciar(app); if (window.Agente.callarSi) window.Agente.callarSi(contestaElRobot); };
     s.onerror = () => toast("No pude cargar a Píxel en este celular. Recarga la página.", true);
     document.head.append(s);
     au.onAuthStateChanged(nube.auth, sesion);          // la sesion de Google se recuerda en este navegador
     if (PRUEBA_ANONIMA) au.signInAnonymously(nube.auth).catch(errorNube);
   } catch (e) { errorNube(e); }
+}
+
+// 18 nov (pedido: "si le doy al robot, el de la web no tiene por que hablar, y viceversa"): en la ventana del Panel de
+// control, Voz -> Por donde habla, se elige quien contesta a "Píxel". Si es el robot (o el PC) y hay un robot
+// conectado a ese Panel en linea, la app se calla y dice por que. Un Panel de antes de la 2.6.1 no manda "contesta":
+// entonces contestan los dos, como antes. -> "" si contesta la app, o el aviso.
+function contestaElRobot() {
+  const e = nube.estado, aj = e && e.agente && e.agente.ajustes;
+  if (!EN_INTERNET || !aj || aj.contesta !== "pc" || !nube.enLinea || !(e.dispositivos || []).length) return "";
+  return "Te contesta el robot Píxel. Para que te conteste esta app, elígela en el Panel de control: Voz → Por dónde habla → La app de internet.";
 }
 
 function sesion(u) {

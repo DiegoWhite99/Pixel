@@ -76,6 +76,20 @@ DISPOSITIVOS_ARCHIVO = "dispositivos.json"  # dispositivos Bluetooth aceptados e
 # Por donde habla Pixel: "esp32" (su altavoz) o "pc" (salida de audio del PC: el altavoz
 # Bluetooth si esta conectado). Lo cambia el panel (ajustes.json).
 SALIDA_VOZ = "esp32"
+# 18 nov (pedido: "si le doy al robot, el de la web no tiene por que hablar, y viceversa"): quien contesta cuando se
+# dice "Pixel". "pc": este programa (por el robot o por el PC) y la app de internet se calla mientras haya un robot
+# conectado. "app": la app de internet, y el robot se calla. Lo cambia la ventana (Voz -> Por donde habla).
+CONTESTA = "pc"
+
+
+def callado_por_ajuste(es_movil, hay_robot):
+    """Por que esta sesion no contesta a "Pixel" ("" si contesta). es_movil: el celular como microfono del PC
+    (SesionMovil, que habla por el celular: es la app). hay_robot: algun robot conectado a este PC."""
+    if CONTESTA == "app" and not es_movil:
+        return "contesta la app de internet"
+    if CONTESTA != "app" and es_movil and hay_robot:
+        return "contesta el robot"
+    return ""
 
 # Pixel en la nube (Fase 10, nube.py): la app de https://pixelassitance.web.app lo encuentra y lo
 # maneja desde cualquier sitio. Mismo proyecto de Firebase que web/app.js. NUBE_DB vacio = sin nube.
@@ -904,6 +918,13 @@ class Sesion:
         en_ventana = t_inicio <= self.ventana_hasta
         if not activa and not en_ventana:
             log("%s  ignorada (sin %s): %s" % (self.peer, ACTIVACION, texto))
+            return
+        with _sesiones_lock:
+            hay_robot = bool(SESIONES)
+        callado = callado_por_ajuste(isinstance(self, SesionMovil), hay_robot)
+        if callado:                         # 18 nov: solo contesta uno, el que se eligio en la ventana (Voz)
+            self.ventana_hasta = 0.0
+            log("%s  ignorada (%s, Panel de control -> Voz): %s" % (self.peer, callado, texto))
             return
         self.ventana_hasta = 0.0            # la ventana vale para una sola frase
         self.turno_aceptado = True

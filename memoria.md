@@ -1144,6 +1144,10 @@ El usuario: «va muy rápido con lo del código, le doy repetir el código y se 
 - **La luz y el enlace**: verificado con el robot real que robot, registro del PC y panel dicen el mismo color (11:05: azul, sin enlace con la app). El robot no podía anotarse en la cuenta (Firebase 401: su entrada se había borrado). Con la regla nueva, el panel puso la marca y a los 3 s el robot dijo «verde, enlazado con la app» (11:26).
 - **WiFi del robot desde el PC por Bluetooth** (`robot_wifi.py`): funcionó con el robot real (de la red de la casa a la del laboratorio, con la contraseña guardada en el PC). El PC ve al robot a -25 a -35 dBm a su lado.
 
+### 18 nov: contesta uno solo
+
+- El usuario: «me están hablando los dos al tiempo» (el robot y la app de internet con «Escuchar» prendido oyen el mismo «Píxel»). Pidió elegirlo en el Panel de control: va como tercera opción de «Por dónde habla» («La app de internet»). Probado con el servidor aislado y `tools/frase_prueba.wav` como robot: con «app», las dos frases quedan «ignorada (contesta la app de internet…)»; con «pc», contesta las dos. En la app (Chrome, cuenta anónima, Panel simulado): se calla solo con «pc» + robot conectado + Panel en línea.
+
 ### 18 nov: el Queen fantasma
 
 - **Lo que pasaba:** el robot ponía «Queen – Bohemian Rhapsody» solo (7 veces el 18 nov entre 09:59 y 12:13; 22 en todo `servidor.log`). Whisper escribía «Píxel, YouTube, pon música, reproduce, Soda Stereo, Queen, Bohemian Rhapsody», que es su `initial_prompt` (`STT_PROMPT`) casi entero: trae la palabra de activación y una orden de YouTube.
