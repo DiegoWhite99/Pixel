@@ -25,6 +25,7 @@ from datetime import date, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import acciones
+import actualizar
 import bluetooth_pc
 import gemini
 import groq_ia
@@ -285,6 +286,7 @@ def estado():
         },
         "agenda": {"recordatorios": pendientes, "eventos": eventos},
         "programa": PROGRAMA,
+        "actualizacion": actualizar.estado(),      # 18 nov (Fase 17): versiones nuevas, solo el programa instalado
     }
 
 
@@ -712,8 +714,30 @@ def robot_enlazar_app(d):
                        app_por_red=_robot_dice_app, id_por_red=_robot_id_por_red)
 
 
+def buscar_version(d):
+    """18 nov (Fase 17): el boton "Buscar actualizaciones" de la ventana."""
+    if not actualizar.estado()["activo"]:
+        raise ErrorPanel("Este Píxel corre desde el código: se actualiza con git, no con este botón.")
+    pub = actualizar.revisar()
+    if pub is None:
+        raise ErrorPanel(actualizar.estado()["error"] or "No pude buscar versiones nuevas.")
+    e = actualizar.estado()
+    return {"mensaje": "Hay una versión nueva: %s. Toca «Actualizar»." % pub["version"] if e["hay"]
+            else "Tienes la última versión (%s)." % e["actual"]}
+
+
+def instalar_version(d):
+    """18 nov (Fase 17): el boton "Actualizar": baja, instala y reinicia Pixel (actualizar.py)."""
+    try:
+        return {"mensaje": actualizar.instalar()}
+    except RuntimeError as e:
+        raise ErrorPanel(str(e))
+
+
 RUTAS_SOLO_LOCAL = {
     "/api/google/credencial": guardar_credencial_google,     # un archivo de este PC: no llega por la nube
+    "/api/actualizar/buscar": buscar_version,                # 18 nov: instalar programas, solo desde la ventana
+    "/api/actualizar/instalar": instalar_version,
     "/api/robot/detectar": robot_detectar,                   # el Bluetooth de este PC
     "/api/robot/vincular": robot_vincular,
     "/api/robot/redes": robot_redes,
@@ -722,7 +746,8 @@ RUTAS_SOLO_LOCAL = {
 }
 # 17 nov: ademas, solo desde este mismo PC (el panel de desarrollo escucha en 0.0.0.0 y no pide contrasena): asi nadie
 # en la red puede hacer que el PC le pase una clave WiFi guardada a otro aparato Bluetooth que se haga pasar por el robot
-RUTAS_SOLO_ESTE_PC = {"/api/robot/detectar", "/api/robot/vincular", "/api/robot/redes", "/api/robot/wifi", "/api/robot/app"}
+RUTAS_SOLO_ESTE_PC = {"/api/robot/detectar", "/api/robot/vincular", "/api/robot/redes", "/api/robot/wifi", "/api/robot/app",
+                      "/api/actualizar/buscar", "/api/actualizar/instalar"}
 
 
 _saludo = {"clave": None, "wav": b""}

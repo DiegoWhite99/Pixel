@@ -297,6 +297,7 @@
   }
 
   let E = null, modo = "conectando", fallos = 0, reloj = null, apagadoAqui = false;
+  let actualizando = false, versionVista = "";      // 18 nov (Fase 17): mientras se instala una version nueva
 
   async function mirar() {
     clearTimeout(reloj);
@@ -395,11 +396,12 @@
     pintarCabecera();
     const v = ventana();
     $("#apagado").hidden = false;
-    $("#apagado-titulo").textContent = apagadoAqui ? "Apagaste a Píxel" : "Píxel está apagado";
-    $("#apagado-texto").textContent = v ? "No escucha al robot ni a tus apps hasta que lo enciendas."
+    $("#apagado-titulo").textContent = actualizando ? "Píxel se está actualizando" : apagadoAqui ? "Apagaste a Píxel" : "Píxel está apagado";
+    $("#apagado-texto").textContent = actualizando ? "Se instala la versión nueva y Píxel vuelve solo. Esta ventana se reconecta sola en un momento."
+      : v ? "No escucha al robot ni a tus apps hasta que lo enciendas."
       : "Esta página no encuentra a Píxel. Ábrelo desde el menú de inicio o el escritorio.";
-    $("#encender").hidden = !v;
-    $("#cerrar-ventana").hidden = !v;
+    $("#encender").hidden = !v || actualizando;
+    $("#cerrar-ventana").hidden = !v || actualizando;
   }
 
   // -- vincular (Inicio y Dispositivos) --
@@ -736,6 +738,60 @@
     pintarRobot();
     pintarRed();
     pintarVoz();
+    pintarVersion();
+  }
+
+  // ------------------------------------------------------------------ 18 nov (Fase 17): actualizaciones
+  // Pedido: "un boton que llame las versiones mas recientes y se actualicen y reciba notificaciones; me toca descargar
+  // todo el tiempo". Lo hace actualizar.py (solo el programa instalado); aqui se ve y se pide.
+  function cuandoFue(seg) {
+    const d = new Date(seg * 1000), min = Math.round((Date.now() - d) / 60000);
+    if (min < 2) return "hace un momento";
+    if (min < 60) return `hace ${min} minutos`;
+    const hora = d.toLocaleTimeString("es", {hour: "numeric", minute: "2-digit"});
+    return d.toDateString() === new Date().toDateString() ? `hoy a las ${hora}` : `el ${d.toLocaleDateString("es", {day: "numeric", month: "long"})} a las ${hora}`;
+  }
+  function pintarVersion() {
+    const a = E.actualizacion || {};
+    const actualizar = $$("[data-actualizar]"), buscar = $("#ver-buscar"), notas = $("#ver-notas"), chip = $("#ver-chip");
+    const err = $("#ver-error"), barra = $("#ver-barra"), aviso = $("#aviso-version");
+    if (versionVista && a.actual && a.actual !== versionVista) toast(`¡Listo! Píxel ya está en la versión ${a.actual}.`);
+    if (a.actual) versionVista = a.actual;
+    if (!a.activo) {
+      $("#ver-texto").textContent = "Este Píxel corre desde el código del proyecto: se actualiza con git, no con este botón. En el programa instalado aquí se buscan y se instalan las versiones nuevas.";
+      for (const b of actualizar) b.hidden = true;
+      buscar.hidden = true; notas.hidden = true; err.hidden = true; barra.hidden = true; aviso.hidden = true;
+      chip.textContent = "Desde el código"; chip.className = "chip";
+      return;
+    }
+    actualizando = !!a.instalando;
+    let texto;
+    if (a.instalando) texto = a.fase || "Actualizando Píxel…";
+    else if (a.buscando) texto = "Buscando versiones nuevas…";
+    else if (a.hay) texto = `Hay una versión nueva: ${a.ultima}. Tienes la ${a.actual}. Se baja, se instala y Píxel se reinicia solo.`;
+    else if (a.revisado) texto = `Tienes la última versión (${a.actual}). Revisado ${cuandoFue(a.revisado)}; vuelvo a mirar solo cada 6 horas.`;
+    else texto = `Tienes la versión ${a.actual}. Busco versiones nuevas solo, al arrancar y cada 6 horas, y te aviso.`;
+    $("#ver-texto").textContent = texto;
+    chip.textContent = a.instalando ? "Actualizando" : a.hay ? "Versión nueva" : a.revisado ? "Al día" : a.actual;
+    chip.className = "chip" + (a.instalando || a.hay ? " aviso" : a.revisado ? " bien" : "");
+    err.hidden = !a.error || a.instalando;
+    err.textContent = a.error || "";
+    const conCifra = a.instalando && a.total > 0;
+    barra.hidden = !a.instalando;
+    barra.classList.toggle("sin", !conCifra);
+    $("i", barra).style.width = conCifra ? Math.round((a.avance / a.total) * 100) + "%" : "";
+    for (const b of actualizar) {
+      b.hidden = !a.hay || a.instalando;
+      b.textContent = `Actualizar a ${a.ultima}`;
+      b.dataset.version = a.ultima || "";
+    }
+    buscar.hidden = false;
+    buscar.disabled = !!(a.buscando || a.instalando);
+    notas.hidden = !(a.hay && a.pagina);
+    if (a.pagina) notas.href = a.pagina;
+    aviso.hidden = !(a.hay || a.instalando);
+    $("#aviso-version-texto").textContent = a.instalando ? (a.fase || "Actualizando Píxel…")
+      : `Hay una versión nueva de Píxel: ${a.ultima} (tienes la ${a.actual}).`;
   }
 
   // ------------------------------------------------------------------ eventos
@@ -755,6 +811,21 @@
     const t = e.target.closest("button");
     if (!t) return;
     if (t.dataset.ir) { irA(t.dataset.ir); return; }
+    if (t.hasAttribute("data-actualizar")) {          // 18 nov (Fase 17)
+      const v = t.dataset.version || "la versión nueva";
+      if (!confirm(`¿Actualizar Píxel a ${v}? Se baja, se instala y Píxel se reinicia solo (un par de minutos).`
+        + ((E.actualizacion || {}).sistema === "linux" ? " Ubuntu te va a pedir tu contraseña." : ""))) return;
+      t.disabled = true;
+      await enviar("/api/actualizar/instalar", {});
+      t.disabled = false;
+      return;
+    }
+    if (t.id === "ver-buscar") {
+      t.disabled = true;
+      await enviar("/api/actualizar/buscar", {});
+      t.disabled = false;
+      return;
+    }
     if (t.hasAttribute("data-nuevo")) {
       t.disabled = true;
       await enviar("/api/nube/enlazar", {});

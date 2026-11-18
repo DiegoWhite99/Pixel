@@ -332,6 +332,9 @@ def configurar(datos):
         threading.Timer(0.6, lambda: os._exit(0)).start()
         return {"mensaje": "Píxel se apaga."}
     panel.RUTAS_SOLO_LOCAL["/api/apagar"] = apagar
+    # 18 nov (Fase 17): buscar versiones nuevas, avisar e instalarlas desde la ventana ("me toca descargar todo el tiempo")
+    import actualizar
+    actualizar.configurar(VERSION, datos, carpeta=os.path.dirname(APP), programa="/usr/bin/pixel", log=servidor.log)
     return servidor, panel
 
 

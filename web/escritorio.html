@@ -70,6 +70,13 @@
       <div class="pildoras" id="pildoras" aria-live="polite"></div>
     </header>
 
+    <!-- 18 nov (Fase 17, actualizar.py): hay una version nueva de Pixel; se ve en todas las pestanas -->
+    <div id="aviso-version" class="aviso-version" hidden role="status">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg>
+      <span id="aviso-version-texto"></span>
+      <button class="btn primario" type="button" data-actualizar>Actualizar</button>
+    </div>
+
     <!-- Preparando: la primera vez baja la voz y el oido -->
     <section id="preparando" class="tarjeta preparando" hidden aria-live="polite">
       <div class="prep-cab">
@@ -99,6 +106,18 @@
         <article class="tarjeta">
           <div class="t-cab"><h2>Tus APIs</h2><button class="enlace-btn" type="button" data-ir="apis">Administrar</button></div>
           <div id="resumen-apis" class="resumen-apis"></div>
+        </article>
+        <!-- 18 nov (Fase 17): buscar versiones nuevas e instalarlas sin descargar a mano -->
+        <article class="tarjeta" id="tarjeta-version">
+          <div class="t-cab"><h2>Actualizaciones</h2><span class="chip" id="ver-chip"></span></div>
+          <p class="sub" id="ver-texto"></p>
+          <div class="barra" id="ver-barra" hidden><i></i></div>
+          <p class="error" id="ver-error" hidden></p>
+          <div class="acciones">
+            <button class="btn primario" type="button" data-actualizar hidden>Actualizar</button>
+            <button class="btn" type="button" id="ver-buscar">Buscar actualizaciones</button>
+            <a class="enlace-btn" id="ver-notas" target="_blank" rel="noopener" hidden>Qué trae</a>
+          </div>
         </article>
       </div>
     </section>

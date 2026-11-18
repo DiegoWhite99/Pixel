@@ -445,3 +445,11 @@ body.con-intro .app { opacity: 0; }
 
 /* 2.4.0: el perfil que llega de la app, linea por linea */
 .perfil-pc { margin: 8px 0; white-space: pre-line; color: var(--texto); font-size: 14px; line-height: 1.5; }
+
+/* 18 nov (Fase 17): hay una version nueva de Pixel (actualizar.py) */
+.aviso-version { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 18px; padding: 12px 16px; border-radius: 14px;
+  border: 1px solid rgba(251, 191, 36, 0.45); background: rgba(251, 191, 36, 0.1); color: var(--aviso); font-weight: 600; }
+.aviso-version svg { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.aviso-version span { flex: 1 1 220px; }
+#tarjeta-version .barra { margin: 4px 0; }
+#tarjeta-version .acciones { align-items: center; }
