@@ -13,7 +13,7 @@ ctx.self = ctx;
 vm.createContext(ctx);
 // lo que pone app.js: aqui solo lo justo para que los modulos carguen sin pagina
 vm.runInContext("var nube = {uid: '', usuario: null, d: null}; var $ = () => null; var esc = (t) => String(t); var toast = () => {};", ctx);
-for (const f of ["luz_robot.js", "proveedores.js", "proveedor_claude.js", "voz.js", "agente.js", "cerebro.js", "google.js", "tiempo.js", "aparatos.js", "musica.js", "humor.js", "apuntes.js", "contactos.js", "whatsapp.js", "ajustes.js", "perfil.js", "registro.js"]) {
+for (const f of ["luz_robot.js", "proveedores.js", "proveedor_claude.js", "voz.js", "agente.js", "cerebro.js", "google.js", "tiempo.js", "aparatos.js", "musica.js", "humor.js", "apuntes.js", "contactos.js", "whatsapp.js", "ajustes.js", "calibracion.js", "perfil.js", "registro.js"]) {
   const ruta = path.join(WEB, f);
   if (fs.existsSync(ruta)) vm.runInContext(fs.readFileSync(ruta, "utf8"), ctx, {filename: f});
 }
@@ -824,6 +824,67 @@ if (ctx.PixelPerfil) {
   prueba("perfil: agente.md tiene el lugar del perfil", () => {
     const md = fs.readFileSync(path.join(WEB, "agente.md"), "utf8");
     assert.ok(md.includes("{{PERFIL}}") && md.includes("Divergencia IA"));
+  });
+}
+
+// ------------------------------------------------------------------ 18 nov: calibración cognitiva (calibracion.js)
+if (ctx.Calibracion && ctx.PixelPerfil) {
+  const C = ctx.Calibracion, P = ctx.PixelPerfil.texto;
+  const todas = (l, extra) => Object.assign(Object.fromEntries(C.PREGUNTAS.filter((q) => q.o).map((q) => [q.p, l])), {p4: "F", p5: "F", p10: "F", p14: "F"}, extra || {});
+  prueba("calibración: las 14 preguntas del cuestionario, con sus opciones", () => {
+    assert.strictEqual(C.PREGUNTAS.length, 14);
+    igual(C.PREGUNTAS.filter((q) => !q.o).map((q) => q.p), ["p4", "p5", "p10", "p14"]);
+    for (const q of C.PREGUNTAS.filter((x) => x.o)) igual(Object.keys(q.o), ["A", "B", "C", "D"]);
+    // lo que acepta la regla de la base de datos (usuarios/<uid>/perfil/calibracion)
+    const reglas = fs.readFileSync(path.join(WEB, "..", "database.rules.json"), "utf8");
+    assert.ok(reglas.includes("^p([1-9]|1[0-4])$") && reglas.includes("^[ABCDVF]$") && reglas.includes("'neutro'"));
+    for (const q of C.PREGUNTAS) assert.ok(/^p([1-9]|1[0-4])$/.test(q.p));
+  });
+  prueba("calibración: la matriz de arquetipos (dominante y secundario)", () => {
+    assert.strictEqual(C.evaluar(todas("A", {p4: "V", p5: "V"})).dominante, "arquitecto");
+    assert.strictEqual(C.evaluar(todas("B", {p11: "A", p12: "D", p13: "A"})).dominante, "mago");
+    assert.strictEqual(C.evaluar(todas("C", {p11: "B", p12: "C", p13: "B"})).dominante, "estratega");
+    const ex = C.evaluar({p1: "D", p2: "D", p3: "D", p4: "V", p6: "C", p7: "C", p8: "C", p9: "C", p11: "C", p12: "A", p13: "A"});
+    assert.strictEqual(ex.dominante, "explorador");
+    const mezcla = C.evaluar({p1: "B", p2: "B", p3: "B", p6: "A", p7: "A", p8: "B", p9: "A", p11: "A", p12: "A", p13: "A", p4: "V", p5: "V"});
+    assert.strictEqual(mezcla.dominante, "mago");
+    assert.strictEqual(mezcla.secundario, "arquitecto");
+    assert.strictEqual(C.evaluar({p1: "A", p2: "A"}).dominante, "");       // con menos de 7 respuestas, aún nada
+  });
+  prueba("calibración: los modificadores y la temperatura", () => {
+    const e = C.evaluar(todas("A", {p2: "A", p4: "V", p14: "V", p10: "V", p12: "A"}));
+    igual(e.modos, ["directo", "monitor", "freno"]);
+    assert.ok(e.sugerida <= 3);
+    const tierno = C.evaluar(todas("B", {p12: "D"}));
+    igual(tierno.modos, []);
+    assert.ok(tierno.sugerida >= 7);
+    assert.strictEqual(C.temperatura({temperatura: 9}, e), 9);
+    assert.strictEqual(C.temperatura({temperatura: 40}, e), e.sugerida);
+  });
+  prueba("calibración: lo que entra en las instrucciones, sin pronombres", () => {
+    const cal = {respuestas: todas("B", {p4: "V", p14: "V", p10: "V", p11: "A", p12: "A", p13: "A"}), temperatura: 2};
+    const t = C.paraPrompt(cal, false), corto = C.paraPrompt(cal, true);
+    assert.ok(t.includes("El Mago (Tecnólogo / Ejecutor)") && t.includes("Primero la solución ejecutable") && t.includes("2 de 10"), t);
+    assert.ok(t.includes("Modo Directo / Sin Filtros") && t.includes("Monitor de Economía Libidinal") && t.includes("Aprende mejor con"), t);
+    assert.ok(corto.length < t.length && !corto.includes("Aprende mejor con") && corto.includes("El Mago"));
+    assert.ok(!/\b(él|ella|lo trates|la trates|atrapado|atrapada)\b/i.test(t), t);
+    assert.strictEqual(C.paraPrompt({respuestas: {p1: "A"}}, false), "");
+    assert.strictEqual(C.paraPrompt(null, false), "");
+  });
+  prueba("calibración: el empalme con Mi perfil (y cabe en lo que acepta el PC)", () => {
+    const cal = {respuestas: todas("C", {p11: "B", p12: "C", p13: "B", p2: "A"})};
+    const p = {nombre: "Ana Prueba", apodo: "Ana", trato: "neutro", sobre: "Estudia.", calibracion: cal};
+    const t = P.paraPrompt(p, false);
+    assert.ok(t.includes("Trato neutro") && t.includes("El Estratega") && t.includes("Freno al Perfeccionismo"), t);
+    const largo = Object.assign({}, p, {sobre: "x".repeat(600), gustos: "y".repeat(600), ayuda: "z".repeat(600), reglas: "w".repeat(600)});
+    const tl = P.paraPrompt(largo, false);
+    assert.ok(tl.length <= 3900 && tl.includes("El Estratega") && !tl.includes("Aprende mejor con"), tl.length);
+    assert.ok(P.lleno({calibracion: cal}) && !P.lleno({calibracion: {respuestas: {}}}));
+    igual(P.calibracionLimpia({respuestas: {p1: "a", p4: "V", p99: "A", p2: "X"}, temperatura: 11}), {respuestas: {p1: "A", p4: "V"}});
+    igual(P.calibracionLimpia({respuestas: {p3: "B"}, temperatura: 4}), {respuestas: {p3: "B"}, temperatura: 4});
+    assert.strictEqual(P.calibracionLimpia({respuestas: {}}), null);
+    assert.strictEqual(P.leerMarkdown(P.aMarkdown({trato: "neutro"})).campos.trato, "neutro");
+    assert.ok(P.presentacion("", false, true).includes("La invitación es a entrar al perfil"));
   });
 }
 

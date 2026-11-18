@@ -1144,6 +1144,10 @@ El usuario: «va muy rápido con lo del código, le doy repetir el código y se 
 - **La luz y el enlace**: verificado con el robot real que robot, registro del PC y panel dicen el mismo color (11:05: azul, sin enlace con la app). El robot no podía anotarse en la cuenta (Firebase 401: su entrada se había borrado). Con la regla nueva, el panel puso la marca y a los 3 s el robot dijo «verde, enlazado con la app» (11:26).
 - **WiFi del robot desde el PC por Bluetooth** (`robot_wifi.py`): funcionó con el robot real (de la red de la casa a la del laboratorio, con la contraseña guardada en el PC). El PC ve al robot a -25 a -35 dBm a su lado.
 
+### 18 nov: calibración cognitiva en Mi perfil
+
+- El usuario pegó su cuestionario «Perfil de Identidad y Calibración Cognitiva» (datos base, 14 preguntas, matriz de arquetipos, modificadores y síntesis) y pidió el empalme con el perfil que usa el agente. Va tal cual en `web/calibracion.js`. Lo que el cuestionario deja abierto: los puntos por arquetipo suman su «patrón de respuestas clave» (si empatan: Arquitecto, Mago, Estratega, Explorador); hace falta un mínimo de 7 respuestas; la temperatura (1 seca y directa, 10 cálida y cercana) se sugiere desde 6 con P12, P14 y P4, con el Modo Directo no pasa de 3, y el usuario la mueve.
+
 ### 18 nov: contesta uno solo
 
 - El usuario: «me están hablando los dos al tiempo» (el robot y la app de internet con «Escuchar» prendido oyen el mismo «Píxel»). Pidió elegirlo en el Panel de control: va como tercera opción de «Por dónde habla» («La app de internet»). Probado con el servidor aislado y `tools/frase_prueba.wav` como robot: con «app», las dos frases quedan «ignorada (contesta la app de internet…)»; con «pc», contesta las dos. En la app (Chrome, cuenta anónima, Panel simulado): se calla solo con «pc» + robot conectado + Panel en línea.

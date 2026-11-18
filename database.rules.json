@@ -165,7 +165,21 @@
             ".validate": "newData.isString() && newData.val().length <= 40"
           },
           "trato": {
-            ".validate": "newData.val() === 'tu' || newData.val() === 'usted'"
+            ".validate": "newData.val() === 'tu' || newData.val() === 'usted' || newData.val() === 'neutro'"
+          },
+          "calibracion": {
+            ".validate": "newData.hasChildren(['respuestas'])",
+            "respuestas": {
+              "$p": {
+                ".validate": "$p.matches(/^p([1-9]|1[0-4])$/) && newData.isString() && newData.val().matches(/^[ABCDVF]$/)"
+              }
+            },
+            "temperatura": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10"
+            },
+            "$otro": {
+              ".validate": false
+            }
           },
           "foto": {
             ".validate": "newData.isString() && newData.val().length <= 120000 && newData.val().beginsWith('data:image/jpeg;base64,')"
